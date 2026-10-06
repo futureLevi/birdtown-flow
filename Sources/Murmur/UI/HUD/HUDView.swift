@@ -44,7 +44,9 @@ struct HUDView: View {
 
     private func pill(size: CGSize, kind: HUDState.Kind) -> some View {
         ZStack {
-            HUDPillBody()
+            // At rest the whole pill is faded, so its edge needs more light to stay findable
+            // on dark content.
+            HUDPillBody(stroke: kind == .idle || kind == .hidden ? Palette.HUD.idleStroke : Palette.HUD.stroke)
             content(size: size, kind: kind)
                 .frame(width: size.width, height: size.height)
                 .clipShape(Capsule(style: .continuous))
@@ -116,7 +118,10 @@ struct HUDView: View {
 /// capsules rather than a layer shadow, so it is identical on screen and in offscreen
 /// snapshots (where layer shadows render flipped), and it costs a dozen fills.
 struct HUDPillBody: View {
+    var stroke = Palette.HUD.stroke
+
     var body: some View {
+        let stroke = self.stroke
         Canvas { context, canvasSize in
             let margin = Layout.HUD.shadowMargin
             let pill = CGRect(origin: .zero, size: canvasSize).insetBy(dx: margin, dy: margin)
@@ -139,7 +144,7 @@ struct HUDPillBody: View {
             context.fill(capsule, with: .color(Palette.HUD.fill))
             let edge = pill.insetBy(dx: 0.5, dy: 0.5)
             context.stroke(Path(roundedRect: edge, cornerRadius: edge.height / 2, style: .continuous),
-                           with: .color(Palette.HUD.stroke), lineWidth: 1)
+                           with: .color(stroke), lineWidth: 1)
         }
         .padding(-Layout.HUD.shadowMargin)
         .allowsHitTesting(false)

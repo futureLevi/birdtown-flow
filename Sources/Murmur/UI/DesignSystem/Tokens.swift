@@ -173,6 +173,8 @@ extension Palette.HUD {
     static let barPeakOpacity: Double = 0.95
     /// The resting idle pill is a whisper until hovered.
     static let idleOpacity: Double = 0.4
+    /// Edge of the resting pill (before `idleOpacity`), so it stays visible on dark content.
+    static let idleStroke = Color.white.opacity(0.5)
     /// Round HUD buttons at rest and under the pointer.
     static let control = Color.white.opacity(0.08)
     static let controlHover = Color.white.opacity(0.18)

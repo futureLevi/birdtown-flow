@@ -35,8 +35,7 @@ final class HUDController {
             object: nil,
             queue: .main
         ) { [weak self] _ in
-            // Delivered on the main queue (requested above).
-            MainActor.assumeIsolated { self?.reposition(followMouse: false) }
+            Task { @MainActor [weak self] in self?.reposition(followMouse: false) }
         }
 
         Sounds.prepare()
@@ -122,12 +121,13 @@ final class HUDController {
         guard let model else { return }
         let interactive = model.state.isInteractive && (panel?.isVisible ?? false)
         if interactive, mouseMonitors.isEmpty {
+            // Hop to the main actor rather than asserting we're on it: a wrong assumption
+            // there would crash the app, and a hop per mouse move costs nothing.
             let global = NSEvent.addGlobalMonitorForEvents(matching: [.mouseMoved, .leftMouseDragged]) { [weak self] _ in
-                // AppKit delivers event-monitor callbacks on the main thread.
-                MainActor.assumeIsolated { self?.updateHover() }
+                Task { @MainActor [weak self] in self?.updateHover() }
             }
             let local = NSEvent.addLocalMonitorForEvents(matching: [.mouseMoved, .leftMouseDragged]) { [weak self] event in
-                MainActor.assumeIsolated { self?.updateHover() }
+                Task { @MainActor [weak self] in self?.updateHover() }
                 return event
             }
             mouseMonitors = [global, local].compactMap { $0 }
