@@ -2,7 +2,7 @@ import MurmurKit
 import SwiftUI
 
 /// The speech model's state, flattened for display.
-enum ModelStatus: Equatable, Sendable {
+enum ModelDisplayState: Equatable, Sendable {
     case notDownloaded
     case downloading(Double?)
     case loading
@@ -26,7 +26,7 @@ struct SystemStatus: Equatable, Sendable {
     var accessibility: Bool
     var microphone: Bool
     var hotkeyActive: Bool
-    var model: ModelStatus
+    var model: ModelDisplayState
     var isRecording: Bool
     var engineName: String
     var engineDownloadSize: String
@@ -38,7 +38,7 @@ struct SystemStatus: Equatable, Sendable {
             accessibility: model.permissions.accessibility,
             microphone: model.permissions.microphone,
             hotkeyActive: model.controller.isHotkeyActive,
-            model: ModelStatus(model.models.state),
+            model: ModelDisplayState(model.models.state),
             isRecording: model.controller.phase.isRecording,
             engineName: model.settings.engine.displayName,
             engineDownloadSize: model.settings.engine.downloadSize,
