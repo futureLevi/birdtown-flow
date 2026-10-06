@@ -21,7 +21,7 @@ extension SnapshotCatalog {
         shots.append(SnapshotRenderer.Shot("brand-icon-32", size: CGSize(width: 32, height: 32)) {
             AppIconArtwork(size: 32)
         })
-        shots.append(SnapshotRenderer.Shot("brand-sheet", size: CGSize(width: 720, height: 300)) {
+        shots.append(SnapshotRenderer.Shot("brand-sheet", size: CGSize(width: 720, height: 460)) {
             BrandPreviewSheet()
         })
         return shots
@@ -261,9 +261,28 @@ struct BrandPreviewSheet: View {
                 }
                 .foregroundStyle(Palette.ink)
             }
+            // The spectrum orb: still, live (quiet and loud) and thinking, at each size, on
+            // the window and on the pill's navy.
+            HStack(spacing: Spacing.xxl) {
+                orbs.padding(Spacing.l)
+                orbs.padding(Spacing.l)
+                    .background(Capsule(style: .continuous).fill(Palette.HUD.fill))
+                    .environment(\.colorScheme, .dark)
+            }
         }
         .padding(Spacing.xxl)
-        .frame(width: 720, height: 300, alignment: .topLeading)
+        .frame(width: 720, height: 460, alignment: .topLeading)
         .background(Palette.canvas)
+    }
+
+    private var orbs: some View {
+        HStack(spacing: Spacing.l) {
+            ForEach([Layout.Orb.small, Layout.Orb.medium, Layout.Orb.large], id: \.self) { side in
+                SpectrumOrb(mode: .still, diameter: side, phase: 0)
+                SpectrumOrb(mode: .live, diameter: side, showsHalo: true, phase: 1.2)
+                SpectrumOrb(mode: .live, diameter: side, level: 0.8, showsHalo: true, phase: 2.4)
+                SpectrumOrb(mode: .thinking, diameter: side, showsHalo: true, phase: 0.3)
+            }
+        }
     }
 }

@@ -1,84 +1,154 @@
 import AppKit
 import SwiftUI
 
-// MARK: - Murmur design language
+// MARK: - Birdtown Flow design language
 //
-// "Quiet ink." Murmur sits beside everything you do, so the app recedes: warm paper,
-// near-black ink, generous space, and exactly one living colour — Ember — which means
-// "listening" or "the thing to press". Serif display type (New York) for anything that is
-// *your words* or a page title; SF Pro for interface. Motion is springy but brief, and
-// collapses to fades under Reduce Motion.
+// "Navy and spectrum", taken straight from the logo. Navy ink on porcelain (midnight navy in
+// dark mode), white surfaces, rounded shapes. One solid accent, Signal blue, marks selection,
+// focus and links. Primary actions are navy pills (porcelain in dark mode), like the logo's
+// tile and ring. The spectrum, the logo's disc, means "your voice is live" and nothing else:
+// the recording orb, the thinking ring, download progress and the onboarding hero. Never
+// static chrome, text or backgrounds. SF Pro Rounded for titles and numbers echoes the
+// logo's pill bars; SF Pro for everything you read, including your own words. Motion is
+// springy but brief, and collapses to fades under Reduce Motion.
 //
 // Rules:
 //  - Views never contain literal colours, sizes, radii or durations. Use these tokens; if a
 //    token is missing, add it here.
-//  - Ember is reserved for recording state and primary actions. Never decorative.
-//  - No gradients except the HUD's live waveform glow. No drop shadows heavier than `Elevation`.
+//  - Spectrum only for live states (`Spectrum`, `SpectrumOrb`). Signal blue only for
+//    selection, focus, links and toggles. At most one primary (navy) action per view.
 //  - Every animation goes through `Motion` so Reduce Motion is honoured everywhere.
 
 enum Palette {
-    /// Window background. Warm paper / deep graphite.
-    static let canvas = Color.adaptive(light: 0xF7F6F3, dark: 0x1A1A19)
+    /// Window background. Porcelain / midnight navy.
+    static let canvas = Color.adaptive(light: 0xF6F7FB, dark: 0x0B1026)
     /// Raised surfaces: cards, rows, popovers.
-    static let surface = Color.adaptive(light: 0xFFFFFF, dark: 0x242423)
+    static let surface = Color.adaptive(light: 0xFFFFFF, dark: 0x141A33)
     /// Hovered surface.
-    static let surfaceHover = Color.adaptive(light: 0xF2F1ED, dark: 0x2C2C2A)
+    static let surfaceHover = Color.adaptive(light: 0xEEF1F8, dark: 0x1B2242)
     /// Inset wells: text inputs, code, empty states.
-    static let sunken = Color.adaptive(light: 0xEFEEEA, dark: 0x141413)
-    /// 1px separators and card borders.
-    static let hairline = Color.adaptive(light: 0x1C1B19, lightAlpha: 0.09, dark: 0xFFFFFF, darkAlpha: 0.08)
+    static let sunken = Color.adaptive(light: 0xECEFF6, dark: 0x080C1D)
+    /// 1px separators and card borders, tinted navy.
+    static let hairline = Color.adaptive(light: 0x0E183C, lightAlpha: 0.09, dark: 0xFFFFFF, darkAlpha: 0.08)
     /// Stronger border for focused inputs and selected cards.
-    static let hairlineStrong = Color.adaptive(light: 0x1C1B19, lightAlpha: 0.18, dark: 0xFFFFFF, darkAlpha: 0.18)
+    static let hairlineStrong = Color.adaptive(light: 0x0E183C, lightAlpha: 0.18, dark: 0xFFFFFF, darkAlpha: 0.18)
 
-    /// Primary text.
-    static let ink = Color.adaptive(light: 0x1C1B19, dark: 0xF2F1EE)
+    /// Primary text: the logo's navy.
+    static let ink = Color.adaptive(light: 0x0E183C, dark: 0xEEF1FA)
     /// Secondary text: metadata, descriptions.
-    static let inkSecondary = Color.adaptive(light: 0x6B6862, dark: 0xA3A09A)
+    static let inkSecondary = Color.adaptive(light: 0x4A5478, dark: 0xA5ACC6)
     /// Tertiary text: placeholders, disabled, timestamps.
-    static let inkTertiary = Color.adaptive(light: 0x9C9891, dark: 0x6F6C67)
+    static let inkTertiary = Color.adaptive(light: 0x8A91AC, dark: 0x6A7191)
 
-    /// The one accent. Recording, primary buttons, selection.
-    static let ember = Color.adaptive(light: 0xE5532A, dark: 0xFF6A3D)
-    /// Ember at low strength, for selected backgrounds and badges.
-    static let emberSoft = Color.adaptive(light: 0xE5532A, lightAlpha: 0.10, dark: 0xFF6A3D, darkAlpha: 0.16)
-    /// Text drawn on an Ember fill.
-    static let onEmber = Color.white
+    /// The primary action: a navy pill in light mode, porcelain in dark (the logo's tile and ring).
+    static let primaryFill = Color.adaptive(light: 0x0E183C, dark: 0xEEF1FA)
+    static let primaryFillHover = Color.adaptive(light: 0x1D2B5E, dark: 0xFFFFFF)
+    static let primaryFillPressed = Color.adaptive(light: 0x08102A, dark: 0xD9DDEC)
+    /// Text and icons on `primaryFill`.
+    static let onPrimary = Color.adaptive(light: 0xFFFFFF, dark: 0x0E183C)
 
-    static let success = Color.adaptive(light: 0x2F8F57, dark: 0x58C487)
-    static let successSoft = Color.adaptive(light: 0x2F8F57, lightAlpha: 0.10, dark: 0x58C487, darkAlpha: 0.16)
+    /// Signal blue, from the logo's spectrum: selection, focus rings, links, toggles.
+    static let accent = Color.adaptive(light: 0x4256F0, dark: 0x8291FF)
+    /// Signal blue at low strength: selected backgrounds, badges.
+    static let accentSoft = Color.adaptive(light: 0x4F61FB, lightAlpha: 0.10, dark: 0x8291FF, darkAlpha: 0.18)
+    /// Text drawn on a Signal blue fill.
+    static let onAccent = Color.white
+
+    /// Deprecated names from the Ember era. They point at Signal blue so nothing breaks while
+    /// views migrate to `accent`, `primaryFill` or the spectrum.
+    static let ember = accent
+    static let emberSoft = accentSoft
+    static let onEmber = onAccent
+
+    static let success = Color.adaptive(light: 0x1E8F63, dark: 0x4FD39A)
+    static let successSoft = Color.adaptive(light: 0x1E8F63, lightAlpha: 0.10, dark: 0x4FD39A, darkAlpha: 0.16)
     static let warning = Color.adaptive(light: 0xB7791F, dark: 0xF0B04A)
     static let warningSoft = Color.adaptive(light: 0xB7791F, lightAlpha: 0.10, dark: 0xF0B04A, darkAlpha: 0.15)
-    static let danger = Color.adaptive(light: 0xC8382B, dark: 0xFF6B5E)
-    static let dangerSoft = Color.adaptive(light: 0xC8382B, lightAlpha: 0.09, dark: 0xFF6B5E, darkAlpha: 0.15)
+    static let danger = Color.adaptive(light: 0xD03A4E, dark: 0xFF6B7A)
+    static let dangerSoft = Color.adaptive(light: 0xD03A4E, lightAlpha: 0.09, dark: 0xFF6B7A, darkAlpha: 0.15)
 
-    /// The HUD is always dark, whatever the appearance — it floats over arbitrary content.
+    /// The pill is always dark, whatever the appearance: it floats over arbitrary content.
+    /// Its navy is the logo tile's.
     enum HUD {
-        static let fill = Color(hex: 0x0F0F0E, alpha: 0.94)
+        static let fill = Color(hex: 0x0B1230, alpha: 0.95)
         static let stroke = Color.white.opacity(0.12)
         static let ink = Color.white.opacity(0.94)
-        static let inkSecondary = Color.white.opacity(0.56)
-        static let bar = Color.white.opacity(0.92)
+        static let inkSecondary = Color.white.opacity(0.58)
+        /// The logo's warm-white bars.
+        static let bar = Color(hex: 0xFEFCF8, alpha: 0.95)
         static let barIdle = Color.white.opacity(0.30)
-        static let ember = Color(hex: 0xFF6A3D)
-        static let success = Color(hex: 0x58C487)
-        static let danger = Color(hex: 0xFF6B5E)
+        /// Deprecated: the spectrum orb replaces the Ember record light.
+        static let ember = Color(hex: 0x8291FF)
+        static let success = Color(hex: 0x4FD39A)
+        static let danger = Color(hex: 0xFF6B7A)
     }
 }
 
+/// The logo's spectrum, for live states only. Colours are `LogoPainter`'s measured hue stops,
+/// so the orb in the pill is the logo's disc, not an approximation of it.
+enum Spectrum {
+    /// The 36 hue stops in SwiftUI's clockwise order, starting at 3 o'clock.
+    static let colors: [Color] = {
+        let stops = LogoPainter.Colors.hueMid
+        // LogoPainter's stops run counter-clockwise; SwiftUI's angular gradients run clockwise.
+        let clockwise = [stops[0]] + stops.dropFirst().reversed()
+        return (clockwise + [stops[0]]).map { Color(hex: $0) }
+    }()
+
+    /// The disc's hues around a centre, turned by `rotation`.
+    static func angular(rotation: Angle = .zero) -> AngularGradient {
+        AngularGradient(colors: colors, center: .center, angle: rotation)
+    }
+
+    /// A left-to-right sweep for progress bars: cool to warm, like a voice warming up.
+    static var progress: LinearGradient {
+        LinearGradient(
+            colors: [0x3082F8, 0x6F54FB, 0xB348ED, 0xFB7896, 0xFEA964].map { Color(hex: $0) },
+            startPoint: .leading,
+            endPoint: .trailing
+        )
+    }
+
+    /// The muted violet-grey the disc fades toward at its centre.
+    static let centre = Color(hex: LogoPainter.Colors.centreNeutral)
+}
+
+extension Layout {
+    /// `SpectrumOrb` sizes. The orb is the logo's disc; it never appears smaller than `small`,
+    /// below which the hues blur into grey.
+    enum Orb {
+        /// Menu bar window status, list rows.
+        static let small: CGFloat = 8
+        /// The record light in the pill, the Dictate button while recording.
+        static let medium: CGFloat = 12
+        /// Onboarding's "try it" moment.
+        static let large: CGFloat = 44
+        /// The thinking ring's hole, as a fraction of the orb's radius.
+        static let ringHole: CGFloat = 0.56
+    }
+}
+
+extension Motion {
+    /// Seconds per turn of the live orb: slow enough to feel calm, fast enough to read as alive.
+    static let orbTurn: Double = 9
+    /// Seconds per turn of the thinking ring.
+    static let orbThinkingTurn: Double = 1.25
+}
+
 enum Typography {
-    /// Page titles: "History", "Good evening, Levi".
-    static let display = Font.system(size: 28, weight: .semibold, design: .serif)
+    /// Page titles: "History", "Good evening, Levi". Rounded, like the logo's bars.
+    static let display = Font.system(size: 28, weight: .semibold, design: .rounded)
     /// Section titles inside a page, sheet titles.
-    static let title = Font.system(size: 19, weight: .semibold, design: .serif)
+    static let title = Font.system(size: 19, weight: .semibold, design: .rounded)
     /// Big numbers in stat tiles.
-    static let numeral = Font.system(size: 30, weight: .medium, design: .serif).monospacedDigit()
+    static let numeral = Font.system(size: 30, weight: .semibold, design: .rounded).monospacedDigit()
     /// Card and row headings.
     static let headline = Font.system(size: 13, weight: .semibold)
     static let body = Font.system(size: 13)
     static let bodyEmphasis = Font.system(size: 13, weight: .medium)
-    /// Dictated text — the user's own words — set in serif so it reads as writing, not UI.
-    static let transcript = Font.system(size: 15, design: .serif)
-    static let transcriptLarge = Font.system(size: 17, design: .serif)
+    /// Dictated text: the user's own words, set a step larger than interface text.
+    static let transcript = Font.system(size: 15)
+    static let transcriptLarge = Font.system(size: 17)
     static let callout = Font.system(size: 12)
     static let caption = Font.system(size: 11, weight: .medium)
     /// Small uppercase labels above sections. Use with `.textCase(.uppercase)` and `Tracking.eyebrow`.
@@ -87,8 +157,8 @@ enum Typography {
     static let keycap = Font.system(size: 12, weight: .medium, design: .rounded)
     static let mono = Font.system(size: 12, design: .monospaced)
     /// HUD labels.
-    static let hud = Font.system(size: 12, weight: .medium)
-    static let hudNumeral = Font.system(size: 12, weight: .medium).monospacedDigit()
+    static let hud = Font.system(size: 12, weight: .medium, design: .rounded)
+    static let hudNumeral = Font.system(size: 12, weight: .medium, design: .rounded).monospacedDigit()
 }
 
 enum Tracking {
@@ -180,10 +250,10 @@ extension Palette.HUD {
     /// Round HUD buttons at rest and under the pointer.
     static let control = Color.white.opacity(0.08)
     static let controlHover = Color.white.opacity(0.18)
-    /// Soft halo behind the record dot; brightens with the voice.
-    static let emberGlow = Color(hex: 0xFF6A3D, alpha: 0.55)
-    static let dangerSoft = Color(hex: 0xFF6B5E, alpha: 0.18)
-    static let successSoft = Color(hex: 0x58C487, alpha: 0.18)
+    /// Soft halo behind the live orb; brightens with the voice.
+    static let emberGlow = Color(hex: 0x8291FF, alpha: 0.5)
+    static let dangerSoft = Color(hex: 0xFF6B7A, alpha: 0.18)
+    static let successSoft = Color(hex: 0x4FD39A, alpha: 0.18)
     static let onEmber = Color.white
     /// The pill's shadow is built from stacked layers (see `HUDPillBody`), shaped by
     /// `Elevation.hud`'s radius and offset.
@@ -271,11 +341,11 @@ enum Motion {
 
 extension Typography {
     /// The product name on the welcome and About screens.
-    static let hero = Font.system(size: 40, weight: .semibold, design: .serif)
+    static let hero = Font.system(size: 40, weight: .bold, design: .rounded)
     /// The paragraph under an onboarding title: a step larger than body, for calm reading.
     static let lead = Font.system(size: 14)
     /// Recent dictations in the menu bar window: the user's words, at menu scale.
-    static let transcriptSmall = Font.system(size: 13, design: .serif)
+    static let transcriptSmall = Font.system(size: 13)
     /// The symbol inside an onboarding step's glyph.
     static let stepGlyph = Font.system(size: 22, weight: .regular)
     /// Big keycaps in the shortcut picker.
@@ -441,16 +511,17 @@ enum Interaction {
 
 extension Palette {
     /// Pressed surfaces and ghost buttons.
-    static let surfacePressed = Color.adaptive(light: 0xE8E7E2, dark: 0x343432)
-    static let emberHover = Color.adaptive(light: 0xEC5F37, dark: 0xFF7A51)
-    static let emberPressed = Color.adaptive(light: 0xC9471F, dark: 0xEE5A2D)
+    static let surfacePressed = Color.adaptive(light: 0xE4E8F2, dark: 0x232B4D)
+    /// Deprecated Ember-era names; they follow the primary fill now.
+    static let emberHover = primaryFillHover
+    static let emberPressed = primaryFillPressed
     /// Keycaps: a face a shade lighter than the surface and a darker lip below it.
-    static let keyFace = Color.adaptive(light: 0xFFFFFF, dark: 0x3A3A37)
-    static let keyLip = Color.adaptive(light: 0x1C1B19, lightAlpha: 0.20, dark: 0x000000, darkAlpha: 0.60)
+    static let keyFace = Color.adaptive(light: 0xFFFFFF, dark: 0x2A3359)
+    static let keyLip = Color.adaptive(light: 0x0E183C, lightAlpha: 0.20, dark: 0x000000, darkAlpha: 0.60)
     static let keyHighlight = Color.adaptive(light: 0xFFFFFF, lightAlpha: 1, dark: 0xFFFFFF, darkAlpha: 0.12)
     /// Selected filter chips are inked in, like a pressed key.
-    static let chipSelected = Color.adaptive(light: 0x1C1B19, dark: 0xF2F1EE)
-    static let onChipSelected = Color.adaptive(light: 0xFFFFFF, dark: 0x1A1A19)
+    static let chipSelected = Color.adaptive(light: 0x0E183C, dark: 0xEEF1FA)
+    static let onChipSelected = Color.adaptive(light: 0xFFFFFF, dark: 0x0E183C)
 }
 
 extension Motion {

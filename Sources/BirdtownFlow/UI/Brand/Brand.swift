@@ -86,7 +86,7 @@ struct BrandMark: View {
 }
 
 /// Monochrome bars wherever a template glyph is needed. Draws in the current foreground style,
-/// so it follows the appearance. `isActive` adds the live dot used while recording.
+/// so it follows the appearance. `isActive` adds the spectrum dot used while recording.
 struct BrandGlyph: View {
     var size: CGFloat = 16
     var isActive = false
@@ -97,9 +97,8 @@ struct BrandGlyph: View {
             .frame(width: size * 1.2, height: size)
             .overlay(alignment: .topTrailing) {
                 if isActive {
-                    Circle()
-                        .fill(Palette.ember)
-                        .frame(width: size * 0.3, height: size * 0.3)
+                    SpectrumOrb(mode: .still, diameter: max(Layout.Orb.small, size * 0.4))
+                        .offset(x: size * 0.12, y: -size * 0.08)
                 }
             }
             .accessibilityLabel("Birdtown Flow")

@@ -42,7 +42,25 @@ Tile: Apple's macOS grid (824 px tile on a 1024 px canvas), continuous corners a
 - **In-app** (`AppIconArtwork`): picks the size variant from the rendered pixel size; in dark
   appearance it adds a faint light rim so the navy tile doesn't sink into a navy window.
 - **Menu bar:** the five bars alone as a template image (`MenuBarGlyph`, `LogoBars`).
-- **Dictation pill:** the spectrum disc (`LogoPainter.drawDisc`), turning slowly while you speak.
+- **Live states:** the spectrum disc on its own is `SpectrumOrb`. It means "your voice is live"
+  and nothing else: the pill's record light, the Dictate button and menu bar status while
+  recording, onboarding's try-it moment. While listening it turns slowly (one turn per 9 s)
+  and swells a little with your voice; while transcribing or polishing it hollows into a ring
+  that spins with a comet tail. It is painted once by `LogoPainter.drawDisc` and then only
+  turned, so it is the logo's disc, not an imitation of it.
+
+## The app around it ("navy and spectrum")
+
+`Sources/BirdtownFlow/UI/DesignSystem/Tokens.swift` holds the rules; in short:
+
+- Navy ink (`#0E183C`) on porcelain (`#F6F7FB`); in dark mode, porcelain ink on midnight navy
+  (`#0B1026`).
+- Primary actions are navy pills (porcelain in dark mode), like the tile and ring.
+- One solid accent, Signal blue (`#4256F0`, `#8291FF` in dark), for selection, focus, links
+  and toggles.
+- The spectrum only for live states: the orb, the thinking ring, model download progress.
+  Never for static chrome, text or backgrounds.
+- SF Pro Rounded for titles and numbers, echoing the pill-shaped bars; SF Pro for reading.
 
 ## Later
 
