@@ -27,7 +27,7 @@ struct SetupPreview {
     var devices: [AudioInputDevice] = []
     var launchAtLogin = true
     var keySaved = false
-    /// Text already in the practice field, as if Murmur had just typed it.
+    /// Text already in the practice field, as if Birdtown Flow had just typed it.
     var practiceText: String?
 }
 
@@ -65,7 +65,7 @@ extension SetupKit {
     }
 
     /// Whether pressing 🌐/fn on its own also does something (emoji picker, input source,
-    /// Dictation), which would fire alongside Murmur. `0` is "Do Nothing"; a missing value
+    /// Dictation), which would fire alongside Birdtown Flow. `0` is "Do Nothing"; a missing value
     /// means the system default, which is never "Do Nothing".
     ///
     /// This is a system preference, read-only, so it deliberately doesn't live in `Settings`.
@@ -95,7 +95,7 @@ extension SetupKit {
     /// Set while a relaunch is under way, so a second click can't start a second instance.
     private(set) static var isRelaunching = false
 
-    /// Opens a fresh instance of Murmur, then quits this one. macOS sometimes only lets a
+    /// Opens a fresh instance of Birdtown Flow, then quits this one. macOS sometimes only lets a
     /// process create its event tap after a restart that follows the Accessibility grant.
     /// The new instance resumes onboarding where this one was (see
     /// `OnboardingWindowController.show`). If macOS refuses to open it, this instance keeps
@@ -196,7 +196,8 @@ extension SetupKit {
 // MARK: - Buttons
 
 extension SetupKit {
-    /// The one filled button on a screen. Ember, because it is the thing to press.
+    /// The one filled button on a screen: a navy pill (porcelain in dark mode), like the
+    /// logo's tile and ring. Never more than one per view.
     struct PrimaryButtonStyle: ButtonStyle {
         var fullWidth = false
         /// A taller, wider button for a screen's single moment, like Get Started.
@@ -207,7 +208,8 @@ extension SetupKit {
         }
     }
 
-    /// A quiet bordered button for secondary actions.
+    /// A quiet bordered pill for secondary actions: the same shape as the primary, none of
+    /// its weight.
     struct SecondaryButtonStyle: ButtonStyle {
         func makeBody(configuration: Configuration) -> some View {
             SecondaryButtonBody(configuration: configuration)
@@ -221,14 +223,12 @@ extension SetupKit {
         }
     }
 
-    /// An inline link inside a sentence or callout: underlined ink rather than system blue,
-    /// which would fight the warm palette.
+    /// An inline link inside a sentence or callout, in Signal blue like every link.
     struct InlineLinkStyle: ButtonStyle {
         func makeBody(configuration: Configuration) -> some View {
             configuration.label
                 .font(Typography.callout.weight(.medium))
-                .underline()
-                .foregroundStyle(Palette.ink)
+                .foregroundStyle(Palette.accent)
                 .opacity(configuration.isPressed ? Layout.Setup.pressedOpacity : 1)
                 .contentShape(Rectangle())
         }
@@ -243,20 +243,25 @@ private struct PrimaryButtonBody: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var hovering = false
 
+    private var fill: Color {
+        guard isEnabled else { return Palette.primaryFill }
+        if configuration.isPressed { return Palette.primaryFillPressed }
+        return hovering ? Palette.primaryFillHover : Palette.primaryFill
+    }
+
     var body: some View {
-        let shape = RoundedRectangle(cornerRadius: Radius.s, style: .continuous)
+        let shape = Capsule(style: .continuous)
         configuration.label
             .font(Typography.bodyEmphasis)
-            .foregroundStyle(Palette.onEmber)
+            .foregroundStyle(Palette.onPrimary)
             .padding(.horizontal, large ? Spacing.xxxl : Spacing.l)
             .frame(maxWidth: fullWidth ? .infinity : nil)
             .frame(
                 minWidth: Layout.Setup.buttonMinWidth,
                 minHeight: large ? Layout.Setup.menuButtonHeight : Layout.Setup.buttonHeight
             )
-            .background(shape.fill(Palette.ember))
-            .overlay(shape.fill(Palette.onEmber.opacity(hovering && isEnabled && !configuration.isPressed ? Layout.Setup.hoverLift : 0)))
-            .opacity(isEnabled ? (configuration.isPressed ? Layout.Setup.pressedOpacity : 1) : Layout.Setup.disabledOpacity)
+            .background(shape.fill(fill))
+            .opacity(isEnabled ? 1 : Layout.Setup.disabledOpacity)
             .scaleEffect(configuration.isPressed && !reduceMotion ? Motion.pressedScale : 1)
             .contentShape(shape)
             .onHover { hovering = $0 }
@@ -272,11 +277,11 @@ private struct SecondaryButtonBody: View {
     @State private var hovering = false
 
     var body: some View {
-        let shape = RoundedRectangle(cornerRadius: Radius.s, style: .continuous)
+        let shape = Capsule(style: .continuous)
         configuration.label
             .font(Typography.bodyEmphasis)
             .foregroundStyle(Palette.ink)
-            .padding(.horizontal, Spacing.m)
+            .padding(.horizontal, Spacing.l)
             .frame(minHeight: Layout.Setup.buttonHeight - Spacing.xs)
             .background(shape.fill(hovering && isEnabled ? Palette.surfaceHover : Palette.surface))
             .overlay(shape.strokeBorder(Palette.hairlineStrong))
@@ -310,7 +315,8 @@ private struct QuietButtonBody: View {
 // MARK: - Progress and status
 
 extension SetupKit {
-    /// A slim determinate bar in ink — calm, not an alarm.
+    /// A slim determinate bar. The fill is the spectrum, because a download is live, and it
+    /// is laid across the whole track so the colour warms as the bar grows.
     struct ProgressBar: View {
         let fraction: Double
         @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -321,8 +327,10 @@ extension SetupKit {
                 ZStack(alignment: .leading) {
                     Capsule().fill(Palette.sunken)
                     Capsule()
-                        .fill(Palette.ink)
-                        .frame(width: max(proxy.size.height, proxy.size.width * clamped))
+                        .fill(Spectrum.progress)
+                        .mask(alignment: .leading) {
+                            Capsule().frame(width: max(proxy.size.height, proxy.size.width * clamped))
+                        }
                 }
             }
             .frame(height: Layout.Setup.progressBarHeight)
@@ -333,7 +341,8 @@ extension SetupKit {
         }
     }
 
-    /// A filled circle that signals state: Ember while listening, green when ready.
+    /// A filled circle for settled states: green when ready, amber or red when something needs
+    /// attention, Signal blue for a call to action. Anything live is a `SpectrumOrb` instead.
     struct StatusDot: View {
         let color: Color
 
@@ -394,7 +403,7 @@ extension View {
 // MARK: - App mark
 
 extension SetupKit {
-    /// Murmur's app icon, wherever setup shows it. Wraps the brand artwork so the onboarding
+    /// Birdtown Flow's app icon, wherever setup shows it. Wraps the brand artwork so the onboarding
     /// welcome, the About pane and the menu bar header all match the Dock icon exactly.
     struct AppMark: View {
         let size: CGFloat

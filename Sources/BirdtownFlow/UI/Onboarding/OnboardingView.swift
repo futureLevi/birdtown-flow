@@ -36,7 +36,7 @@ struct OnboardingView: View {
     /// earlier `lastRecord` (or one finishing from a previous step) can't fake a success.
     @State private var practiceStartedAt: Date?
     @State private var practiceDone = false
-    /// Bumped whenever Murmur becomes active again, e.g. back from System Settings.
+    /// Bumped whenever Birdtown Flow becomes active again, e.g. back from System Settings.
     @State private var activations = 0
 
     private let onFinish: () -> Void
@@ -62,7 +62,7 @@ struct OnboardingView: View {
     private var practiceSucceeded: Bool { preview?.practiceSucceeded ?? practiceDone }
     private var needsRelaunch: Bool { accessibilityGranted && !hotkeyActive }
 
-    // System facts nothing observable tells us about: re-read each time Murmur comes back to
+    // System facts nothing observable tells us about: re-read each time the app comes back to
     // the front, since that's when the user has just changed them.
     private var fnHasSystemAction: Bool {
         _ = activations
@@ -187,7 +187,7 @@ struct OnboardingView: View {
         case .accessibility:
             if !accessibilityGranted {
                 return FooterAction(title: "Open System Settings") {
-                    // The prompt is what adds Murmur to the Accessibility list; opening the
+                    // The prompt is what adds the app to the Accessibility list; opening the
                     // pane directly saves a click in the system alert.
                     Permissions.promptForAccessibility()
                     Permissions.openAccessibilitySettings()
@@ -346,7 +346,7 @@ private struct ProgressDots: View {
 
 // MARK: - Scaffold
 
-/// The shared shape of a step: glyph, serif title, a calm paragraph, then the step's controls.
+/// The shared shape of a step: glyph, rounded title, a calm paragraph, then the step's controls.
 private struct StepScaffold<Controls: View>: View {
     var symbol: String?
     var done = false
@@ -415,6 +415,7 @@ private struct WelcomeStep: View {
     let onStart: () -> Void
     @Environment(\.setupPreview) private var preview
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.colorScheme) private var colorScheme
     @State private var appeared = false
 
     var body: some View {
@@ -422,6 +423,9 @@ private struct WelcomeStep: View {
             Spacer()
             SetupKit.AppMark(size: Layout.Setup.appIcon)
                 .scaleEffect(appeared || reduceMotion ? 1 : Motion.pressedScale)
+                // The product moment: the logo's own spectrum as light behind it, turning
+                // slowly. A background, so it glows past the icon without moving the layout.
+                .background { heroLight }
                 .opacity(appeared ? 1 : 0)
             VStack(spacing: Spacing.xs) {
                 Text("Birdtown Flow")
@@ -457,6 +461,26 @@ private struct WelcomeStep: View {
             }
             withAnimation(Motion.resolve(Motion.gentle, reduceMotion: reduceMotion)) { appeared = true }
         }
+    }
+
+    /// Faint and soft, so the icon stays the hero: it should read as the icon's colours
+    /// lighting the page, not as a second object. The orb fades out from the tile's edge to
+    /// its rim; the tile hides its centre. No halo: it blooms on navy but smudges porcelain.
+    private var heroLight: some View {
+        SpectrumOrb(
+            mode: .live,
+            diameter: Layout.Setup.heroOrb,
+            phase: preview == nil ? nil : Motion.snapshotOrbPhase
+        )
+        .mask {
+            RadialGradient(
+                colors: [.white, .clear],
+                center: .center,
+                startRadius: Layout.Setup.heroGlowInner,
+                endRadius: Layout.Setup.heroOrb / 2
+            )
+        }
+        .opacity(colorScheme == .dark ? Layout.Setup.heroOrbOpacityDark : Layout.Setup.heroOrbOpacityLight)
     }
 }
 
@@ -820,12 +844,12 @@ private struct KeyOption: View {
             .frame(maxWidth: .infinity)
             .background(
                 RoundedRectangle(cornerRadius: Radius.l, style: .continuous)
-                    .fill(selected ? Palette.emberSoft : (hovering ? Palette.surfaceHover : Palette.surface))
+                    .fill(selected ? Palette.accentSoft : (hovering ? Palette.surfaceHover : Palette.surface))
             )
             .overlay(
                 RoundedRectangle(cornerRadius: Radius.l, style: .continuous)
                     .strokeBorder(
-                        selected ? Palette.ember : Palette.hairline,
+                        selected ? Palette.accent : Palette.hairline,
                         lineWidth: selected ? Layout.Setup.selectionStroke : Layout.Setup.hairline
                     )
             )
@@ -850,6 +874,10 @@ private struct PracticeStep: View {
 
     @State private var text = ""
     @FocusState private var focused: Bool
+    @Environment(\.setupPreview) private var preview
+
+    /// Snapshots draw the orb at a fixed moment; live, it animates.
+    private var orbPhase: Double? { preview == nil ? nil : Motion.snapshotOrbPhase }
 
     private var keyName: String { SetupKit.name(for: key) }
 
@@ -918,14 +946,14 @@ private struct PracticeStep: View {
             .font(Typography.callout)
         } else if phase.isRecording {
             HStack(spacing: Spacing.s) {
-                SetupKit.StatusDot(color: Palette.ember)
+                SpectrumOrb(mode: .live, diameter: Layout.Orb.small, phase: orbPhase)
                 Text("Listening… let go when you're done.")
                     .foregroundStyle(Palette.ink)
             }
             .font(Typography.callout)
         } else if phase.isBusy {
             HStack(spacing: Spacing.s) {
-                ProgressView().controlSize(.small)
+                SpectrumOrb(mode: .thinking, diameter: Layout.Orb.small, phase: orbPhase)
                 Text("Writing it down…")
                     .foregroundStyle(Palette.inkSecondary)
             }

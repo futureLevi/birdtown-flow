@@ -283,7 +283,7 @@ private struct EngineRow: View {
         HStack(alignment: .center, spacing: Spacing.m) {
             Image(systemName: selected ? "largecircle.fill.circle" : "circle")
                 .font(Typography.body)
-                .foregroundStyle(selected ? Palette.ember : Palette.inkTertiary)
+                .foregroundStyle(selected ? Palette.accent : Palette.inkTertiary)
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: Spacing.xxs) {
                 HStack(spacing: Spacing.s) {
@@ -622,7 +622,7 @@ private struct ProviderCard: View {
                         .foregroundStyle(Palette.ink)
                     Spacer(minLength: Spacing.s)
                     Image(systemName: selected ? "checkmark.circle.fill" : "circle")
-                        .foregroundStyle(selected ? Palette.ember : Palette.inkTertiary)
+                        .foregroundStyle(selected ? Palette.accent : Palette.inkTertiary)
                         .accessibilityHidden(true)
                 }
                 Text(provider.subtitle)
@@ -637,10 +637,10 @@ private struct ProviderCard: View {
             }
             .padding(Spacing.m)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(shape.fill(selected ? Palette.emberSoft : (hovering ? Palette.surfaceHover : Palette.surface)))
+            .background(shape.fill(selected ? Palette.accentSoft : (hovering ? Palette.surfaceHover : Palette.surface)))
             .overlay(
                 shape.strokeBorder(
-                    selected ? Palette.ember : Palette.hairline,
+                    selected ? Palette.accent : Palette.hairline,
                     lineWidth: selected ? Layout.Setup.selectionStroke : Layout.Setup.hairline
                 )
             )
@@ -789,7 +789,7 @@ struct AboutSettingsPane: View {
                         if let url = URL(string: credit.link) {
                             Link(destination: url) {
                                 Image(systemName: "arrow.up.right.square")
-                                    .foregroundStyle(Palette.inkSecondary)
+                                    .foregroundStyle(Palette.accent)
                             }
                             .help(credit.link)
                             .accessibilityLabel("Open \(credit.title) website")

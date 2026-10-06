@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 import MurmurKit
 import SwiftUI
@@ -100,7 +101,11 @@ extension SnapshotCatalog {
         listening.phase = .listening
         var downloading = SetupPreview()
         downloading.modelState = .downloading(progress: 0.42)
-        func shot(_ name: String, _ facts: SetupPreview) -> SnapshotRenderer.Shot {
+        var transcribing = SetupPreview()
+        transcribing.phase = .transcribing
+        // Setup not finished: shows the "Finish Setup…" call to action.
+        let unfinished = AppModel.setupPreview()
+        func shot(_ name: String, _ facts: SetupPreview, model: AppModel) -> SnapshotRenderer.Shot {
             SnapshotRenderer.Shot("setup-menubar-\(name)", size: size) {
                 MenuBarContent()
                     .environment(model)
@@ -110,17 +115,47 @@ extension SnapshotCatalog {
             }
         }
         return [
-            shot("ready", SetupPreview()),
-            shot("downloading", downloading),
-            shot("listening", listening),
+            shot("ready", SetupPreview(), model: model),
+            shot("downloading", downloading, model: model),
+            shot("listening", listening, model: model),
+            shot("transcribing", transcribing, model: model),
+            shot("finish-setup", SetupPreview(), model: unfinished),
+            SnapshotRenderer.Shot("setup-menubar-icon", size: CGSize(width: Layout.Setup.menuBarWidth, height: 120)) {
+                MenuBarIconSheet()
+            },
         ]
+    }
+}
+
+/// The menu bar icon, idle and listening, at its real size and magnified, so the tiny
+/// spectrum disc can be judged in review.
+private struct MenuBarIconSheet: View {
+    /// Magnification for the enlarged pair. Review-only, never shipped UI.
+    private let magnified: CGFloat = 4
+
+    var body: some View {
+        HStack(alignment: .center, spacing: Spacing.xxl) {
+            glyph(MenuBarGlyph.idle, scale: 1)
+            glyph(MenuBarGlyph.active, scale: 1)
+            glyph(MenuBarGlyph.idle, scale: magnified)
+            glyph(MenuBarGlyph.active, scale: magnified)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Palette.canvas)
+    }
+
+    private func glyph(_ image: NSImage, scale: CGFloat) -> some View {
+        Image(nsImage: image)
+            .resizable()
+            .frame(width: image.size.width * scale, height: image.size.height * scale)
+            .foregroundStyle(Palette.ink)
     }
 }
 
 extension AppModel {
     /// An in-memory model for snapshots: throwaway defaults, sample history, no files touched.
     static func setupPreview(_ configure: (Settings) -> Void = { _ in }) -> AppModel {
-        let suite = "murmur.snapshots.setup.\(UUID().uuidString)"
+        let suite = "birdtownflow.snapshots.setup.\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suite) ?? .standard
         let settings = Settings(defaults: defaults)
         configure(settings)

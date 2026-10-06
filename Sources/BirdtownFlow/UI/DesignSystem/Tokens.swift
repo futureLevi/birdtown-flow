@@ -383,9 +383,14 @@ extension Layout {
         static let footerHeight: CGFloat = 72
         static let pressedOpacity: Double = 0.84
         static let disabledOpacity: Double = 0.4
-        /// White wash over a hovered Ember button.
-        static let hoverLift: Double = 0.08
         static let hairline: CGFloat = 1
+        /// The spectrum's light behind the welcome icon: an orb wider than the icon, faded out
+        /// from the tile's edge (`heroGlowInner`) to its rim, faint enough that the icon stays
+        /// the hero. Painted, not blurred, so snapshots show what people see.
+        static let heroOrb: CGFloat = 216
+        static let heroGlowInner: CGFloat = 46
+        static let heroOrbOpacityLight: Double = 0.5
+        static let heroOrbOpacityDark: Double = 0.62
     }
 }
 
@@ -405,6 +410,8 @@ extension Motion {
     static let stepTravel: CGFloat = 36
     /// Press feedback for custom buttons.
     static let pressedScale: CGFloat = 0.97
+    /// Seconds into a live orb's motion that snapshots draw, so frames are deterministic.
+    static let snapshotOrbPhase: Double = 2.5
 }
 
 // MARK: - Helpers

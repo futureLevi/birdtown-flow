@@ -2,8 +2,8 @@ import AppKit
 import MurmurKit
 import SwiftUI
 
-/// The menu bar extra's window: where Murmur stands, one big record button, and the last
-/// few dictations a click away.
+/// The menu bar extra's window: where Birdtown Flow stands, one big record button, and the
+/// last few dictations a click away.
 struct MenuBarContent: View {
     @Environment(AppModel.self) private var model
     @Environment(\.setupPreview) private var preview
@@ -48,10 +48,11 @@ struct MenuBarContent: View {
                     .font(Typography.headline)
                     .foregroundStyle(Palette.ink)
                 HStack(spacing: Spacing.xs + Spacing.xxs) {
-                    SetupKit.StatusDot(color: status.color)
+                    indicator(status.indicator)
+                        .frame(width: Layout.Orb.small, height: Layout.Orb.small)
                     Text(status.text)
                         .font(Typography.callout)
-                        .foregroundStyle(Palette.inkSecondary)
+                        .foregroundStyle(status.indicator == .live ? Palette.ink : Palette.inkSecondary)
                         .lineLimit(1)
                         .contentTransition(.opacity)
                 }
@@ -63,30 +64,53 @@ struct MenuBarContent: View {
         .accessibilityElement(children: .combine)
     }
 
-    private var status: (text: String, color: Color) {
+    /// What sits beside the status text: the spectrum while your voice is live or being worked
+    /// on, a plain dot for every settled state.
+    private enum Indicator: Equatable {
+        case dot(Color)
+        case live
+        case thinking
+    }
+
+    @ViewBuilder
+    private func indicator(_ indicator: Indicator) -> some View {
+        switch indicator {
+        case .dot(let color):
+            SetupKit.StatusDot(color: color)
+        case .live:
+            LiveOrb(phase: orbPhase)
+        case .thinking:
+            SpectrumOrb(mode: .thinking, diameter: Layout.Orb.small, phase: orbPhase)
+        }
+    }
+
+    /// Snapshots draw orbs at a fixed moment; live, they animate.
+    private var orbPhase: Double? { preview == nil ? nil : Motion.snapshotOrbPhase }
+
+    private var status: (text: String, indicator: Indicator) {
         if phase.isRecording {
-            return (model.controller.isHandsFree ? "Listening · hands-free" : "Listening…", Palette.ember)
+            return (model.controller.isHandsFree ? "Listening · hands-free" : "Listening…", .live)
         }
-        if phase == .transcribing { return ("Transcribing…", Palette.inkTertiary) }
-        if phase == .polishing { return ("Polishing…", Palette.inkTertiary) }
+        if phase == .transcribing { return ("Transcribing…", .thinking) }
+        if phase == .polishing { return ("Polishing…", .thinking) }
         if phase == .done {
-            // "Copied — no text field was focused" when it couldn't be typed.
-            return (model.controller.notice ?? "Done", Palette.success)
+            // The controller's notice when it couldn't be typed, e.g. it was copied instead.
+            return (model.controller.notice ?? "Done", .dot(Palette.success))
         }
-        if phase == .cancelled { return ("Cancelled", Palette.inkTertiary) }
-        if case .failed(let message) = phase { return (message, Palette.danger) }
-        if !micGranted { return ("Microphone access needed", Palette.warning) }
-        if !accessibilityGranted { return ("Accessibility access needed", Palette.warning) }
-        if !hotkeyActive { return ("Shortcut not active · reopen Birdtown Flow", Palette.warning) }
+        if phase == .cancelled { return ("Cancelled", .dot(Palette.inkTertiary)) }
+        if case .failed(let message) = phase { return (message, .dot(Palette.danger)) }
+        if !micGranted { return ("Microphone access needed", .dot(Palette.warning)) }
+        if !accessibilityGranted { return ("Accessibility access needed", .dot(Palette.warning)) }
+        if !hotkeyActive { return ("Shortcut not active · reopen Birdtown Flow", .dot(Palette.warning)) }
         if let progress = SetupKit.progress(of: modelState) {
-            return ("Downloading speech model · \(SetupKit.percent(progress))", Palette.inkTertiary)
+            return ("Downloading speech model · \(SetupKit.percent(progress))", .dot(Palette.inkTertiary))
         }
         if modelState == .loading || modelState == .downloading(progress: nil) {
-            return ("Preparing speech model…", Palette.inkTertiary)
+            return ("Preparing speech model…", .dot(Palette.inkTertiary))
         }
-        if SetupKit.isFailed(modelState) { return ("Speech model unavailable", Palette.danger) }
-        if modelState == .notDownloaded { return ("Speech model not downloaded", Palette.warning) }
-        return ("Ready · Hold \(keyName) to talk", Palette.success)
+        if SetupKit.isFailed(modelState) { return ("Speech model unavailable", .dot(Palette.danger)) }
+        if modelState == .notDownloaded { return ("Speech model not downloaded", .dot(Palette.warning)) }
+        return ("Ready · Hold \(keyName) to talk", .dot(Palette.success))
     }
 
     // MARK: Record
@@ -139,7 +163,8 @@ struct MenuBarContent: View {
     private var actions: some View {
         VStack(spacing: 0) {
             if !model.settings.hasCompletedOnboarding {
-                MenuRow(title: "Finish Setup…", badge: Palette.ember) {
+                // A call to action, not a live state: Signal blue.
+                MenuRow(title: "Finish Setup…", badge: Palette.accent) {
                     guard preview == nil else { return }
                     OnboardingWindowController.shared.show(model: model)
                 }
@@ -166,6 +191,22 @@ struct MenuBarContent: View {
             }
             .keyboardShortcut("q", modifiers: .command)
         }
+    }
+}
+
+/// The listening orb, swelling with the voice. Its own view so the level, which changes
+/// about 30 times a second, redraws only the orb and not the whole menu.
+private struct LiveOrb: View {
+    let phase: Double?
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        SpectrumOrb(
+            mode: .live,
+            diameter: Layout.Orb.small,
+            level: phase == nil ? model.controller.level : 0,
+            phase: phase
+        )
     }
 }
 
@@ -258,7 +299,7 @@ private struct MenuRow: View {
 
 // MARK: - Menu bar icon
 
-/// The menu bar icon: the logo's five bars, plus a live dot while listening or working.
+/// The menu bar icon: the logo's five bars, plus a tiny spectrum disc while listening or working.
 struct MenuBarLabel: View {
     @Environment(AppModel.self) private var model
 
@@ -278,9 +319,13 @@ enum MenuBarGlyph {
     static let active = make(active: true)
 
     /// Icon artwork in points, sized for the menu bar's 22 pt height: the logo's five
-    /// mirrored bars, in its exact proportions (`LogoBars`).
+    /// mirrored bars, in its exact proportions (`LogoBars`). While listening, a tiny spectrum
+    /// disc (the logo's own, from `LogoPainter`) sits top right with a point of clear space,
+    /// so it reads as the live light rather than part of the mark. Both states share one
+    /// canvas so the status item never changes width.
     nonisolated private static func make(active: Bool) -> NSImage {
-        let image = NSImage(size: NSSize(width: 21, height: 16), flipped: false) { rect in
+        // y-down, which is what `LogoPainter` expects.
+        let image = NSImage(size: NSSize(width: 21, height: 19), flipped: true) { rect in
             let tallest: CGFloat = 14
             let heights: [CGFloat] = [0.345, 0.658, 1, 0.658, 0.345].map { $0 * tallest }
             let barWidth: CGFloat = 0.164 * tallest
@@ -298,11 +343,15 @@ enum MenuBarGlyph {
                 )
                 NSBezierPath(roundedRect: bar, xRadius: barWidth / 2, yRadius: barWidth / 2).fill()
             }
-            if active {
-                // Top-right, clear of the short outer bar.
-                let dot: CGFloat = 5
-                NSColor(Palette.ember).setFill()
-                NSBezierPath(ovalIn: NSRect(x: rect.maxX - dot, y: rect.maxY - dot, width: dot, height: dot)).fill()
+            if active, let cg = NSGraphicsContext.current?.cgContext {
+                // Top right, above the short outer bar: 6 pt still reads as the spectrum at
+                // 16 px, and this corner leaves a point clear of both neighbouring bars.
+                let radius: CGFloat = 3
+                LogoPainter.drawDisc(
+                    in: cg,
+                    centre: CGPoint(x: rect.maxX - radius, y: rect.minY + radius),
+                    radius: radius
+                )
             }
             return true
         }
