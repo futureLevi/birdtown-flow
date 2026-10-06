@@ -102,6 +102,8 @@ jobs:
             echo "release=${{ steps.release.outcome }}"
           } > out/status.txt
           if [ -f dist/Murmur.zip ]; then cp dist/Murmur.zip out/; fi
+          # The icon is regenerated from Tools/makeicon.swift on main; publish it so it can be committed.
+          if [ -f icon.log ] && [ -d Resources/AppIcon.iconset ]; then mkdir -p out/icon && cp -R Resources/AppIcon.iconset Resources/AppIcon.icns out/icon/ 2>/dev/null || true; fi
           cat out/status.txt
           cd out
           git init -q

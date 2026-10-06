@@ -140,6 +140,18 @@ private struct HomeBanners: View {
 
     var body: some View {
         VStack(spacing: Spacing.s) {
+            if !model.settings.hasCompletedOnboarding {
+                Banner(
+                    symbol: "sparkles",
+                    title: "Finish setting up Murmur",
+                    message: "Two minutes: permissions, your shortcut, and a first dictation.",
+                    tone: .info
+                ) {
+                    Button("Continue Setup") { OnboardingWindowController.shared.show(model: model) }
+                        .buttonStyle(.murmurPrimary)
+                        .controlSize(.small)
+                }
+            }
             if !status.microphone {
                 Banner(
                     symbol: "mic.slash.fill",

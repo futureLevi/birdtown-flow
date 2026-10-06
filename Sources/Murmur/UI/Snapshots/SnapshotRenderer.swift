@@ -45,7 +45,9 @@ enum SnapshotRenderer {
         let window = NSWindow(contentRect: rect, styleMask: [.borderless], backing: .buffered, defer: false)
         window.appearance = NSAppearance(named: appearance)
         window.isReleasedWhenClosed = false
-        window.backgroundColor = .clear
+        // Opaque, like a real window: a clear backdrop shows through translucent sidebars and
+        // leaves dark strips at the edges of full-window shots.
+        window.backgroundColor = NSColor(Palette.canvas)
         window.contentView = hosting
         window.setFrameOrigin(NSPoint(x: 40, y: 40))
         window.orderFrontRegardless()

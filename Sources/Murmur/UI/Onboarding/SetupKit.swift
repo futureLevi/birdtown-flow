@@ -387,41 +387,17 @@ extension View {
 // MARK: - App mark
 
 extension SetupKit {
-    /// Murmur's mark until the brand artwork lands: a dark squircle with a quiet waveform that
-    /// ends in one Ember dot, the live point where speech becomes text. Always dark, like the
-    /// HUD, so it reads the same on paper and graphite.
+    /// Murmur's app icon, wherever setup shows it. Wraps the brand artwork so the onboarding
+    /// welcome, the About pane and the menu bar header all match the Dock icon exactly.
     struct AppMark: View {
         let size: CGFloat
-        /// Small marks (menu bar header) sit flat; a shadow at that size reads as a smudge.
+        /// Kept for call-site compatibility: the artwork carries its own soft shadow, which is
+        /// already proportional to the size, so small marks don't smudge.
         var elevated = true
 
-        // Artwork geometry as fractions of the icon size — proportions of a drawing, not UI
-        // metrics, so they live with the drawing.
-        private let bars: [CGFloat] = [0.14, 0.27, 0.43, 0.31, 0.21, 0.12]
-        private let barWidth: CGFloat = 0.055
-        private let barGap: CGFloat = 0.048
-        private let cornerRatio: CGFloat = 0.225
-        private let dotRatio: CGFloat = 0.085
-
         var body: some View {
-            let shape = RoundedRectangle(cornerRadius: size * cornerRatio, style: .continuous)
-            ZStack {
-                shape.fill(Palette.HUD.fill)
-                HStack(spacing: size * barGap) {
-                    ForEach(bars.indices, id: \.self) { index in
-                        Capsule()
-                            .fill(Palette.HUD.bar)
-                            .frame(width: size * barWidth, height: size * bars[index])
-                    }
-                    Circle()
-                        .fill(Palette.HUD.ember)
-                        .frame(width: size * dotRatio, height: size * dotRatio)
-                }
-            }
-            .frame(width: size, height: size)
-            .overlay(shape.strokeBorder(Palette.HUD.stroke))
-            .elevation(elevated ? Elevation.raised : Elevation.flat)
-            .accessibilityHidden(true)
+            AppIconArtwork(size: size)
+                .accessibilityHidden(true)
         }
     }
 }

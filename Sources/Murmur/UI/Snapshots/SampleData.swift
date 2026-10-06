@@ -245,8 +245,11 @@ extension AppModel {
         let suite = "Murmur.Preview"
         let defaults = UserDefaults(suiteName: suite) ?? .standard
         defaults.removePersistentDomain(forName: suite)
+        let settings = Settings(defaults: defaults)
+        // Someone with history has been through setup; an empty store is a first launch.
+        settings.hasCompletedOnboarding = !records.isEmpty
         return AppModel(
-            settings: Settings(defaults: defaults),
+            settings: settings,
             history: HistoryStore(previewRecords: records),
             snippets: SnippetStore(preview: snippets),
             dictionary: DictionaryStore(preview: dictionary)

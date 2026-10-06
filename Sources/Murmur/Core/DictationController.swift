@@ -759,7 +759,8 @@ final class DictationController {
             text,
             style: style,
             corrector: dictionary.corrector,
-            snippets: snippets.enabled
+            snippets: snippets.enabled,
+            vocabulary: dictionary.biasPhrases
         )
         return PipelineOutput(
             engineName: engine.displayName,
@@ -773,9 +774,9 @@ final class DictationController {
     }
 
     private func readyEngine() async throws -> any TranscriptionEngine {
-        if case .downloading = models.state {
-            throw DictationFailure(message: "Speech model is still downloading")
-        }
+        // No early exit while Parakeet downloads: `ModelManager.engine()` hands back Apple
+        // Speech (or the previously loaded model) as a stand-in, so dictation works from the
+        // first minute instead of after a 600 MB download.
         let models = self.models
         if case .notDownloaded = models.state {
             Task { await models.prepare() }

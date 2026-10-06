@@ -51,7 +51,7 @@ final class PolishService {
                 try await client.polish(request)
             }
             let elapsed = Self.seconds(clock.now - started)
-            guard let accepted = PolishGuard.accept(output, original: request.text) else {
+            guard let accepted = PolishGuard.accept(output, original: request.text, vocabulary: request.vocabulary) else {
                 Log.polish.info("\(provider.rawValue, privacy: .public) rewrite rejected by the guard")
                 return Outcome(text: request.text, provider: nil, note: "Rewrite rejected: it changed what was said")
             }
@@ -89,7 +89,7 @@ final class PolishService {
             let output = try await HardDeadline.run(within: .seconds(limit)) {
                 try await client.polish(request)
             }
-            guard let accepted = PolishGuard.accept(output, original: request.text) else {
+            guard let accepted = PolishGuard.accept(output, original: request.text, vocabulary: request.vocabulary) else {
                 return .failure(TestFailure(
                     message: "The model replied, but rewrote too freely, so dictation would keep the original text. It said: “\(output.trimmingCharacters(in: .whitespacesAndNewlines))”"
                 ))
