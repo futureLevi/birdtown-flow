@@ -96,6 +96,7 @@ struct OnboardingView: View {
             if preview == nil { model.permissions.stopPolling() }
         }
         .onChange(of: accessibilityGranted) { _, granted in accessibilityChanged(granted) }
+        .onChange(of: hotkeyActive) { _, active in hotkeyChanged(active) }
         .onChange(of: model.controller.lastRecord?.id) { _, _ in checkPractice() }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             activations += 1
@@ -278,7 +279,13 @@ struct OnboardingView: View {
         if !model.controller.isHotkeyActive {
             model.controller.activate()
         }
-        guard step == .accessibility, model.controller.isHotkeyActive else { return }
+    }
+
+    /// The step finishes when the hotkey is actually armed, not merely when access is granted:
+    /// that covers an arm right after the grant and a late one from the controller's own
+    /// retry loop, and it can only fire once per arming.
+    private func hotkeyChanged(_ active: Bool) {
+        guard preview == nil, active, step == .accessibility, accessibilityGranted else { return }
         Task {
             try? await Task.sleep(for: Motion.autoAdvanceDelay)
             if step == .accessibility { go(to: .model) }
