@@ -289,7 +289,8 @@ final class DictationController {
         let releasedAt = Date()
         let id = UUID()
         let task = Task { [weak self] in
-            await self?.finish(current, releasedAt: releasedAt, id: id)
+            guard let self else { return }
+            await self.finish(current, releasedAt: releasedAt, id: id)
         }
         processing = (id, task)
     }
