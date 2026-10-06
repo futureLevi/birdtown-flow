@@ -65,7 +65,7 @@ jobs:
           mkdir -p snapshots
           ( .build/debug/Murmur --render-snapshots "$PWD/snapshots" 2>&1 | tee snapshots.log ) &
           pid=$!
-          for i in $(seq 1 180); do
+          for i in $(seq 1 420); do
             kill -0 $pid 2>/dev/null || break
             sleep 1
           done
@@ -140,7 +140,7 @@ jobs:
           gh release delete nightly --yes --cleanup-tag 2>/dev/null || true
           gh release create nightly dist/Murmur.zip \
             --title "Murmur nightly" \
-            --notes "Built from ${GITHUB_SHA::8}. Unzip, move Murmur.app to Applications, then right-click → Open the first time (it is not notarized)." \
+            --notes "Built from ${GITHUB_SHA::8}. Unzip and move Murmur.app to Applications. It is not notarized, so the first launch is blocked: open System Settings → Privacy & Security and click Open Anyway (or run: xattr -dr com.apple.quarantine /Applications/Murmur.app). Ad-hoc signed, so re-grant Accessibility after each update." \
             --prerelease --target "${GITHUB_SHA}"
 
       - name: Fail if build or tests failed
