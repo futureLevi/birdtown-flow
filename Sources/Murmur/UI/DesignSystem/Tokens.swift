@@ -183,6 +183,7 @@ extension Palette.HUD {
     /// Soft halo behind the record dot; brightens with the voice.
     static let emberGlow = Color(hex: 0xFF6A3D, alpha: 0.55)
     static let dangerSoft = Color(hex: 0xFF6B5E, alpha: 0.18)
+    static let successSoft = Color(hex: 0x58C487, alpha: 0.18)
     static let onEmber = Color.white
     /// The pill's shadow is built from stacked layers (see `HUDPillBody`), shaped by
     /// `Elevation.hud`'s radius and offset.
@@ -207,6 +208,8 @@ extension Layout.HUD {
     static let timerWidth: CGFloat = 32
     static let checkSize: CGFloat = 14
     static let checkStroke: CGFloat = 2
+    /// The smaller check inside the "copied" notice's glyph circle.
+    static let noticeCheckSize: CGFloat = 10
     static let failureGlyph: CGFloat = 16
     static let contentPadding: CGFloat = 14
     static let hintSpacing: CGFloat = 5
@@ -234,6 +237,9 @@ extension Motion {
     /// Per-bar spring for the live waveform (same feel as `bars`).
     static let barStiffness: Double = 420
     static let barDamping: Double = 26
+    /// `pill`'s spring parameters, for code that evaluates the curve itself (the README film).
+    static let pillResponse: Double = 0.38
+    static let pillDamping: Double = 0.74
     /// Record dot breathing period, seconds.
     static let breathPeriod: Double = 1.8
     /// Travelling "thinking" wave, cycles per second.

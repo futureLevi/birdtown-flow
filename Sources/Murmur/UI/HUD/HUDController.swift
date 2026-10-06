@@ -183,7 +183,8 @@ final class HUDModel {
             recordingStartedAt: controller.recordingStartedAt,
             hover: hover,
             keyName: settings.pushToTalkKey.displayName,
-            appName: controller.context?.appName
+            appName: controller.context?.appName,
+            notice: controller.notice
         )
     }
 

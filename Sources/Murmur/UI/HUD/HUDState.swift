@@ -48,6 +48,9 @@ struct HUDState: Equatable, Sendable {
     /// The push-to-talk key, as the user sees it ("fn", "Right ⌥").
     var keyName = "fn"
     var appName: String?
+    /// Why a finished dictation went to the clipboard ("Copied — no text field was focused").
+    /// Shown beside the check; `nil` when the text was typed.
+    var notice: String?
 
     var kind: Kind {
         switch phase {
@@ -92,7 +95,7 @@ struct HUDState: Equatable, Sendable {
             return "Listening"
         case .transcribing: return "Transcribing"
         case .polishing: return "Polishing"
-        case .done: return "Inserted"
+        case .done: return notice ?? "Inserted"
         case .cancelled: return "Cancelled"
         case .failed: return failureMessage ?? "Something went wrong"
         }
@@ -127,14 +130,21 @@ enum HUDMetrics {
             return CGSize(width: Layout.HUD.listeningWidth, height: height)
         case .handsFree:
             return CGSize(width: Layout.HUD.handsFreeWidth, height: height)
-        case .done, .cancelled:
+        case .done:
+            if let notice = state.notice { return messageSize(notice) }
+            return CGSize(width: height, height: height)
+        case .cancelled:
             return CGSize(width: height, height: height)
         case .failed:
-            let text = min(textWidth(state.failureMessage ?? "", pointSize: Layout.HUD.labelPointSize),
-                           Layout.HUD.messageMaxWidth)
-            let width = Layout.HUD.contentPadding * 2 + Layout.HUD.failureGlyph + Spacing.s + text
-            return CGSize(width: width.rounded(.up), height: height)
+            return messageSize(state.failureMessage ?? "")
         }
+    }
+
+    /// A glyph and one line of text, truncated at `messageMaxWidth`.
+    static func messageSize(_ message: String) -> CGSize {
+        let text = min(textWidth(message, pointSize: Layout.HUD.labelPointSize), Layout.HUD.messageMaxWidth)
+        let width = Layout.HUD.contentPadding * 2 + Layout.HUD.failureGlyph + Spacing.s + text
+        return CGSize(width: width.rounded(.up), height: Layout.HUD.height)
     }
 
     /// The pill's frame inside the panel, in AppKit (y-up) coordinates.

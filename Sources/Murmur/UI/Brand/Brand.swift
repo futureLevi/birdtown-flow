@@ -7,6 +7,8 @@ import SwiftUI
 /// If you change one, paste it into the other; the `brand-*` snapshots show the result.
 struct AppIconArtwork: View {
     var size: CGFloat = 128
+    /// Off for exports, where the page supplies its own context.
+    var showsShadow = true
 
     var body: some View {
         Canvas { context, canvasSize in
@@ -16,7 +18,7 @@ struct AppIconArtwork: View {
         }
         .frame(width: size, height: size)
         // The same soft shadow the .icns bakes in, so the tile sits on the page.
-        .shadow(color: .black.opacity(0.3), radius: size * 0.014, y: size * 0.01)
+        .shadow(color: .black.opacity(showsShadow ? 0.3 : 0), radius: size * 0.014, y: size * 0.01)
         .accessibilityLabel("Murmur")
     }
 }
