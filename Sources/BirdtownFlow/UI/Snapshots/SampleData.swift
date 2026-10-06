@@ -223,7 +223,7 @@ extension AppModel {
         snippets: [Snippet] = SampleData.snippets,
         dictionary: [DictionaryEntry] = SampleData.dictionary
     ) -> AppModel {
-        let suite = "Murmur.Preview"
+        let suite = "BirdtownFlow.Preview"
         let defaults = UserDefaults(suiteName: suite) ?? .standard
         defaults.removePersistentDomain(forName: suite)
         let settings = Settings(defaults: defaults)

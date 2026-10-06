@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// A toggleable filter capsule. Selected chips are inked in; the count stays legible either way.
+/// A toggleable filter capsule. Selected chips wear Signal blue, the app's colour for "chosen".
 struct FilterChip: View {
     let title: String
     var symbol: String?
@@ -46,11 +46,11 @@ private struct FilterChipBody: View {
     var body: some View {
         configuration.label
             .font(Typography.caption)
-            .foregroundStyle(isSelected ? Palette.onChipSelected : (isHovered ? Palette.ink : Palette.inkSecondary))
+            .foregroundStyle(isSelected ? Palette.accent : (isHovered ? Palette.ink : Palette.inkSecondary))
             .padding(.horizontal, Spacing.m)
             .frame(height: Layout.Main.chipHeight)
             .background(Capsule(style: .continuous).fill(fill))
-            .overlay(Capsule(style: .continuous).strokeBorder(isSelected ? Color.clear : Palette.hairline,
+            .overlay(Capsule(style: .continuous).strokeBorder(isSelected ? Palette.accent : Palette.hairline,
                                                               lineWidth: Layout.Main.hairline))
             .contentShape(Capsule(style: .continuous))
             .scaleEffect(configuration.isPressed && !reduceMotion ? Interaction.pressedScale : 1)
@@ -61,7 +61,7 @@ private struct FilterChipBody: View {
     }
 
     private var fill: Color {
-        if isSelected { return Palette.chipSelected }
+        if isSelected { return Palette.accentSoft }
         if configuration.isPressed { return Palette.surfacePressed }
         return isHovered ? Palette.surfaceHover : Palette.surface
     }

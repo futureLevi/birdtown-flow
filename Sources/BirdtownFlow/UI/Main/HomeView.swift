@@ -96,7 +96,7 @@ struct HomeView: View {
                             .imageScale(.small)
                     }
                 }
-                .buttonStyle(.murmurGhost)
+                .buttonStyle(.flowGhost)
                 .controlSize(.small)
             }
             VStack(spacing: 0) {
@@ -152,7 +152,7 @@ private struct HomeBanners: View {
                     tone: .info
                 ) {
                     Button("Continue Setup") { OnboardingWindowController.shared.show(model: model) }
-                        .buttonStyle(.murmurPrimary)
+                        .buttonStyle(.flowPrimary)
                         .controlSize(.small)
                 }
             } else {
@@ -180,7 +180,7 @@ private struct HomeBanners: View {
                             model.permissions.refresh()
                         }
                     }
-                    .buttonStyle(.murmurSecondary)
+                    .buttonStyle(.flowSecondary)
                     .controlSize(.small)
                 }
             }
@@ -192,7 +192,7 @@ private struct HomeBanners: View {
                     tone: .warning
                 ) {
                     Button("Open Settings") { Permissions.openAccessibilitySettings() }
-                        .buttonStyle(.murmurSecondary)
+                        .buttonStyle(.flowSecondary)
                         .controlSize(.small)
                 }
             }
@@ -216,10 +216,7 @@ private struct HomeBanners: View {
                             .monospacedDigit()
                             .foregroundStyle(Palette.inkSecondary)
                     }
-                    ProgressView(value: progress ?? 0)
-                        .progressViewStyle(.linear)
-                        .controlSize(.small)
-                        .tint(Palette.ink)
+                    SpectrumProgressBar(progress: progress)
                         .frame(width: Layout.Main.progressBarWidth)
                 }
             }
@@ -231,7 +228,7 @@ private struct HomeBanners: View {
                 tone: .info
             ) {
                 Button("Download") { Task { await model.models.prepare() } }
-                    .buttonStyle(.murmurSecondary)
+                    .buttonStyle(.flowSecondary)
                     .controlSize(.small)
             }
         case .failed(let message):
@@ -242,7 +239,7 @@ private struct HomeBanners: View {
                 tone: .danger
             ) {
                 Button("Try Again") { Task { await model.models.prepare() } }
-                    .buttonStyle(.murmurSecondary)
+                    .buttonStyle(.flowSecondary)
                     .controlSize(.small)
             }
         case .loading, .ready:
@@ -256,7 +253,7 @@ private struct HomeBanners: View {
 /// Teaches the gesture before there's any history: hold the key, speak, release.
 private struct FirstRunCard: View {
     let keyName: String
-    /// Until setup is done the setup banner carries the one Ember button; trying dictation
+    /// Until setup is done the setup banner carries the one primary button; trying dictation
     /// before permissions are granted would only fail.
     let isSetupComplete: Bool
 
@@ -283,7 +280,9 @@ private struct FirstRunCard: View {
                         KeyCap(label: keyName, size: .large, isPressed: isKeyDown)
                     }
                     step(number: 2, title: "Speak", detail: "Talk naturally. Pauses and “um”s get tidied up.") {
-                        DemoWaveform()
+                        // The logo's bars: your voice, in the app's own mark. Nothing is live
+                        // here, so no spectrum.
+                        BrandMark(height: Layout.Main.brandMarkLarge)
                     }
                     step(number: 3, title: "Release", detail: "Clean text lands right where your cursor was.") {
                         Image(systemName: "text.cursor")
@@ -294,9 +293,9 @@ private struct FirstRunCard: View {
 
                 HStack(spacing: Spacing.m) {
                     if isSetupComplete {
-                        tryButton.buttonStyle(.murmurPrimary)
+                        tryButton.buttonStyle(.flowPrimary)
                     } else {
-                        tryButton.buttonStyle(.murmurSecondary)
+                        tryButton.buttonStyle(.flowSecondary)
                     }
                     Text("Tip: double-tap \(keyName) to keep talking without holding it.")
                         .font(Typography.callout)
@@ -350,23 +349,5 @@ private struct FirstRunCard: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .accessibilityElement(children: .combine)
-    }
-}
-
-/// A still waveform in Ember: the mark Murmur shows while it's listening.
-private struct DemoWaveform: View {
-    private static let levels: [CGFloat] = [0.35, 0.6, 0.95, 0.7, 0.45, 0.85, 1, 0.55, 0.3, 0.6, 0.4]
-
-    var body: some View {
-        HStack(alignment: .center, spacing: Layout.HUD.barSpacing) {
-            ForEach(Array(Self.levels.enumerated()), id: \.offset) { _, level in
-                Capsule()
-                    .fill(Palette.ember)
-                    .frame(width: Layout.HUD.barWidth,
-                           height: max(Layout.HUD.barMinHeight, Layout.Main.keyCapHeightLarge * level))
-            }
-        }
-        .frame(height: Layout.Main.keyCapHeightLarge)
-        .accessibilityHidden(true)
     }
 }

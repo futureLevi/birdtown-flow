@@ -26,7 +26,7 @@ struct DictionaryView: View {
                     } label: {
                         Label("Add Entry", systemImage: "plus")
                     }
-                    .buttonStyle(.murmurPrimary)
+                    .buttonStyle(.flowPrimary)
                     .keyboardShortcut("n", modifiers: .command)
                     .help("Add a word or a replacement (⌘N)")
                 }
@@ -39,7 +39,7 @@ struct DictionaryView: View {
                             + "“cloud code” you mean “Claude Code”."
                     ) {
                         Button("Add Entry") { isAdding = true }
-                            .buttonStyle(.murmurSecondary)
+                            .buttonStyle(.flowSecondary)
                     }
                     .cardSurface()
                 } else {
@@ -121,7 +121,7 @@ struct DictionaryView: View {
                 .foregroundStyle(Palette.inkSecondary)
             Spacer(minLength: Spacing.s)
             Button("Open dictionary.txt") { NSWorkspace.shared.open(DictionaryStore.fileURL) }
-                .buttonStyle(.murmurGhost)
+                .buttonStyle(.flowGhost)
                 .controlSize(.small)
                 .help(DictionaryStore.fileURL.path)
                 .disabled(!FileManager.default.fileExists(atPath: DictionaryStore.fileURL.path))
@@ -320,7 +320,7 @@ struct DictionaryEditorSheet: View {
             }
 
             if kind == .correction {
-                LabeledInput(label: "When Birdtown Flow hears", text: $hear, prompt: "cloud code")
+                LabeledInput(label: "When it hears", text: $hear, prompt: "cloud code")
             }
             LabeledInput(
                 label: kind == .term ? "Word or phrase" : "Write",
@@ -353,13 +353,13 @@ struct DictionaryEditorSheet: View {
             HStack(spacing: Spacing.s) {
                 Spacer()
                 Button("Cancel") { dismiss() }
-                    .buttonStyle(.murmurSecondary)
+                    .buttonStyle(.flowSecondary)
                     .keyboardShortcut(.cancelAction)
                 Button(original == nil ? "Add" : "Save") {
                     onSave(draft)
                     dismiss()
                 }
-                .buttonStyle(.murmurPrimary)
+                .buttonStyle(.flowPrimary)
                 .keyboardShortcut(.defaultAction)
                 .disabled(!canSave)
             }

@@ -36,8 +36,8 @@ struct SearchField: View {
         .padding(.horizontal, Spacing.m)
         .frame(height: Layout.Main.searchFieldHeight)
         .background(shape.fill(Palette.sunken))
-        .overlay(shape.strokeBorder(isFocused ? Palette.hairlineStrong : Palette.hairline,
-                                    lineWidth: Layout.Main.hairline))
+        .overlay(shape.strokeBorder(isFocused ? Palette.accent : Palette.hairline,
+                                    lineWidth: isFocused ? Layout.Main.focusRing : Layout.Main.hairline))
         .contentShape(shape)
         .onTapGesture { isFocused = true }
         .animation(Motion.resolve(Motion.fadeFast, reduceMotion: reduceMotion), value: text.isEmpty)

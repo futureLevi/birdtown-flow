@@ -54,6 +54,8 @@ struct MainPreview: Sendable {
     var firstName: String?
     var historyQuery = ""
     var originalRecordID: UUID?
+    /// Seconds into the live orb's turn, so recording states render the same frame every time.
+    var orbPhase: Double?
 }
 
 extension EnvironmentValues {

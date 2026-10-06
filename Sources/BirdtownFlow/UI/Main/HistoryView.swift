@@ -221,7 +221,8 @@ struct HistoryView: View {
                 symbol: "waveform",
                 title: "Your words will gather here",
                 message: "Every dictation lands in History with its audio, so you can copy it, paste it "
-                    + "again or retry it. Hold your shortcut and say something to begin."
+                    + "again or retry it. Hold your shortcut and say something to begin.",
+                showsBrandMark: true
             )
         } else if searchMatches == 0 {
             EmptyState(
@@ -230,7 +231,7 @@ struct HistoryView: View {
                 message: "Try a shorter phrase, or search for the app you were dictating into."
             ) {
                 Button("Clear Search") { query = "" }
-                    .buttonStyle(.murmurSecondary)
+                    .buttonStyle(.flowSecondary)
             }
         } else if filter == .failed {
             EmptyState(
@@ -239,7 +240,7 @@ struct HistoryView: View {
                 message: "Every dictation made it through. If one ever doesn't, it waits here with its audio."
             ) {
                 Button("Show All") { filter = .all }
-                    .buttonStyle(.murmurSecondary)
+                    .buttonStyle(.flowSecondary)
             }
         } else {
             EmptyState(
@@ -250,7 +251,7 @@ struct HistoryView: View {
                     : "Dictations rewritten by AI polish will show up here."
             ) {
                 Button("Show All") { filter = .all }
-                    .buttonStyle(.murmurSecondary)
+                    .buttonStyle(.flowSecondary)
             }
         }
     }
@@ -267,7 +268,7 @@ struct HistoryView: View {
                     .font(Typography.bodyEmphasis)
                     .foregroundStyle(Palette.ink)
                 Button("Undo") { undoDeletion() }
-                    .buttonStyle(.murmurGhost)
+                    .buttonStyle(.flowGhost)
                     .controlSize(.small)
                     .keyboardShortcut("z", modifiers: .command)
             }

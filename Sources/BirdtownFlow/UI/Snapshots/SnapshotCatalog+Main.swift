@@ -6,7 +6,7 @@ extension SnapshotCatalog {
     static var main: [SnapshotRenderer.Shot] {
         let size = CGSize(width: 1040, height: 700)
         let records = SampleData.records()
-        let sample = MainPreview(status: SampleData.readyStatus, firstName: "Levi")
+        let sample = MainPreview(status: SampleData.readyStatus, firstName: "Levi", orbPhase: Self.orbPhase)
         var firstRun = sample
         firstRun.status?.model = .downloading(0.42)
         var search = sample
@@ -30,7 +30,63 @@ extension SnapshotCatalog {
             SnapshotRenderer.Shot("main-sidebar", size: CGSize(width: 4 * Layout.sidebarWidth, height: 520)) {
                 sidebars(records: records)
             },
+            // The toolbar never renders in window shots, so the Dictate pill (idle and live)
+            // and the shared controls get a sheet of their own.
+            SnapshotRenderer.Shot("main-components", size: CGSize(width: 760, height: 420)) {
+                components(records: records)
+            },
         ]
+    }
+
+    /// A fixed moment in the live orb's turn, so recording states render identically.
+    private static let orbPhase: Double = 2.4
+
+    private static func components(records: [HistoryRecord]) -> some View {
+        VStack(alignment: .leading, spacing: Spacing.xl) {
+            HStack(spacing: Spacing.m) {
+                DictateButton(isRecording: false) {}
+                DictateButton(isRecording: true, orbPhase: orbPhase) {}
+                Button("Continue Setup") {}.buttonStyle(.flowPrimary).controlSize(.small)
+                Button("Open Settings") {}.buttonStyle(.flowSecondary)
+                Button("All history") {}.buttonStyle(.flowGhost)
+            }
+            HStack(spacing: Spacing.s) {
+                FilterChip(title: "All", isSelected: true) {}
+                FilterChip(title: "Failed", symbol: "exclamationmark.triangle", count: 2, isSelected: false) {}
+                FilterChip(title: "Polished", symbol: "sparkles", count: 6, isSelected: false) {}
+                Badge(text: "Polished · Claude", symbol: "sparkles")
+                Badge(text: "Chosen", tone: .accent)
+                Badge(text: "Failed", symbol: "exclamationmark.triangle.fill", tone: .danger)
+            }
+            HStack(alignment: .top, spacing: Spacing.m) {
+                Card(isSelected: true) {
+                    VStack(alignment: .leading, spacing: Spacing.xs) {
+                        Text("Selected card").font(Typography.headline).foregroundStyle(Palette.ink)
+                        Text("Signal blue ring over a soft wash.").font(Typography.callout)
+                            .foregroundStyle(Palette.inkSecondary)
+                    }
+                }
+                Card {
+                    VStack(alignment: .leading, spacing: Spacing.s) {
+                        HStack(spacing: Spacing.s) {
+                            Text("Hold").font(Typography.callout).foregroundStyle(Palette.inkSecondary)
+                            KeyCap(label: "fn")
+                            StatusDot(color: Palette.success)
+                            StatusDot(color: Palette.danger)
+                        }
+                        SpectrumProgressBar(progress: 0.42)
+                    }
+                }
+                StatTile(label: "Pace", value: 152, unit: "wpm", caption: "3.4× faster than typing")
+            }
+            SearchField(text: .constant("migration"), prompt: "Search words or apps")
+                .frame(width: Layout.Main.searchFieldWidth)
+        }
+        .padding(Spacing.page)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .background(Palette.canvas)
+        .environment(previewModel(records: records, section: .home))
+        .transaction { $0.disablesAnimations = true }
     }
 
     private static func sidebars(records: [HistoryRecord]) -> some View {
@@ -46,6 +102,7 @@ extension SnapshotCatalog {
             ForEach(Array([ready, noAccess, recording, failed].enumerated()), id: \.offset) { index, status in
                 MainSidebar(status: status)
                     .environment(previewModel(records: records, section: index == 0 ? .home : .history))
+                    .environment(\.mainPreview, MainPreview(orbPhase: orbPhase))
                     .frame(width: Layout.sidebarWidth)
                     .background(Palette.sunken)
             }

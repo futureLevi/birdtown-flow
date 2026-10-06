@@ -29,7 +29,7 @@ extension SectionHeader where Trailing == EmptyView {
     }
 }
 
-/// A page's title block: serif display title, one explanatory line, actions on the right.
+/// A page's title block: rounded display title, one explanatory line, actions on the right.
 struct PageHeader<Actions: View>: View {
     let title: String
     var subtitle: String?

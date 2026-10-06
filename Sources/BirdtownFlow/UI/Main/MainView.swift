@@ -26,13 +26,18 @@ struct MainView: View {
             .animation(Motion.resolve(Motion.smooth, reduceMotion: reduceMotion), value: model.section)
             .toolbar {
                 ToolbarItem(placement: .primaryAction) {
-                    DictateButton(isRecording: status.isRecording) {
+                    DictateButton(isRecording: status.isRecording, orbPhase: preview.orbPhase) {
                         model.controller.toggleRecording()
                     }
                 }
+                // The button is its own navy pill; a glass capsule behind it would double it.
+                .sharedBackgroundVisibility(.hidden)
             }
         }
-        // Warm paper shows around the floating sidebar, so the window reads as one surface.
+        // Signal blue for every system control: sidebar selection, toggles, focus rings.
+        .tint(Palette.accent)
+        // Porcelain (midnight in dark mode) shows around the floating sidebar, so the window
+        // reads as one surface.
         .background(Palette.canvas)
         .background { SectionShortcuts() }
         .onAppear { model.permissions.refresh() }
@@ -59,21 +64,35 @@ struct MainView: View {
     }
 }
 
-/// Start or stop hands-free dictation from the toolbar.
-private struct DictateButton: View {
+/// Start or stop hands-free dictation from the toolbar: the window's one primary action, so
+/// it's the navy pill (porcelain with a navy label in dark mode). A system prominent button
+/// would draw a white label on that porcelain and vanish, hence the custom style. While
+/// recording, the mic becomes the live orb: the brand's way of saying "listening".
+struct DictateButton: View {
     let isRecording: Bool
+    /// Pins the orb's frame for snapshots.
+    var orbPhase: Double?
     let action: () -> Void
+
+    @Environment(AppModel.self) private var model
 
     var body: some View {
         Button(action: action) {
-            Label(isRecording ? "Stop" : "Dictate", systemImage: isRecording ? "stop.fill" : "mic.fill")
-                .labelStyle(.titleAndIcon)
+            HStack(spacing: Spacing.s) {
+                if isRecording {
+                    // Read the level here, not in MainView, so only this button redraws with the voice.
+                    SpectrumOrb(mode: .live, diameter: Layout.Orb.medium, level: model.controller.level, phase: orbPhase)
+                } else {
+                    Image(systemName: "mic.fill")
+                }
+                Text(isRecording ? "Stop" : "Dictate")
+            }
         }
-        .buttonStyle(.borderedProminent)
-        .tint(Palette.ember)
+        .buttonStyle(.flowPrimary)
         .keyboardShortcut("d", modifiers: [.command, .shift])
         .help(isRecording ? "Finish and insert the text (⇧⌘D)"
                           : "Dictate hands-free (⇧⌘D). You can also just hold your shortcut key.")
+        .accessibilityLabel(isRecording ? "Stop dictating" : "Dictate")
     }
 }
 
@@ -128,6 +147,7 @@ struct MainSidebar: View {
 struct SidebarStatusView: View {
     let status: SystemStatus
     @Environment(AppModel.self) private var model
+    @Environment(\.mainPreview) private var preview
 
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.s) {
@@ -143,13 +163,13 @@ struct SidebarStatusView: View {
     private var shortcutLine: some View {
         if status.isRecording {
             HStack(spacing: Spacing.s) {
-                StatusDot(color: Palette.ember, isPulsing: true)
+                SpectrumOrb(mode: .live, diameter: Layout.Orb.small, phase: preview.orbPhase)
                 Text("Listening…")
                     .font(Typography.bodyEmphasis)
-                    .foregroundStyle(Palette.ember)
+                    .foregroundStyle(Palette.ink)
                 Spacer(minLength: 0)
                 Button("Stop") { model.controller.stopRecording() }
-                    .buttonStyle(.murmurGhost)
+                    .buttonStyle(.flowGhost)
                     .controlSize(.small)
             }
         } else if !status.accessibility {
@@ -176,7 +196,7 @@ struct SidebarStatusView: View {
                 symbol: "exclamationmark.triangle.fill"
             ) {
                 Button("Retry") { model.controller.activate() }
-                    .buttonStyle(.murmurGhost)
+                    .buttonStyle(.flowGhost)
                     .controlSize(.small)
             }
         } else {
@@ -253,10 +273,7 @@ struct SidebarStatusView: View {
                             .foregroundStyle(Palette.inkTertiary)
                     }
                 }
-                ProgressView(value: progress ?? 0)
-                    .progressViewStyle(.linear)
-                    .controlSize(.small)
-                    .tint(Palette.ink)
+                SpectrumProgressBar(progress: progress)
             }
         case .notDownloaded:
             HStack(spacing: Spacing.s) {
@@ -266,7 +283,7 @@ struct SidebarStatusView: View {
                     .foregroundStyle(Palette.inkSecondary)
                 Spacer(minLength: 0)
                 Button("Get") { Task { await model.models.prepare() } }
-                    .buttonStyle(.murmurGhost)
+                    .buttonStyle(.flowGhost)
                     .controlSize(.small)
                     .help("Download \(status.engineName) (\(status.engineDownloadSize))")
             }
@@ -279,7 +296,7 @@ struct SidebarStatusView: View {
                     .help(message)
                 Spacer(minLength: 0)
                 Button("Retry") { Task { await model.models.prepare() } }
-                    .buttonStyle(.murmurGhost)
+                    .buttonStyle(.flowGhost)
                     .controlSize(.small)
             }
         }

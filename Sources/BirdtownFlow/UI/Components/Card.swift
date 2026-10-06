@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// A raised surface: paper on the canvas, a hairline edge and the faintest shadow.
+/// A raised surface: white on porcelain (navy on midnight), a hairline edge and the faintest shadow.
 struct Card<Content: View>: View {
     var padding: CGFloat = Spacing.l
     var isSelected = false
@@ -15,13 +15,19 @@ struct Card<Content: View>: View {
 }
 
 extension View {
-    /// Card chrome for views that manage their own padding (grouped lists, tiles).
+    /// Card chrome for views that manage their own padding (grouped lists, tiles). Selected
+    /// cards wear Signal blue: a ring over a soft blue wash, the app's one mark of "chosen".
     func cardSurface(isSelected: Bool = false, isHovered: Bool = false, radius: CGFloat = Radius.l) -> some View {
         let shape = RoundedRectangle(cornerRadius: radius, style: .continuous)
         return self
-            .background(shape.fill(isHovered ? Palette.surfaceHover : Palette.surface))
+            .background {
+                ZStack {
+                    shape.fill(isHovered ? Palette.surfaceHover : Palette.surface)
+                    if isSelected { shape.fill(Palette.accentSoft) }
+                }
+            }
             .overlay(shape.strokeBorder(
-                isSelected ? Palette.ember : Palette.hairline,
+                isSelected ? Palette.accent : Palette.hairline,
                 lineWidth: isSelected ? Layout.Main.selectionRing : Layout.Main.hairline
             ))
             .clipShape(shape)

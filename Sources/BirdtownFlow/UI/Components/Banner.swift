@@ -76,34 +76,15 @@ struct ProgressRing: View {
     }
 }
 
-/// A small status light. Ember pulses gently while recording (static under Reduce Motion).
+/// A small static status light: ready, failed, not downloaded. Anything that means
+/// "recording" is a `SpectrumOrb` instead, never a coloured dot.
 struct StatusDot: View {
     let color: Color
-    var isPulsing = false
-
-    @State private var pulse = false
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         Circle()
             .fill(color)
             .frame(width: Layout.Main.statusDot, height: Layout.Main.statusDot)
-            .background(
-                Circle()
-                    .fill(color.opacity(Interaction.disabledOpacity))
-                    .scaleEffect(pulse ? 2.2 : 1)
-                    .opacity(pulse ? 0 : 1)
-            )
-            .onAppear { startPulse() }
-            .onChange(of: isPulsing) { _, _ in startPulse() }
             .accessibilityHidden(true)
-    }
-
-    private func startPulse() {
-        guard isPulsing, !reduceMotion else {
-            pulse = false
-            return
-        }
-        withAnimation(Motion.gentle.repeatForever(autoreverses: false)) { pulse = true }
     }
 }

@@ -123,14 +123,15 @@ struct HistoryRow: View {
                     } label: {
                         HStack(spacing: Spacing.xs) {
                             if isRetrying {
-                                ProgressView().controlSize(.mini).tint(Palette.onEmber)
+                                // Sits on the navy pill, so it takes the pill's label colour.
+                                ProgressView().controlSize(.mini).tint(Palette.onPrimary)
                             } else {
                                 Image(systemName: "arrow.clockwise")
                             }
                             Text(isRetrying ? "Retrying…" : "Retry")
                         }
                     }
-                    .buttonStyle(.murmurPrimary)
+                    .buttonStyle(.flowPrimary)
                     .controlSize(.small)
                     .disabled(isRetrying || audioURL == nil)
                     .help(audioURL == nil ? "The audio for this dictation wasn't kept" : "Transcribe the saved audio again")
@@ -277,7 +278,7 @@ struct HistoryRow: View {
     @ViewBuilder
     private var rowFill: some View {
         if isSelected || isHighlighted {
-            Palette.emberSoft
+            Palette.accentSoft
         } else if isHovered {
             Palette.surfaceHover
         } else {
@@ -385,7 +386,7 @@ struct HistoryRow: View {
     }
 }
 
-/// What the engine heard versus what Murmur wrote, and what changed in between.
+/// What the engine heard versus what was written, and what changed in between.
 struct OriginalPanel: View {
     let record: HistoryRecord
 
