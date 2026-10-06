@@ -21,7 +21,7 @@ final class OnboardingWindowController: NSObject, NSWindowDelegate {
         }
         self.model = model
 
-        let root = OnboardingView(onFinish: { [weak self] in self?.finish() })
+        let root = OnboardingView(initialStep: Self.startStep(for: model), onFinish: { [weak self] in self?.finish() })
             .environment(model)
         let hosting = NSHostingView(rootView: root)
         // The SwiftUI view has a fixed size; don't let the hosting view resize the window.
@@ -54,6 +54,16 @@ final class OnboardingWindowController: NSObject, NSWindowDelegate {
 
     func close() {
         window?.close()
+    }
+
+    /// Where setup opens. Unfinished setup with both permissions already granted means a
+    /// relaunch after the Accessibility grant (or setup closed part-way), so it resumes at the
+    /// speech model instead of making people click through steps that are done. Running
+    /// setup again from Settings starts at the beginning.
+    private static func startStep(for model: AppModel) -> OnboardingStep {
+        model.permissions.refresh()
+        let permissionsDone = model.permissions.microphone && model.permissions.accessibility
+        return !model.settings.hasCompletedOnboarding && permissionsDone ? .model : .welcome
     }
 
     /// Marks setup complete, closes the window and hands over to the main window.

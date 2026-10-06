@@ -1,4 +1,5 @@
 import AppKit
+import Combine
 import MurmurKit
 import SwiftUI
 
@@ -54,9 +55,12 @@ struct GeneralSettingsPane: View {
             SettingsGroup(title: "System") {
                 SettingsRow(title: "Open at login", detail: launchDetail) {
                     HStack(spacing: Spacing.m) {
-                        if launchNeedsApproval {
-                            Button("Open Login Items") { LaunchAtLogin.openSystemSettings() }
-                                .buttonStyle(SetupKit.SecondaryButtonStyle())
+                        if launchNeedsApproval || launchError != nil {
+                            Button("Open Login Items") {
+                                guard preview == nil else { return }
+                                LaunchAtLogin.openSystemSettings()
+                            }
+                            .buttonStyle(SetupKit.SecondaryButtonStyle())
                         }
                         SettingsSwitch(label: "Open at login", isOn: launchBinding)
                     }
@@ -72,14 +76,20 @@ struct GeneralSettingsPane: View {
             }
         }
         .onAppear(perform: refreshLaunchAtLogin)
+        // Approving (or removing) the login item happens in System Settings; pick it up on return.
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            refreshLaunchAtLogin()
+        }
         .onChange(of: settings.pushToTalkKey) { reloadShortcuts() }
         .onChange(of: settings.handsFreeEnabled) { reloadShortcuts() }
         .onChange(of: settings.pasteLastShortcutEnabled) { reloadShortcuts() }
     }
 
     private var launchDetail: String {
+        if launchNeedsApproval {
+            return "Almost on: allow Murmur under System Settings → General → Login Items."
+        }
         if let launchError { return launchError }
-        if launchNeedsApproval { return "Waiting for your approval in System Settings → Login Items." }
         return "Start Murmur quietly in the menu bar when you log in."
     }
 
@@ -92,7 +102,10 @@ struct GeneralSettingsPane: View {
                     try LaunchAtLogin.setEnabled(enabled)
                     launchError = nil
                 } catch {
-                    launchError = "Couldn't change this: \(error.localizedDescription)"
+                    Log.app.error("login item change failed: \(error.localizedDescription, privacy: .public)")
+                    launchError = enabled
+                        ? "macOS didn't allow this. Turn Murmur on under System Settings → General → Login Items."
+                        : "macOS didn't allow this. Turn Murmur off under System Settings → General → Login Items."
                 }
                 refreshLaunchAtLogin()
             }
@@ -106,6 +119,8 @@ struct GeneralSettingsPane: View {
         }
         launchAtLogin = LaunchAtLogin.isEnabled || LaunchAtLogin.needsApproval
         launchNeedsApproval = LaunchAtLogin.needsApproval
+        // Fixed in System Settings since the error: stop showing it.
+        if LaunchAtLogin.isEnabled { launchError = nil }
     }
 
     private func reloadShortcuts() {
@@ -121,6 +136,11 @@ struct AudioSettingsPane: View {
     @Environment(\.setupPreview) private var preview
     @State private var devices: [AudioInputDevice] = []
     @State private var pendingDelete: SpeechEngineChoice?
+    // What's on disk isn't observable, and measuring it walks the model folders, so it's read
+    // on appear and when something could have changed it — never on every progress tick.
+    @State private var downloaded: Set<SpeechEngineChoice> = []
+    @State private var deletable: Set<SpeechEngineChoice> = []
+    @State private var diskUses: [SpeechEngineChoice: String] = [:]
 
     private var modelState: ModelManager.State { preview?.modelState ?? model.models.state }
 
@@ -158,7 +178,9 @@ struct AudioSettingsPane: View {
                     EngineRow(
                         choice: choice,
                         selected: settings.engine == choice,
-                        downloaded: isDownloaded(choice),
+                        downloaded: downloaded.contains(choice),
+                        deletable: deletable.contains(choice),
+                        diskUse: diskUses[choice],
                         state: modelState,
                         onUse: { use(choice) },
                         onDelete: { pendingDelete = choice }
@@ -175,31 +197,66 @@ struct AudioSettingsPane: View {
                 }
             }
         }
-        .onAppear { devices = preview?.devices ?? AudioDevices.inputDevices() }
+        .onAppear {
+            devices = preview?.devices ?? AudioDevices.inputDevices()
+            refreshDisk()
+        }
+        .onChange(of: settings.engine) { refreshDisk() }
+        .onChange(of: stateKind) { refreshDisk() }
         .confirmationDialog(
             "Delete this speech model?",
             isPresented: Binding(get: { pendingDelete != nil }, set: { if !$0 { pendingDelete = nil } }),
             presenting: pendingDelete
         ) { choice in
             Button("Delete \(choice.displayName)", role: .destructive) {
+                guard preview == nil else { return }
                 model.models.deleteModel(choice)
+                refreshDisk()
             }
         } message: { choice in
-            Text("Frees \(choice.downloadSize) of disk space. You can download it again any time.")
+            Text("Frees \(diskUses[choice] ?? choice.downloadSize) of disk space. You can download it again any time.")
         }
     }
 
-    private func isDownloaded(_ choice: SpeechEngineChoice) -> Bool {
-        if let preview { return preview.downloaded.contains(choice) }
-        return model.models.isDownloaded(choice)
+    /// The model's broad state, without download progress, so disk facts refresh when a
+    /// download starts, finishes or fails rather than on every percent.
+    private var stateKind: Int {
+        if SetupKit.progress(of: modelState) != nil || modelState == .downloading(progress: nil) { return 1 }
+        if modelState == .loading { return 2 }
+        if modelState == .ready { return 3 }
+        if SetupKit.isFailed(modelState) { return 4 }
+        return 0
     }
 
-    /// Switches engine and starts loading it — downloading first if needed. Unstructured so
-    /// closing Settings doesn't cancel the download.
+    private func refreshDisk() {
+        if let preview {
+            downloaded = preview.downloaded
+            deletable = preview.downloaded.filter { $0.isParakeet && $0 != model.settings.engine }
+            return
+        }
+        let models = model.models
+        let all = SpeechEngineChoice.allCases
+        downloaded = Set(all.filter { models.isDownloaded($0) })
+        // Mirrors `ModelManager.canDelete`: never the selected engine; partial downloads count.
+        deletable = Set(all.filter { models.canDelete($0) })
+        diskUses = all.reduce(into: [:]) { sizes, choice in
+            if let bytes = models.diskSize(of: choice) {
+                sizes[choice] = ByteCountFormatter.string(fromByteCount: bytes, countStyle: .file)
+            }
+        }
+    }
+
+    /// Picking an engine is all it takes: ModelManager follows the setting, preparing the new
+    /// engine (downloading if needed) while the previous one keeps serving dictations. Only a
+    /// retry of the engine already selected needs an explicit `prepare()`, unstructured so
+    /// closing Settings doesn't cancel it.
     private func use(_ choice: SpeechEngineChoice) {
         guard preview == nil else { return }
-        model.settings.engine = choice
-        Task { await model.models.prepare() }
+        if model.settings.engine == choice {
+            Task { await model.models.prepare() }
+        } else {
+            model.settings.engine = choice
+        }
     }
 }
 
@@ -207,9 +264,20 @@ private struct EngineRow: View {
     let choice: SpeechEngineChoice
     let selected: Bool
     let downloaded: Bool
+    let deletable: Bool
+    /// Space the model takes on disk now, when there's anything there.
+    let diskUse: String?
     let state: ModelManager.State
     let onUse: () -> Void
     let onDelete: () -> Void
+
+    private var detail: String {
+        // Apple Speech's size line ("Managed by macOS") just repeats its detail.
+        guard choice.isParakeet else { return choice.detail }
+        guard downloaded else { return "\(choice.detail) \(choice.downloadSize) download." }
+        if let diskUse { return "\(choice.detail) Uses \(diskUse)." }
+        return "\(choice.detail) Downloaded."
+    }
 
     var body: some View {
         HStack(alignment: .center, spacing: Spacing.m) {
@@ -231,8 +299,7 @@ private struct EngineRow: View {
                             .background(Capsule().fill(Palette.sunken))
                     }
                 }
-                // Apple Speech's size line ("Managed by macOS") just repeats its detail.
-                Text(choice.isParakeet ? "\(choice.detail) \(choice.downloadSize)." : choice.detail)
+                Text(detail)
                     .font(Typography.callout)
                     .foregroundStyle(Palette.inkSecondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -277,7 +344,7 @@ private struct EngineRow: View {
             }
         } else if downloaded || !choice.isParakeet {
             HStack(spacing: Spacing.s) {
-                if choice.isParakeet {
+                if deletable {
                     Button(action: onDelete) {
                         Image(systemName: "trash")
                             .foregroundStyle(Palette.inkSecondary)
@@ -288,11 +355,24 @@ private struct EngineRow: View {
                 }
                 Button("Use", action: onUse)
                     .buttonStyle(SetupKit.SecondaryButtonStyle())
+                    .help("Switch to \(choice.displayName)")
             }
         } else {
-            Button("Download", action: onUse)
-                .buttonStyle(SetupKit.SecondaryButtonStyle())
-                .help("Download \(choice.downloadSize) and switch to \(choice.displayName)")
+            HStack(spacing: Spacing.s) {
+                // A partial download can still be cleared away.
+                if deletable {
+                    Button(action: onDelete) {
+                        Image(systemName: "trash")
+                            .foregroundStyle(Palette.inkSecondary)
+                    }
+                    .buttonStyle(.borderless)
+                    .help("Delete the partial \(choice.displayName) download")
+                    .accessibilityLabel("Delete partial \(choice.displayName) download")
+                }
+                Button("Download", action: onUse)
+                    .buttonStyle(SetupKit.SecondaryButtonStyle())
+                    .help("Switch to \(choice.displayName) and download it. Dictation keeps working meanwhile.")
+            }
         }
     }
 }

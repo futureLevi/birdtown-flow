@@ -92,28 +92,35 @@ extension SetupKit {
         Bundle.main.bundleURL.pathExtension == "app"
     }
 
-    /// Quits and reopens Murmur. macOS sometimes only lets a process create its event tap
-    /// after a restart that follows the Accessibility grant.
-    /// - Returns: `false` if the relauncher couldn't be started (Murmur keeps running).
-    static func relaunch() -> Bool {
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/bin/sh")
-        // Wait for this process to exit before reopening, so the new instance is a fresh
-        // launch rather than a reactivation of the dying one. The bundle path arrives as $0
-        // so it never needs quoting.
-        let pid = ProcessInfo.processInfo.processIdentifier
-        process.arguments = [
-            "-c", "while kill -0 \(pid) 2>/dev/null; do sleep 0.2; done; /usr/bin/open \"$0\"",
-            Bundle.main.bundleURL.path,
-        ]
-        do {
-            try process.run()
-        } catch {
-            Log.ui.error("relaunch failed: \(error.localizedDescription)")
-            return false
+    /// Set while a relaunch is under way, so a second click can't start a second instance.
+    private(set) static var isRelaunching = false
+
+    /// Opens a fresh instance of Murmur, then quits this one. macOS sometimes only lets a
+    /// process create its event tap after a restart that follows the Accessibility grant.
+    /// The new instance resumes onboarding where this one was (see
+    /// `OnboardingWindowController.show`). If macOS refuses to open it, this instance keeps
+    /// running and says so.
+    static func relaunch() {
+        guard !isRelaunching else { return }
+        isRelaunching = true
+        let configuration = NSWorkspace.OpenConfiguration()
+        configuration.createsNewApplicationInstance = true
+        NSWorkspace.shared.openApplication(at: Bundle.main.bundleURL, configuration: configuration) { _, error in
+            // Called off the main thread; carry only a string across.
+            let failure = error?.localizedDescription
+            Task { @MainActor in
+                guard let failure else {
+                    NSApp.terminate(nil)
+                    return
+                }
+                SetupKit.isRelaunching = false
+                Log.ui.error("relaunch failed: \(failure, privacy: .public)")
+                let alert = NSAlert()
+                alert.messageText = "Murmur couldn't restart itself"
+                alert.informativeText = "Quit Murmur and open it again from Applications to finish turning on your shortcut."
+                alert.runModal()
+            }
         }
-        NSApp.terminate(nil)
-        return true
     }
 
     /// Short, human description of the speech model's state.

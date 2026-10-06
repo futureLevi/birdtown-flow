@@ -32,8 +32,9 @@ struct OnboardingView: View {
     @State private var step: OnboardingStep
     @State private var forward = true
     @State private var micDenied = false
-    @State private var relaunchFailed = false
-    @State private var practiceBaseline: UUID?
+    /// When the Try it step appeared. Only a dictation that started after this counts, so an
+    /// earlier `lastRecord` (or one finishing from a previous step) can't fake a success.
+    @State private var practiceStartedAt: Date?
     @State private var practiceDone = false
     /// Bumped whenever Murmur becomes active again, e.g. back from System Settings.
     @State private var activations = 0
@@ -95,6 +96,7 @@ struct OnboardingView: View {
             if preview == nil { model.permissions.stopPolling() }
         }
         .onChange(of: accessibilityGranted) { _, granted in accessibilityChanged(granted) }
+        .onChange(of: hotkeyActive) { _, active in hotkeyChanged(active) }
         .onChange(of: model.controller.lastRecord?.id) { _, _ in checkPractice() }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             activations += 1
@@ -112,8 +114,7 @@ struct OnboardingView: View {
         case .accessibility:
             AccessibilityStep(
                 granted: accessibilityGranted,
-                needsRelaunch: needsRelaunch,
-                relaunchFailed: relaunchFailed
+                needsRelaunch: needsRelaunch
             )
             .padding(.bottom, Layout.Setup.footerHeight)
         case .model:
@@ -139,7 +140,7 @@ struct OnboardingView: View {
             )
             .padding(.bottom, Layout.Setup.footerHeight)
             .onAppear {
-                if preview == nil { practiceBaseline = model.controller.lastRecord?.id }
+                if preview == nil { practiceStartedAt = Date() }
             }
         }
     }
@@ -192,10 +193,8 @@ struct OnboardingView: View {
                     Permissions.openAccessibilitySettings()
                 }
             }
-            if needsRelaunch && SetupKit.canRelaunch && !relaunchFailed {
-                return FooterAction(title: "Relaunch Murmur") {
-                    if !SetupKit.relaunch() { relaunchFailed = true }
-                }
+            if needsRelaunch && SetupKit.canRelaunch {
+                return FooterAction(title: "Relaunch Murmur") { SetupKit.relaunch() }
             }
             return FooterAction(title: "Continue", run: advance)
         case .model, .shortcut:
@@ -211,7 +210,7 @@ struct OnboardingView: View {
             return FooterAction(title: "Skip", run: advance)
         case .accessibility where !accessibilityGranted:
             return FooterAction(title: "Skip", run: advance)
-        case .accessibility where needsRelaunch && SetupKit.canRelaunch && !relaunchFailed:
+        case .accessibility where needsRelaunch && SetupKit.canRelaunch:
             return FooterAction(title: "Later", run: advance)
         case .model where SetupKit.isFailed(modelState):
             return FooterAction(title: "Try Again", run: prepareModel)
@@ -280,7 +279,13 @@ struct OnboardingView: View {
         if !model.controller.isHotkeyActive {
             model.controller.activate()
         }
-        guard step == .accessibility, model.controller.isHotkeyActive else { return }
+    }
+
+    /// The step finishes when the hotkey is actually armed, not merely when access is granted:
+    /// that covers an arm right after the grant and a late one from the controller's own
+    /// retry loop, and it can only fire once per arming.
+    private func hotkeyChanged(_ active: Bool) {
+        guard preview == nil, active, step == .accessibility, accessibilityGranted else { return }
         Task {
             try? await Task.sleep(for: Motion.autoAdvanceDelay)
             if step == .accessibility { go(to: .model) }
@@ -296,8 +301,12 @@ struct OnboardingView: View {
 
     private func checkPractice() {
         guard preview == nil, step == .practice, !practiceDone,
+              let startedAt = practiceStartedAt,
               let record = model.controller.lastRecord,
-              record.id != practiceBaseline, record.hasText
+              // `createdAt` is when that recording started.
+              record.createdAt >= startedAt,
+              record.outcome == .inserted || record.outcome == .copied,
+              record.hasText
         else { return }
         withAnimation(Motion.resolve(Motion.confirm, reduceMotion: reduceMotion)) {
             practiceDone = true
@@ -550,7 +559,6 @@ private struct PermissionRow: View {
 private struct AccessibilityStep: View {
     let granted: Bool
     let needsRelaunch: Bool
-    let relaunchFailed: Bool
 
     var body: some View {
         StepScaffold(
@@ -578,7 +586,7 @@ private struct AccessibilityStep: View {
     }
 
     private var relaunchHint: String {
-        if relaunchFailed || !SetupKit.canRelaunch {
+        if !SetupKit.canRelaunch {
             return "Access is on. Quit Murmur and open it again so macOS lets it hear your shortcut."
         }
         return "Access is on. macOS needs Murmur to restart once before it can hear your shortcut."
