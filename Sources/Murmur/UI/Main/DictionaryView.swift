@@ -73,9 +73,11 @@ struct DictionaryView: View {
         }
         .sheet(isPresented: $isAdding) {
             DictionaryEditorSheet(original: nil) { model.dictionary.add($0) }
+                .environment(model)
         }
         .sheet(item: $editing) { entry in
             DictionaryEditorSheet(original: entry) { model.dictionary.update($0) }
+                .environment(model)
         }
     }
 

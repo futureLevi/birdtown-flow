@@ -70,6 +70,7 @@ struct HistoryRow: View {
             DictionaryEditorSheet(original: nil, kind: .correction, context: record.finalText) { entry in
                 model.dictionary.add(entry)
             }
+            .environment(model)
         }
         .animation(Motion.resolve(Motion.fadeFast, reduceMotion: reduceMotion), value: isHovered)
         .animation(Motion.resolve(Motion.smooth, reduceMotion: reduceMotion), value: showsOriginal)

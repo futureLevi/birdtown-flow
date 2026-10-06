@@ -75,9 +75,11 @@ struct SnippetsView: View {
         }
         .sheet(isPresented: $isAdding) {
             SnippetEditorSheet(original: nil) { model.snippets.add($0) }
+                .environment(model)
         }
         .sheet(item: $editing) { snippet in
             SnippetEditorSheet(original: snippet) { model.snippets.update($0) }
+                .environment(model)
         }
     }
 
