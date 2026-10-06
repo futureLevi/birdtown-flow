@@ -278,8 +278,14 @@ extension Typography {
 
 extension Layout {
     enum Setup {
-        static let appIcon: CGFloat = 96
-        static let aboutIcon: CGFloat = 64
+        // Icon frames: the artwork keeps the standard macOS margin (its tile fills ~80 % of
+        // the frame), so these are about a quarter larger than the tile they show.
+        static let appIcon: CGFloat = 120
+        static let aboutIcon: CGFloat = 80
+        static let menuIcon: CGFloat = 36
+        /// Every Settings tab is this tall and scrolls inside, so the window never outgrows a
+        /// 13" screen and doesn't jump in size between tabs.
+        static let settingsHeight: CGFloat = 620
         static let stepGlyph: CGFloat = 52
         /// Reading measure for onboarding copy.
         static let measure: CGFloat = 420

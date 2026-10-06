@@ -39,8 +39,10 @@ struct MenuBarContent: View {
     // MARK: Header
 
     private var header: some View {
-        HStack(spacing: Spacing.m) {
-            SetupKit.AppMark(size: Layout.iconLarge, elevated: false)
+        // The icon's frame includes the artwork's transparent margin, so a tighter gap here
+        // reads as the same rhythm as the rows below.
+        HStack(spacing: Spacing.s) {
+            SetupKit.AppMark(size: Layout.Setup.menuIcon, elevated: false)
             VStack(alignment: .leading, spacing: Spacing.xxs) {
                 Text("Murmur")
                     .font(Typography.headline)
@@ -56,8 +58,7 @@ struct MenuBarContent: View {
             }
             Spacer(minLength: 0)
         }
-        .padding(.horizontal, Spacing.xs)
-        .padding(.top, Spacing.xs)
+        .padding(.horizontal, Spacing.xxs)
         .animation(Motion.resolve(Motion.fade, reduceMotion: reduceMotion), value: status.text)
         .accessibilityElement(children: .combine)
     }
@@ -68,6 +69,11 @@ struct MenuBarContent: View {
         }
         if phase == .transcribing { return ("Transcribing…", Palette.inkTertiary) }
         if phase == .polishing { return ("Polishing…", Palette.inkTertiary) }
+        if phase == .done {
+            // "Copied — no text field was focused" when it couldn't be typed.
+            return (model.controller.notice ?? "Done", Palette.success)
+        }
+        if phase == .cancelled { return ("Cancelled", Palette.inkTertiary) }
         if case .failed(let message) = phase { return (message, Palette.danger) }
         if !micGranted { return ("Microphone access needed", Palette.warning) }
         if !accessibilityGranted { return ("Accessibility access needed", Palette.warning) }

@@ -59,16 +59,20 @@ struct SettingsView: View {
 
 // MARK: - Building blocks
 
-/// A pane: warm canvas, groups stacked with generous rhythm.
+/// A pane: warm canvas, groups stacked with generous rhythm, scrolling inside a fixed height.
 struct SettingsPane<Content: View>: View {
     @ViewBuilder var content: Content
 
     var body: some View {
-        VStack(alignment: .leading, spacing: Spacing.xl) {
-            content
+        ScrollView {
+            VStack(alignment: .leading, spacing: Spacing.xl) {
+                content
+            }
+            .padding(Spacing.xxl)
+            .frame(maxWidth: .infinity, alignment: .topLeading)
         }
-        .padding(Spacing.xxl)
-        .frame(width: Layout.settingsWidth, alignment: .topLeading)
+        .scrollBounceBehavior(.basedOnSize)
+        .frame(width: Layout.settingsWidth, height: Layout.Setup.settingsHeight)
         .background(Palette.canvas)
     }
 }

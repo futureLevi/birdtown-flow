@@ -83,11 +83,11 @@ extension SnapshotCatalog {
         textFacts.keySaved = true
 
         return [
-            shot("general", height: 560, model: general, facts: SetupPreview()) { GeneralSettingsPane() },
-            shot("audio", height: 640, model: audio, facts: audioFacts) { AudioSettingsPane() },
-            shot("text", height: 820, model: text, facts: textFacts) { TextSettingsPane() },
-            shot("privacy", height: 560, model: general, facts: SetupPreview()) { PrivacySettingsPane() },
-            shot("about", height: 520, model: general, facts: SetupPreview()) { AboutSettingsPane() },
+            shot("general", height: Layout.Setup.settingsHeight, model: general, facts: SetupPreview()) { GeneralSettingsPane() },
+            shot("audio", height: Layout.Setup.settingsHeight, model: audio, facts: audioFacts) { AudioSettingsPane() },
+            shot("text", height: Layout.Setup.settingsHeight, model: text, facts: textFacts) { TextSettingsPane() },
+            shot("privacy", height: Layout.Setup.settingsHeight, model: general, facts: SetupPreview()) { PrivacySettingsPane() },
+            shot("about", height: Layout.Setup.settingsHeight, model: general, facts: SetupPreview()) { AboutSettingsPane() },
         ]
     }
 
