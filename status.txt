@@ -1,0 +1,6 @@
+sha=9fc866479add8689d3f9b3c58320c4091e161ece
+branch=feat/speech
+build=success
+test=success
+snapshots=success
+release=skipped
