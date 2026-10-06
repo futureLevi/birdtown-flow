@@ -1,0 +1,7 @@
+sha=9a12855b48a21c7943f86da85661773ab114b6a0
+branch=feat/logo
+build=success
+test=success
+snapshots=success
+speech=success
+release=skipped
