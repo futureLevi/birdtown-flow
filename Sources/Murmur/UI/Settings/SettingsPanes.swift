@@ -231,7 +231,8 @@ private struct EngineRow: View {
                             .background(Capsule().fill(Palette.sunken))
                     }
                 }
-                Text("\(choice.detail) \(choice.downloadSize).")
+                // Apple Speech's size line ("Managed by macOS") just repeats its detail.
+                Text(choice.isParakeet ? "\(choice.detail) \(choice.downloadSize)." : choice.detail)
                     .font(Typography.callout)
                     .foregroundStyle(Palette.inkSecondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -630,7 +631,7 @@ struct PrivacySettingsPane: View {
                 SettingsRow(title: "Data folder", detail: "History, recordings, dictionary and snippets.") {
                     Button("Show in Finder") {
                         guard preview == nil else { return }
-                        NSWorkspace.shared.open(AppPaths.support)
+                        _ = NSWorkspace.shared.open(AppPaths.support)
                     }
                     .buttonStyle(SetupKit.SecondaryButtonStyle())
                 }

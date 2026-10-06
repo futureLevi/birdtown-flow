@@ -46,6 +46,7 @@ extension SnapshotCatalog {
         var done = listening
         done.phase = .idle
         done.practiceSucceeded = true
+        done.practiceText = "Murmur is my new favourite way to write."
 
         return [
             shot("1-welcome", .welcome, fresh),

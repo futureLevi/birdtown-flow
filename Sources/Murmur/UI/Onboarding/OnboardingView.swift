@@ -116,6 +116,7 @@ struct OnboardingView: View {
                 phase: phase,
                 hotkeyActive: hotkeyActive,
                 succeeded: practiceSucceeded,
+                initialText: preview?.practiceText,
                 onFixAccessibility: { go(to: .accessibility) }
             )
             .padding(.bottom, Layout.Setup.footerHeight)
@@ -411,7 +412,7 @@ private struct WelcomeStep: View {
 
             VStack(spacing: Spacing.m) {
                 Button("Get Started", action: onStart)
-                    .buttonStyle(SetupKit.PrimaryButtonStyle())
+                    .buttonStyle(SetupKit.PrimaryButtonStyle(large: true))
                     .keyboardShortcut(.defaultAction)
                 Text("Setup takes about a minute.")
                     .font(Typography.caption)
@@ -702,9 +703,9 @@ private struct ShortcutStep: View {
     var body: some View {
         StepScaffold(
             title: "Choose your shortcut",
-            message: "Hold the key while you talk. Let go, and Murmur types what you said."
+            message: "Hold it while you talk. Let go, and your words appear."
         ) {
-            VStack(spacing: Spacing.l) {
+            VStack(spacing: Spacing.m) {
                 HStack(spacing: Spacing.m) {
                     ForEach(SetupKit.orderedKeys, id: \.self) { option in
                         KeyOption(key: option, selected: option == key) {
@@ -721,10 +722,11 @@ private struct ShortcutStep: View {
                         symbol: "globe",
                         tint: Palette.warning,
                         fill: Palette.warningSoft,
-                        text: "Pressing 🌐 also opens Emoji or Dictation. In Keyboard settings, set “Press 🌐 key to” to “Do Nothing”."
+                        text: "The 🌐 key also opens Emoji or Dictation. Set “Press 🌐 key to” to “Do Nothing” so only Murmur hears it."
                     ) {
-                        Button("Open Keyboard Settings", action: SetupKit.openKeyboardSettings)
-                            .buttonStyle(SetupKit.SecondaryButtonStyle())
+                        Button("Open Keyboard Settings…", action: SetupKit.openKeyboardSettings)
+                            .buttonStyle(.link)
+                            .font(Typography.callout.weight(.medium))
                     }
                 } else if wisprRunning {
                     SetupKit.Callout(
@@ -739,12 +741,21 @@ private struct ShortcutStep: View {
     }
 
     private var gestures: some View {
-        HStack(alignment: .top, spacing: 0) {
-            GestureHint(keys: [glyph], caption: "Hold to talk")
-            GestureHint(keys: [glyph, glyph], caption: "Double-tap for hands-free")
-            GestureHint(keys: ["esc"], caption: "Cancel")
+        VStack(spacing: Spacing.s) {
+            HStack(alignment: .top, spacing: 0) {
+                GestureHint(keys: [glyph], caption: "Hold to talk")
+                if settings.handsFreeEnabled {
+                    GestureHint(keys: [glyph, glyph], caption: "Double-tap for hands-free")
+                }
+                GestureHint(keys: ["esc"], caption: "Cancel")
+            }
+            if settings.handsFreeEnabled {
+                Text("Or hold \(SetupKit.name(for: key)) and press Space. Tap it again to finish.")
+                    .font(Typography.caption)
+                    .foregroundStyle(Palette.inkTertiary)
+            }
         }
-        .padding(.vertical, Spacing.m)
+        .padding(.vertical, Spacing.m - Spacing.xxs)
         .frame(maxWidth: .infinity)
         .background(RoundedRectangle(cornerRadius: Radius.l, style: .continuous).fill(Palette.sunken))
     }
@@ -780,7 +791,7 @@ private struct KeyOption: View {
                     .font(Typography.callout.weight(.medium))
                     .foregroundStyle(selected ? Palette.ink : Palette.inkSecondary)
             }
-            .padding(.vertical, Spacing.m)
+            .padding(.vertical, Spacing.s + Spacing.xxs)
             .frame(maxWidth: .infinity)
             .background(
                 RoundedRectangle(cornerRadius: Radius.l, style: .continuous)
@@ -809,6 +820,7 @@ private struct PracticeStep: View {
     let phase: DictationController.Phase
     let hotkeyActive: Bool
     let succeeded: Bool
+    let initialText: String?
     let onFixAccessibility: () -> Void
 
     @State private var text = ""
@@ -818,7 +830,7 @@ private struct PracticeStep: View {
 
     var body: some View {
         StepScaffold(
-            symbol: "text.cursor",
+            symbol: "waveform",
             done: succeeded,
             title: succeeded ? "That's it." : "Give it a try",
             message: succeeded
@@ -833,7 +845,12 @@ private struct PracticeStep: View {
                         .multilineTextAlignment(.center)
                         .padding(.bottom, Spacing.xs)
                 }
-                TextField("", text: $text, prompt: Text("Your words will appear here."), axis: .vertical)
+                TextField(
+                    "Practice",
+                    text: $text,
+                    prompt: Text("Your words will appear here.").foregroundStyle(Palette.inkTertiary),
+                    axis: .vertical
+                )
                     .textFieldStyle(.plain)
                     .font(Typography.transcript)
                     .foregroundStyle(Palette.ink)
@@ -849,7 +866,10 @@ private struct PracticeStep: View {
                 status
             }
         }
-        .onAppear { focused = true }
+        .onAppear {
+            if let initialText { text = initialText }
+            focused = true
+        }
     }
 
     @ViewBuilder

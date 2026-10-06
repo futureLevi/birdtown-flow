@@ -27,6 +27,8 @@ struct SetupPreview {
     var devices: [AudioInputDevice] = []
     var launchAtLogin = true
     var keySaved = false
+    /// Text already in the practice field, as if Murmur had just typed it.
+    var practiceText: String?
 }
 
 private struct SetupPreviewKey: EnvironmentKey {
@@ -42,6 +44,7 @@ extension EnvironmentValues {
 
 // MARK: - System facts
 
+@MainActor
 extension SetupKit {
     /// Push-to-talk keys in the order we suggest them: fn first, it's the easiest to reach.
     static var orderedKeys: [PushToTalkKey] {
@@ -80,7 +83,7 @@ extension SetupKit {
 
     static func openKeyboardSettings() {
         if let url = URL(string: "x-apple.systempreferences:com.apple.Keyboard-Settings.extension") {
-            NSWorkspace.shared.open(url)
+            _ = NSWorkspace.shared.open(url)
         }
     }
 
@@ -92,7 +95,6 @@ extension SetupKit {
     /// Quits and reopens Murmur. macOS sometimes only lets a process create its event tap
     /// after a restart that follows the Accessibility grant.
     /// - Returns: `false` if the relauncher couldn't be started (Murmur keeps running).
-    @MainActor
     static func relaunch() -> Bool {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/bin/sh")
@@ -190,9 +192,11 @@ extension SetupKit {
     /// The one filled button on a screen. Ember, because it is the thing to press.
     struct PrimaryButtonStyle: ButtonStyle {
         var fullWidth = false
+        /// A taller, wider button for a screen's single moment, like Get Started.
+        var large = false
 
         func makeBody(configuration: Configuration) -> some View {
-            PrimaryButtonBody(configuration: configuration, fullWidth: fullWidth)
+            PrimaryButtonBody(configuration: configuration, fullWidth: fullWidth, large: large)
         }
     }
 
@@ -214,6 +218,7 @@ extension SetupKit {
 private struct PrimaryButtonBody: View {
     let configuration: ButtonStyleConfiguration
     let fullWidth: Bool
+    let large: Bool
     @Environment(\.isEnabled) private var isEnabled
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var hovering = false
@@ -223,9 +228,12 @@ private struct PrimaryButtonBody: View {
         configuration.label
             .font(Typography.bodyEmphasis)
             .foregroundStyle(Palette.onEmber)
-            .padding(.horizontal, Spacing.l)
+            .padding(.horizontal, large ? Spacing.xxxl : Spacing.l)
             .frame(maxWidth: fullWidth ? .infinity : nil)
-            .frame(minWidth: Layout.Setup.buttonMinWidth, minHeight: Layout.Setup.buttonHeight)
+            .frame(
+                minWidth: Layout.Setup.buttonMinWidth,
+                minHeight: large ? Layout.Setup.menuButtonHeight : Layout.Setup.buttonHeight
+            )
             .background(shape.fill(Palette.ember))
             .overlay(shape.fill(Palette.onEmber.opacity(hovering && isEnabled && !configuration.isPressed ? 0.08 : 0)))
             .opacity(isEnabled ? (configuration.isPressed ? Layout.Setup.pressedOpacity : 1) : Layout.Setup.disabledOpacity)
@@ -366,9 +374,9 @@ extension View {
 // MARK: - App mark
 
 extension SetupKit {
-    /// Murmur's mark until the brand artwork lands: a dark squircle with a quiet waveform and
-    /// one Ember dot — the "listening" light. Always dark, like the HUD, so it reads the same
-    /// on paper and graphite.
+    /// Murmur's mark until the brand artwork lands: a dark squircle with a quiet waveform that
+    /// ends in one Ember dot, the live point where speech becomes text. Always dark, like the
+    /// HUD, so it reads the same on paper and graphite.
     struct AppMark: View {
         let size: CGFloat
         /// Small marks (menu bar header) sit flat; a shadow at that size reads as a smudge.
@@ -376,12 +384,11 @@ extension SetupKit {
 
         // Artwork geometry as fractions of the icon size — proportions of a drawing, not UI
         // metrics, so they live with the drawing.
-        private let bars: [CGFloat] = [0.14, 0.26, 0.42, 0.30, 0.20, 0.34, 0.16]
+        private let bars: [CGFloat] = [0.14, 0.27, 0.43, 0.31, 0.21, 0.12]
         private let barWidth: CGFloat = 0.055
-        private let barGap: CGFloat = 0.045
+        private let barGap: CGFloat = 0.048
         private let cornerRatio: CGFloat = 0.225
         private let dotRatio: CGFloat = 0.085
-        private let dotOffset: CGFloat = 0.25
 
         var body: some View {
             let shape = RoundedRectangle(cornerRadius: size * cornerRatio, style: .continuous)
@@ -393,11 +400,10 @@ extension SetupKit {
                             .fill(Palette.HUD.bar)
                             .frame(width: size * barWidth, height: size * bars[index])
                     }
+                    Circle()
+                        .fill(Palette.HUD.ember)
+                        .frame(width: size * dotRatio, height: size * dotRatio)
                 }
-                Circle()
-                    .fill(Palette.HUD.ember)
-                    .frame(width: size * dotRatio, height: size * dotRatio)
-                    .offset(x: size * dotOffset, y: -size * dotOffset)
             }
             .frame(width: size, height: size)
             .overlay(shape.strokeBorder(Palette.HUD.stroke))

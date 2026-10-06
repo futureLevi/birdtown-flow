@@ -16,6 +16,7 @@ struct MenuBarContent: View {
     private var modelState: ModelManager.State { preview?.modelState ?? model.models.state }
     private var micGranted: Bool { preview.map { $0.microphone == .granted } ?? model.permissions.microphone }
     private var accessibilityGranted: Bool { preview?.accessibility ?? model.permissions.accessibility }
+    private var hotkeyActive: Bool { preview?.hotkeyActive ?? model.controller.isHotkeyActive }
     private var keyName: String { SetupKit.name(for: model.settings.pushToTalkKey) }
     private var recent: [HistoryRecord] { Array(model.history.records.filter(\.hasText).prefix(3)) }
 
@@ -69,6 +70,7 @@ struct MenuBarContent: View {
         if case .failed(let message) = phase { return (message, Palette.danger) }
         if !micGranted { return ("Microphone access needed", Palette.warning) }
         if !accessibilityGranted { return ("Accessibility access needed", Palette.warning) }
+        if !hotkeyActive { return ("Shortcut not active · reopen Murmur", Palette.warning) }
         if let progress = SetupKit.progress(of: modelState) {
             return ("Downloading speech model · \(SetupKit.percent(progress))", Palette.inkTertiary)
         }
@@ -76,6 +78,7 @@ struct MenuBarContent: View {
             return ("Preparing speech model…", Palette.inkTertiary)
         }
         if SetupKit.isFailed(modelState) { return ("Speech model unavailable", Palette.danger) }
+        if modelState == .notDownloaded { return ("Speech model not downloaded", Palette.warning) }
         return ("Ready · Hold \(keyName) to talk", Palette.success)
     }
 
@@ -175,6 +178,7 @@ private struct RecentRow: View {
                     .foregroundStyle(Palette.ink)
                     .lineLimit(2)
                     .multilineTextAlignment(.leading)
+                    .fixedSize(horizontal: false, vertical: true)
                     .frame(maxWidth: .infinity, alignment: .leading)
                 ZStack(alignment: .leading) {
                     Label("Copied", systemImage: "checkmark")
