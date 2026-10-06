@@ -97,8 +97,8 @@ struct BrandGlyph: View {
             .frame(width: size * 1.2, height: size)
             .overlay(alignment: .topTrailing) {
                 if isActive {
-                    SpectrumOrb(mode: .still, diameter: max(Layout.Orb.small, size * 0.4))
-                        .offset(x: size * 0.12, y: -size * 0.08)
+                    SpectrumOrb(mode: .still, diameter: size * 0.34)
+                        .offset(x: size * 0.14, y: -size * 0.12)
                 }
             }
             .accessibilityLabel("Birdtown Flow")

@@ -67,10 +67,13 @@ struct SpectrumOrb: View {
 
         return ZStack {
             if showsHalo {
+                // Added light, not paint: on the pill's navy the glow brightens what's behind
+                // it, so it blooms instead of reading as a dark rim.
                 disc
-                    .blur(radius: diameter * 0.35)
-                    .scaleEffect(1.2)
+                    .blur(radius: diameter * 0.45)
+                    .scaleEffect(1.45)
                     .opacity(look.glow)
+                    .blendMode(.plusLighter)
             }
             disc
         }
