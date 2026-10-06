@@ -63,7 +63,7 @@ jobs:
         continue-on-error: true
         run: |
           mkdir -p snapshots
-          ( .build/debug/Murmur --render-snapshots "$PWD/snapshots" 2>&1 | tee snapshots.log ) &
+          ( .build/debug/BirdtownFlow --render-snapshots "$PWD/snapshots" 2>&1 | tee snapshots.log ) &
           pid=$!
           for i in $(seq 1 420); do
             kill -0 $pid 2>/dev/null || break
@@ -85,10 +85,10 @@ jobs:
         continue-on-error: true
         timeout-minutes: 15
         run: |
-          say -o speech.aiff "Hello Murmur. This is a quick test of the dictation pipeline, um, running entirely on this Mac."
+          say -o speech.aiff "Hello Birdtown Flow. This is a quick test of the dictation pipeline, um, running entirely on this Mac."
           afconvert -f WAVE -d LEI16@16000 -c 1 speech.aiff speech.wav
           set -o pipefail
-          .build/debug/Murmur --transcribe "$PWD/speech.wav" parakeetUltra 2>&1 | tee speech.log
+          .build/debug/BirdtownFlow --transcribe "$PWD/speech.wav" parakeetUltra 2>&1 | tee speech.log
           grep -qi "dictation" speech.log
 
       - name: Build release app
@@ -99,7 +99,7 @@ jobs:
           set -o pipefail
           make icon > icon.log 2>&1 || echo "icon generation failed; using the committed icon" | tee -a icon.log
           make app CONFIG=release STAGE="$PWD/dist" 2>&1 | tee release.log
-          cd dist && ditto -c -k --sequesterRsrc --keepParent Murmur.app Murmur.zip
+          cd dist && ditto -c -k --sequesterRsrc --keepParent "Birdtown Flow.app" BirdtownFlow.zip
           ls -la
 
       - name: Publish results branch
@@ -121,7 +121,7 @@ jobs:
             echo "speech=${{ steps.speech.outcome }}"
             echo "release=${{ steps.release.outcome }}"
           } > out/status.txt
-          if [ -f dist/Murmur.zip ]; then cp dist/Murmur.zip out/; fi
+          if [ -f dist/BirdtownFlow.zip ]; then cp dist/BirdtownFlow.zip out/; fi
           # The icon is regenerated from Tools/makeicon.swift on main; publish it so it can be committed.
           if [ -f icon.log ] && [ -d Resources/AppIcon.iconset ]; then mkdir -p out/icon && cp -R Resources/AppIcon.iconset Resources/AppIcon.icns out/icon/ 2>/dev/null || true; fi
           cat out/status.txt
@@ -138,9 +138,9 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release delete nightly --yes --cleanup-tag 2>/dev/null || true
-          gh release create nightly dist/Murmur.zip \
-            --title "Murmur nightly" \
-            --notes "Built from ${GITHUB_SHA::8}. Unzip and move Murmur.app to Applications. It is not notarized, so the first launch is blocked: open System Settings → Privacy & Security and click Open Anyway (or run: xattr -dr com.apple.quarantine /Applications/Murmur.app). Ad-hoc signed, so re-grant Accessibility after each update." \
+          gh release create nightly dist/BirdtownFlow.zip \
+            --title "Birdtown Flow nightly" \
+            --notes "Built from ${GITHUB_SHA::8}. Unzip and move Birdtown Flow.app to Applications. It is not notarized, so the first launch is blocked: open System Settings → Privacy & Security and click Open Anyway (or run: xattr -dr com.apple.quarantine \"/Applications/Birdtown Flow.app\"). Ad-hoc signed, so re-grant Accessibility after each update." \
             --prerelease --target "${GITHUB_SHA}"
 
       - name: Fail if build or tests failed

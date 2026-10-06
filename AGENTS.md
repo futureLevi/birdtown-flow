@@ -1,4 +1,4 @@
-# Working on Murmur
+# Working on Birdtown Flow
 
 Read `docs/ARCHITECTURE.md` first: layers, data flow, and the rules the code keeps. This
 file is the list of things that look wrong but aren't, and things that look fine and bite.
@@ -9,7 +9,7 @@ file is the list of things that look wrong but aren't, and things that look fine
 make install        # build, bundle, sign, copy to /Applications, launch
 make test           # unit tests
 make snapshots      # every screen to ./snapshots, light and dark
-.build/debug/Murmur --transcribe file.wav [parakeetUltra|parakeetV3|parakeetV2|apple]
+.build/debug/BirdtownFlow --transcribe file.wav [parakeetUltra|parakeetV3|parakeetV2|apple]
 ```
 
 - `swift test` also runs on Linux: the manifest drops the app target there, and MurmurKit
@@ -45,16 +45,16 @@ make snapshots      # every screen to ./snapshots, light and dark
 - **TCC keys Accessibility to the code signature.** Ad-hoc signatures change every build, so
   the grant silently stops working while the toggle still shows on. `make` signs with a
   Developer ID when one exists. To reset one app only:
-  `tccutil reset Accessibility io.github.futurelevi.murmur` (never omit the bundle ID), then
+  `tccutil reset Accessibility com.birdtownlabs.flow` (never omit the bundle ID), then
   quit System Settings before reopening it.
 - **Keep the checkout out of iCloud-synced folders**, or build with `make`, which puts build
-  products in `~/Library/Caches/MurmurBuild`. Sync engines modify files mid-compile.
+  products in `~/Library/Caches/BirdtownFlowBuild`. Sync engines modify files mid-compile.
 - **Secure Event Input** (password fields) hides key events from the tap. `HotkeyMonitor`
   polls the modifier state while it's on, so a hidden key-up can't leave the mic open.
 - **AX calls into other apps need short timeouts**; an unresponsive app must never hang
-  Murmur's main thread.
+  Birdtown Flow's main thread.
 - **`log` may be shadowed in your shell.** Use `/usr/bin/log show --predicate
-  'subsystem == "io.github.futurelevi.murmur"'`.
+  'subsystem == "com.birdtownlabs.flow"'`.
 
 ## Not built yet
 

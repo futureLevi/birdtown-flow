@@ -1,14 +1,16 @@
 // swift-tools-version: 6.2
 import PackageDescription
 
-// Murmur — push-to-talk dictation for macOS.
+// Birdtown Flow: push-to-talk dictation for macOS.
 //
 // Three layers:
 //   MurmurDictionary  correction rules (platform-neutral, shared contract with windows/)
 //   MurmurKit         everything that is pure logic: text pipeline, styles, snippets,
 //                     history persistence, stats, AI-polish prompts and HTTP clients.
 //                     Foundation-only, so it builds and tests on Linux as well as macOS.
-//   Murmur            the macOS app: audio, hotkeys, speech engines, injection, UI.
+//   BirdtownFlow      the macOS app (Birdtown Flow): audio, hotkeys, engines, injection, UI.
+//
+// "Murmur" is the codebase's original codename; the library targets keep it.
 //
 // The app target only exists on macOS. On Linux the manifest drops it (and the FluidAudio
 // dependency it needs) so `swift test` exercises the logic layers anywhere.
@@ -54,20 +56,20 @@ var targets: [Target] = [
 #if os(macOS)
 targets.append(
     .executableTarget(
-        name: "Murmur",
+        name: "BirdtownFlow",
         dependencies: [
             "MurmurDictionary",
             "MurmurKit",
             .product(name: "FluidAudio", package: "FluidAudio"),
         ],
-        path: "Sources/Murmur",
+        path: "Sources/BirdtownFlow",
         swiftSettings: [.swiftLanguageMode(.v6)]
     )
 )
 #endif
 
 let package = Package(
-    name: "Murmur",
+    name: "BirdtownFlow",
     platforms: [.macOS(.v26)],
     dependencies: platformDependencies,
     targets: targets

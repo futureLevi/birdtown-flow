@@ -3,13 +3,13 @@
 <plist version="1.0">
 <dict>
 	<key>CFBundleName</key>
-	<string>Murmur</string>
+	<string>Birdtown Flow</string>
 	<key>CFBundleDisplayName</key>
-	<string>Murmur</string>
+	<string>Birdtown Flow</string>
 	<key>CFBundleExecutable</key>
-	<string>Murmur</string>
+	<string>BirdtownFlow</string>
 	<key>CFBundleIdentifier</key>
-	<string>io.github.futurelevi.murmur</string>
+	<string>com.birdtownlabs.flow</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
@@ -22,10 +22,10 @@
 	<array>
 		<dict>
 			<key>CFBundleURLName</key>
-			<string>io.github.futurelevi.murmur</string>
+			<string>com.birdtownlabs.flow</string>
 			<key>CFBundleURLSchemes</key>
 			<array>
-				<string>murmur</string>
+				<string>birdtownflow</string>
 			</array>
 		</dict>
 	</array>
@@ -38,12 +38,12 @@
 	<key>NSHighResolutionCapable</key>
 	<true/>
 	<key>NSHumanReadableCopyright</key>
-	<string>Murmur. Speech stays on your Mac.</string>
+	<string>© 2026 Birdtown Labs. Speech stays on your Mac.</string>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>Murmur listens only while you hold your dictation key, and turns what you say into text.</string>
+	<string>Birdtown Flow listens only while you hold your dictation key, and turns what you say into text.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
-	<string>Murmur can use Apple's on-device speech recognition to transcribe what you say.</string>
+	<string>Birdtown Flow can use Apple's on-device speech recognition to transcribe what you say.</string>
 	<key>NSAppleEventsUsageDescription</key>
-	<string>Murmur uses this to paste your dictation into the app you're working in.</string>
+	<string>Birdtown Flow uses this to paste your dictation into the app you're working in.</string>
 </dict>
 </plist>

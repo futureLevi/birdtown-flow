@@ -1,6 +1,6 @@
-# Murmur, architecture and working agreement
+# Birdtown Flow, architecture and working agreement
 
-Murmur is push-to-talk dictation for macOS: hold a key, speak, release, and polished text
+Birdtown Flow is push-to-talk dictation for macOS: hold a key, speak, release, and polished text
 lands wherever you were typing. It is a fork of `per-simmons/murmur-youtube`, rebuilt to be
 a product that can stand next to Wispr Flow.
 
@@ -29,7 +29,7 @@ Sources/MurmurKit          pure logic. Foundation only, builds and tests on Linu
   History/                 HistoryStore (JSON + recordings/)
   Stats/                   DictationStats
   Polish/                  prompts, PolishGuard, Anthropic + OpenAI-compatible clients
-Sources/Murmur             the macOS app
+Sources/BirdtownFlow             the macOS app
   App/                     @main, AppDelegate, AppModel (composition root)
   Core/                    DictationController, HotkeyMonitor, AudioRecorder, TextInjector…
   Transcription/           TranscriptionEngine, ModelManager, Parakeet + Apple engines
@@ -41,7 +41,7 @@ Sources/Murmur             the macOS app
   UI/HUD                   floating pill
   UI/Main                  main window (Home, History, Dictionary, Snippets, Style)
   UI/Onboarding, UI/Settings, UI/MenuBar
-  UI/Snapshots             `Murmur --render-snapshots <dir>` renders screens to PNG
+  UI/Snapshots             `BirdtownFlow --render-snapshots <dir>` renders screens to PNG
 ```
 
 ## Data flow for one dictation
@@ -88,4 +88,4 @@ make snapshots      # render every screen to ./snapshots
 
 CI (`.github/workflows/macos.yml`) builds and tests every push on a macOS 26 runner, renders
 snapshots, and pushes logs and images to the `snapshots/<branch>` branch. On `main` it also
-publishes a zipped, ad-hoc signed `Murmur.app` as the `nightly` release.
+publishes a zipped, ad-hoc signed `Birdtown Flow.app` as the `nightly` release.

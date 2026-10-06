@@ -1,12 +1,12 @@
-EXEC     := Murmur
+EXEC     := BirdtownFlow
 CONFIG   ?= debug
 
 ## Build products live OUTSIDE the repo. If the checkout sits in an iCloud-synced folder
 ## (~/Desktop, ~/Documents), the sync engine mutates files mid-compile and corrupts signatures.
-SCRATCH  ?= $(HOME)/Library/Caches/MurmurBuild/scratch
-STAGE    ?= $(HOME)/Library/Caches/MurmurBuild
+SCRATCH  ?= $(HOME)/Library/Caches/BirdtownFlowBuild/scratch
+STAGE    ?= $(HOME)/Library/Caches/BirdtownFlowBuild
 BUILD    := $(SCRATCH)/$(CONFIG)
-APPNAME  := Murmur.app
+APPNAME  := Birdtown Flow.app
 BUNDLE   := $(STAGE)/$(APPNAME)
 CONTENTS := $(BUNDLE)/Contents
 

@@ -1,14 +1,14 @@
 <p align="center">
-  <img src="docs/media/icon.png" width="128" alt="Murmur icon">
+  <img src="docs/media/icon.png" width="128" alt="Birdtown Flow icon">
 </p>
 
-<h1 align="center">Murmur</h1>
+<h1 align="center">Birdtown Flow</h1>
 
 <p align="center"><b>Speak anywhere. It types for you.</b><br>
 Push-to-talk dictation for macOS that runs entirely on your Mac.</p>
 
 <p align="center">
-  <img src="docs/media/hud.gif" width="600" alt="The Murmur pill: listening, transcribing, done">
+  <img src="docs/media/hud.gif" width="600" alt="The Birdtown Flow pill: listening, transcribing, done">
 </p>
 
 Hold **fn**, talk, let go. Clean, punctuated text lands wherever your cursor is: Slack,
@@ -16,7 +16,7 @@ Mail, Cursor, Terminal, a browser, anything. Recognition runs on the Neural Engi
 **Parakeet Ultra**, so a 30-second thought is ready a few hundred milliseconds after you
 release the key, and nothing you say leaves the machine unless you turn on cloud polish.
 
-Murmur is a fork of [per-simmons/murmur-youtube](https://github.com/per-simmons/murmur-youtube),
+Birdtown Flow is a fork of [per-simmons/murmur-youtube](https://github.com/per-simmons/murmur-youtube),
 rebuilt into a product meant to stand next to Wispr Flow.
 
 ## What it does
@@ -38,17 +38,17 @@ turned off.
 
 ## Install
 
-**Download:** grab `Murmur.zip` from the [nightly release](https://github.com/futureLevi/murmur-youtube/releases/tag/nightly),
-unzip, and move `Murmur.app` to Applications. It isn't notarized, so macOS blocks the first
+**Download:** grab `BirdtownFlow.zip` from the [nightly release](https://github.com/futureLevi/murmur-youtube/releases/tag/nightly),
+unzip, and move `Birdtown Flow.app` to Applications. It isn't notarized, so macOS blocks the first
 launch: open **System Settings → Privacy & Security** and click **Open Anyway** (or run
-`xattr -dr com.apple.quarantine /Applications/Murmur.app`). The nightly is ad-hoc signed, so
+`xattr -dr com.apple.quarantine /Applications/Birdtown Flow.app`). The nightly is ad-hoc signed, so
 after each update macOS asks for Accessibility again.
 
 **Build from source** (macOS 26, Xcode 26):
 
 ```bash
-git clone https://github.com/futureLevi/murmur-youtube.git murmur
-cd murmur
+git clone https://github.com/futureLevi/murmur-youtube.git birdtown-flow
+cd birdtown-flow
 make install      # builds, signs, installs to /Applications, launches
 ```
 
@@ -70,20 +70,21 @@ Onboarding walks through it in about a minute:
 ## Privacy
 
 Audio and text stay on this Mac. History lives in
-`~/Library/Application Support/Murmur/` (keep text forever by default; keep audio 7 days by
+`~/Library/Application Support/Birdtown Flow/` (keep text forever by default; keep audio 7 days by
 default, both adjustable). Models live in `~/Library/Application Support/FluidAudio/Models/`.
 The only time anything is sent anywhere is when you choose a cloud polisher, and then only
 the transcript text goes to the provider you picked. API keys are stored in your Keychain.
 
 ## How it's built
 
-Swift 6 with strict concurrency, SwiftUI and AppKit, SwiftPM, macOS 26.
+Swift 6 with strict concurrency, SwiftUI and AppKit, SwiftPM, macOS 26. The library
+modules keep the codebase's original codename, Murmur.
 
 ```
 Sources/MurmurDictionary   correction rules (shared contract with windows/)
 Sources/MurmurKit          pure logic, tested on Linux too: pipeline, styles, snippets,
                            history, stats, polish prompt, guard and HTTP clients
-Sources/Murmur             the app: hotkeys, audio, engines, injection, HUD, UI
+Sources/BirdtownFlow       the app: hotkeys, audio, engines, injection, HUD, UI
 ```
 
 See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the data flow and the rules the code
