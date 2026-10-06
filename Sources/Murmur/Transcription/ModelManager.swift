@@ -170,7 +170,11 @@ final class ModelManager {
         let wanted = settings.engine
         if let loaded, loaded.choice == wanted { return loaded.engine }
 
-        if wanted == .apple || isDownloaded(wanted) {
+        if (wanted == .apple || isDownloaded(wanted)), inflight == nil, case .failed = state {
+            // It failed to load last time (a damaged model fails the same way again). Retry in
+            // the background rather than making every dictation wait out a doomed load.
+            Task { await self.prepare() }
+        } else if wanted == .apple || isDownloaded(wanted) {
             // Seconds away at most, usually: worth waiting for, up to a limit.
             do {
                 try await HardDeadline.run(within: Self.loadWaitLimit) { await self.prepare() }
