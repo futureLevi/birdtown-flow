@@ -1,0 +1,98 @@
+[0/1] Planning build
+Building for debugging...
+[0/7] Write sources
+[3/7] Write swift-version-7974D3F7F03D5E95.txt
+[5/10] Emitting module MurmurDictionary
+/Users/runner/work/murmur-youtube/murmur-youtube/Sources/MurmurDictionary/DictionaryCorrector.swift:139:5: warning: 'public' modifier is redundant for static property declared in a public extension
+137 |     /// or ambiguous audio they start inventing text from the vocabulary they were primed
+138 |     /// with, which is a far worse failure than the misspelling it was meant to fix.
+139 |     public static let biasLimit = 40
+    |     `- warning: 'public' modifier is redundant for static property declared in a public extension
+140 | 
+141 |     /// - Returns: the correct spellings — `.term` words and the *write* side of corrections —
+
+/Users/runner/work/murmur-youtube/murmur-youtube/Sources/MurmurDictionary/DictionaryCorrector.swift:143:5: warning: 'public' modifier is redundant for static method declared in a public extension
+141 |     /// - Returns: the correct spellings — `.term` words and the *write* side of corrections —
+142 |     ///   most recently useful first, capped at `biasLimit`.
+143 |     public static func biasPhrases(from entries: [DictionaryEntry]) -> [String] {
+    |     `- warning: 'public' modifier is redundant for static method declared in a public extension
+144 |         var seen = Set<String>()
+145 |         var phrases: [String] = []
+[6/10] Compiling MurmurDictionary DictionaryCorrector.swift
+/Users/runner/work/murmur-youtube/murmur-youtube/Sources/MurmurDictionary/DictionaryCorrector.swift:139:5: warning: 'public' modifier is redundant for static property declared in a public extension
+137 |     /// or ambiguous audio they start inventing text from the vocabulary they were primed
+138 |     /// with, which is a far worse failure than the misspelling it was meant to fix.
+139 |     public static let biasLimit = 40
+    |     `- warning: 'public' modifier is redundant for static property declared in a public extension
+140 | 
+141 |     /// - Returns: the correct spellings — `.term` words and the *write* side of corrections —
+
+/Users/runner/work/murmur-youtube/murmur-youtube/Sources/MurmurDictionary/DictionaryCorrector.swift:143:5: warning: 'public' modifier is redundant for static method declared in a public extension
+141 |     /// - Returns: the correct spellings — `.term` words and the *write* side of corrections —
+142 |     ///   most recently useful first, capped at `biasLimit`.
+143 |     public static func biasPhrases(from entries: [DictionaryEntry]) -> [String] {
+    |     `- warning: 'public' modifier is redundant for static method declared in a public extension
+144 |         var seen = Set<String>()
+145 |         var phrases: [String] = []
+[7/10] Compiling MurmurDictionary DictionaryEntry.swift
+[8/15] Compiling MurmurKit Polish.swift
+[9/15] Compiling MurmurKit DictationStats.swift
+[10/15] Compiling MurmurKit HistoryStore.swift
+[11/15] Compiling MurmurKit Models.swift
+[12/15] Emitting module MurmurKit
+[13/17] Compiling MurmurKit SnippetStore.swift
+[14/17] Compiling MurmurKit TextPipeline.swift
+[15/51] Compiling Murmur AppIcon.swift
+[16/51] Compiling Murmur Badge.swift
+[17/51] Compiling Murmur Banner.swift
+[18/51] Compiling Murmur ButtonStyles.swift
+[19/51] Compiling Murmur Card.swift
+[20/51] Compiling Murmur EmptyState.swift
+[21/51] Compiling Murmur FilterChip.swift
+[22/51] Compiling Murmur IconButton.swift
+[23/51] Compiling Murmur KeyCap.swift
+[24/51] Compiling Murmur LabeledInput.swift
+[25/51] Compiling Murmur SearchField.swift
+[26/51] Compiling Murmur SectionHeader.swift
+[27/51] Compiling Murmur StatTile.swift
+[28/51] Compiling Murmur Tokens.swift
+[29/51] Compiling Murmur HUDController.swift
+[30/51] Compiling Murmur AudioPlayback.swift
+[31/67] Emitting module Murmur
+[32/67] Compiling Murmur AppModel.swift
+[33/67] Compiling Murmur MurmurApp.swift
+[34/67] Compiling Murmur AudioDevices.swift
+[35/67] Compiling Murmur DictationController.swift
+[36/67] Compiling Murmur HotkeyMonitor.swift
+[37/67] Compiling Murmur TextInjector.swift
+[38/67] Compiling Murmur Keychain.swift
+[39/67] Compiling Murmur PolishService.swift
+[40/67] Compiling Murmur DictionaryStore.swift
+[41/67] Compiling Murmur AppPaths.swift
+[42/67] Compiling Murmur Log.swift
+[43/67] Compiling Murmur Permissions.swift
+[44/67] Compiling Murmur PermissionsMonitor.swift
+[45/67] Compiling Murmur Settings.swift
+[46/67] Compiling Murmur Sounds.swift
+[47/67] Compiling Murmur ModelManager.swift
+[48/67] Compiling Murmur TranscriptionEngine.swift
+[49/67] Compiling Murmur DictionaryView.swift
+[50/67] Compiling Murmur HistoryRow.swift
+[51/67] Compiling Murmur HistoryView.swift
+[52/67] Compiling Murmur HomeView.swift
+[53/67] Compiling Murmur MainEnvironment.swift
+[54/67] Compiling Murmur MainView.swift
+[55/67] Compiling Murmur SnippetsView.swift
+[56/67] Compiling Murmur StyleView.swift
+[57/67] Compiling Murmur MenuBarContent.swift
+[58/67] Compiling Murmur OnboardingWindowController.swift
+[59/67] Compiling Murmur SettingsView.swift
+[60/67] Compiling Murmur SampleData.swift
+[61/67] Compiling Murmur SnapshotCatalog+HUD.swift
+[62/67] Compiling Murmur SnapshotCatalog+Main.swift
+[63/67] Compiling Murmur SnapshotCatalog+Setup.swift
+[64/67] Compiling Murmur SnapshotRenderer.swift
+[64/67] Write Objects.LinkFileList
+[65/67] Linking Murmur
+[66/67] Applying Murmur
+Build complete! (27.05s)

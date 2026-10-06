@@ -1,0 +1,33 @@
+[0/1] Planning build
+Building for debugging...
+[0/7] Copying dictionary-test-vectors.json
+[1/7] Write sources
+[3/7] Write swift-version-7974D3F7F03D5E95.txt
+[5/9] Compiling MurmurKitTests SmokeTests.swift
+[6/9] Emitting module MurmurKitTests
+[7/9] Emitting module MurmurDictionaryTests
+[8/9] Compiling MurmurDictionaryTests VectorTests.swift
+Build complete! (2.80s)
+Test Suite 'All tests' started at 2026-10-06 08:05:26.987.
+Test Suite 'All tests' passed at 2026-10-06 08:05:26.989.
+	 Executed 0 tests, with 0 failures (0 unexpected) in 0.000 (0.002) seconds
+◇ Test run started.
+↳ Testing Library Version: 1902
+↳ Target Platform: arm64e-apple-macos14.0
+◇ Suite "Smoke" started.
+◇ Suite VectorTests started.
+◇ Test recordWordCount() started.
+◇ Test "disabled entries are excluded from biasing" started.
+◇ Test "a distinctive phrase is not flagged" started.
+◇ Test "an ordinary word used as a trigger is flagged" started.
+◇ Test "bias list is capped and de-duplicated" started.
+◇ Test "every shared vector produces the contracted output" started.
+✔ Test "disabled entries are excluded from biasing" passed after 0.001 seconds.
+✔ Test "a distinctive phrase is not flagged" passed after 0.002 seconds.
+✔ Test "an ordinary word used as a trigger is flagged" passed after 0.002 seconds.
+✔ Test recordWordCount() passed after 0.002 seconds.
+✔ Test "bias list is capped and de-duplicated" passed after 0.002 seconds.
+✔ Suite "Smoke" passed after 0.002 seconds.
+✔ Test "every shared vector produces the contracted output" passed after 0.022 seconds.
+✔ Suite VectorTests passed after 0.022 seconds.
+✔ Test run with 6 tests in 2 suites passed after 0.022 seconds.
