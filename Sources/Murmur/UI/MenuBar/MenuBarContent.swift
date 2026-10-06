@@ -27,7 +27,7 @@ struct MenuBarContent: View {
             if !recent.isEmpty {
                 recentSection
             }
-            Rectangle().fill(Palette.hairline).frame(height: 1)
+            Rectangle().fill(Palette.hairline).frame(height: Layout.Setup.hairline)
             actions
         }
         .padding(Spacing.m)

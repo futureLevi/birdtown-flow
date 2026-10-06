@@ -248,7 +248,7 @@ private struct PrimaryButtonBody: View {
                 minHeight: large ? Layout.Setup.menuButtonHeight : Layout.Setup.buttonHeight
             )
             .background(shape.fill(Palette.ember))
-            .overlay(shape.fill(Palette.onEmber.opacity(hovering && isEnabled && !configuration.isPressed ? 0.08 : 0)))
+            .overlay(shape.fill(Palette.onEmber.opacity(hovering && isEnabled && !configuration.isPressed ? Layout.Setup.hoverLift : 0)))
             .opacity(isEnabled ? (configuration.isPressed ? Layout.Setup.pressedOpacity : 1) : Layout.Setup.disabledOpacity)
             .scaleEffect(configuration.isPressed && !reduceMotion ? Motion.pressedScale : 1)
             .contentShape(shape)
@@ -420,7 +420,7 @@ extension SetupKit {
             }
             .frame(width: size, height: size)
             .overlay(shape.strokeBorder(Palette.HUD.stroke))
-            .elevation(elevated ? Elevation.raised : Elevation.Shadow(color: .clear, radius: 0, y: 0))
+            .elevation(elevated ? Elevation.raised : Elevation.flat)
             .accessibilityHidden(true)
         }
     }

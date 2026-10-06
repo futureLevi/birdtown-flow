@@ -800,7 +800,7 @@ private struct KeyOption: View {
                 RoundedRectangle(cornerRadius: Radius.l, style: .continuous)
                     .strokeBorder(
                         selected ? Palette.ember : Palette.hairline,
-                        lineWidth: selected ? Layout.Setup.selectionStroke : 1
+                        lineWidth: selected ? Layout.Setup.selectionStroke : Layout.Setup.hairline
                     )
             )
             .contentShape(RoundedRectangle(cornerRadius: Radius.l, style: .continuous))

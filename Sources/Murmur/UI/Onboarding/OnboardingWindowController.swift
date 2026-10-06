@@ -13,8 +13,6 @@ final class OnboardingWindowController: NSObject, NSWindowDelegate {
     private var window: NSWindow?
     private var model: AppModel?
 
-    var isShowing: Bool { window != nil }
-
     func show(model: AppModel) {
         if let window {
             NSApp.activate()

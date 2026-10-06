@@ -133,7 +133,7 @@ struct SettingsDivider: View {
     var body: some View {
         Rectangle()
             .fill(Palette.hairline)
-            .frame(height: 1)
+            .frame(height: Layout.Setup.hairline)
             .padding(.leading, Spacing.l)
     }
 }

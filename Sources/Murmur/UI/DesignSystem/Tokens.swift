@@ -220,13 +220,20 @@ extension Layout {
         static let progressDotActive: CGFloat = 20
         static let progressBarHeight: CGFloat = 4
         static let statusDot: CGFloat = 7
-        static let practiceFieldMinHeight: CGFloat = 76
         static let menuBarWidth: CGFloat = 320
         static let selectionStroke: CGFloat = 1.5
         static let footerHeight: CGFloat = 72
         static let pressedOpacity: Double = 0.84
         static let disabledOpacity: Double = 0.4
+        /// White wash over a hovered Ember button.
+        static let hoverLift: Double = 0.08
+        static let hairline: CGFloat = 1
     }
+}
+
+extension Elevation {
+    /// No shadow, for marks drawn too small for one to read as anything but a smudge.
+    static let flat = Shadow(color: .clear, radius: 0, y: 0)
 }
 
 extension Motion {
