@@ -60,7 +60,7 @@ struct HistoryRow: View {
         }
         .padding(.horizontal, Spacing.l)
         .padding(.vertical, Spacing.m)
-        .background(background)
+        .background(rowFill)
         .contentShape(Rectangle())
         .onHover { isHovered = $0 }
         .onTapGesture {
@@ -268,7 +268,7 @@ struct HistoryRow: View {
     }
 
     @ViewBuilder
-    private var background: some View {
+    private var rowFill: some View {
         if isSelected || isHighlighted {
             Palette.emberSoft
         } else if isHovered {
@@ -288,9 +288,13 @@ struct HistoryRow: View {
 
     private var correctionCount: Int { record.corrections.reduce(0) { $0 + $1.count } }
 
+    /// Whether the text probably runs past `transcriptLines`: a cheap estimate from
+    /// paragraph lengths, since SwiftUI can't report truncation.
     private var isLong: Bool {
-        record.finalText.count > Layout.Main.transcriptFoldLength
-            || record.finalText.filter(\.isNewline).count >= Layout.Main.transcriptLines
+        let perLine = Double(Layout.Main.transcriptCharsPerLine)
+        let lines = record.finalText.split(separator: "\n", omittingEmptySubsequences: false)
+            .reduce(0) { $0 + max(1, Int((Double($1.count) / perLine).rounded(.up))) }
+        return lines > Layout.Main.transcriptLines
     }
 
     /// "Slack", or "Gmail in Google Chrome" when the window title gives a web app away.

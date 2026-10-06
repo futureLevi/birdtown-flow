@@ -171,7 +171,7 @@ enum SampleData {
             }
             let id = UUID()
             let failed = spec.error != nil
-            let words = Double(max(spec.text.split { $0.isWhitespace }.count, 18))
+            let words = Double(max(spec.text.split { $0.isWhitespace }.count, 1))
             let duration = (words / spec.wpm * 60 * 10).rounded() / 10
             let transcribe = 120 + Int(words * 3)
             let polish = spec.polish == nil ? 0 : 420 + Int(words * 9)

@@ -32,6 +32,8 @@ struct MainView: View {
                 }
             }
         }
+        // Warm paper shows around the floating sidebar, so the window reads as one surface.
+        .background(Palette.canvas)
         .background { SectionShortcuts() }
         .onAppear { model.permissions.refresh() }
         // Accessibility is granted in System Settings; re-check when the user comes back.
@@ -94,7 +96,7 @@ private struct SectionShortcuts: View {
 
 // MARK: - Sidebar
 
-private struct MainSidebar: View {
+struct MainSidebar: View {
     let status: SystemStatus
     @Environment(AppModel.self) private var model
 

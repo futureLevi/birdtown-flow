@@ -99,31 +99,32 @@ struct HistoryView: View {
     var body: some View {
         let searched = model.history.search(query).filter { !pendingDeletion.contains($0.id) }
         let visible = searched.filter(filter.matches)
-        VStack(spacing: 0) {
-            header(searched: searched)
-                .frame(maxWidth: Layout.contentMaxWidth)
-                .padding(.horizontal, Spacing.page)
-                .padding(.top, Spacing.page)
-                .padding(.bottom, Spacing.l)
-                .frame(maxWidth: .infinity)
-            ScrollViewReader { proxy in
-                ScrollView {
+        ScrollViewReader { proxy in
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: Spacing.l, pinnedViews: [.sectionHeaders]) {
+                    header(searched: searched)
+                        .padding(.bottom, Spacing.xs)
                     if visible.isEmpty {
                         emptyState
-                            .frame(maxWidth: Layout.contentMaxWidth)
-                            .frame(maxWidth: .infinity)
                     } else {
-                        list(HistoryDay.group(visible))
+                        ForEach(HistoryDay.group(visible)) { day in
+                            Section {
+                                dayCard(day)
+                            } header: {
+                                dayHeader(day)
+                            }
+                        }
                     }
                 }
-                .focusable()
-                .focusEffectDisabled()
-                .focused($listFocused)
-                .onDeleteCommand { requestDelete(selection) }
-                .onExitCommand { selection = [] }
-                .onChange(of: model.focusedRecordID, initial: true) { _, id in
-                    reveal(id, proxy: proxy)
-                }
+                .pageLayout()
+            }
+            .focusable()
+            .focusEffectDisabled()
+            .focused($listFocused)
+            .onDeleteCommand { requestDelete(selection) }
+            .onExitCommand { selection = [] }
+            .onChange(of: model.focusedRecordID, initial: true) { _, id in
+                reveal(id, proxy: proxy)
             }
         }
         .overlay(alignment: .bottom) { undoToast }
@@ -172,37 +173,25 @@ struct HistoryView: View {
 
     // MARK: - List
 
-    private func list(_ days: [HistoryDay]) -> some View {
-        LazyVStack(alignment: .leading, spacing: Spacing.xl, pinnedViews: [.sectionHeaders]) {
-            ForEach(days) { day in
-                Section {
-                    VStack(spacing: 0) {
-                        ForEach(Array(day.records.enumerated()), id: \.element.id) { index, record in
-                            if index > 0 {
-                                RowDivider(leadingInset: HistoryRow.textInset)
-                            }
-                            HistoryRow(
-                                record: record,
-                                player: player,
-                                isSelected: selection.contains(record.id),
-                                isHighlighted: highlighted == record.id,
-                                showsOriginal: record.id == originalRecordID,
-                                onSelect: { additive in select(record.id, additive: additive) },
-                                onDelete: { requestDelete(selection.contains(record.id) ? selection : [record.id]) }
-                            )
-                            .id(record.id)
-                        }
-                    }
-                    .cardSurface()
-                } header: {
-                    dayHeader(day)
+    private func dayCard(_ day: HistoryDay) -> some View {
+        VStack(spacing: 0) {
+            ForEach(Array(day.records.enumerated()), id: \.element.id) { index, record in
+                if index > 0 {
+                    RowDivider(leadingInset: HistoryRow.textInset)
                 }
+                HistoryRow(
+                    record: record,
+                    player: player,
+                    isSelected: selection.contains(record.id),
+                    isHighlighted: highlighted == record.id,
+                    showsOriginal: record.id == originalRecordID,
+                    onSelect: { additive in select(record.id, additive: additive) },
+                    onDelete: { requestDelete(selection.contains(record.id) ? selection : [record.id]) }
+                )
+                .id(record.id)
             }
         }
-        .frame(maxWidth: Layout.contentMaxWidth)
-        .padding(.horizontal, Spacing.page)
-        .padding(.bottom, Spacing.page)
-        .frame(maxWidth: .infinity)
+        .cardSurface()
     }
 
     private func dayHeader(_ day: HistoryDay) -> some View {

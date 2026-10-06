@@ -58,7 +58,7 @@ struct HomeView: View {
                 label: "This week",
                 value: stats.wordsThisWeek,
                 unit: "words",
-                caption: "\(stats.totalWords.formatted()) all time"
+                caption: stats.dictationCount == 1 ? "From 1 dictation" : "From \(stats.dictationCount) dictations"
             )
             StatTile(
                 label: "Pace",

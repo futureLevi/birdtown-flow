@@ -273,8 +273,8 @@ extension Layout {
         static let categoryIcon: CGFloat = 34
         /// Transcript lines shown before "Show more".
         static let transcriptLines = 3
-        /// Characters past which a transcript is probably longer than `transcriptLines`.
-        static let transcriptFoldLength = 210
+        /// Roughly how many transcript characters fit on one line of a history row.
+        static let transcriptCharsPerLine = 86
         static let recentCount = 5
         static let pageHeaderBottom: CGFloat = 20
     }
