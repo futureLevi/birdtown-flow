@@ -1,4 +1,4 @@
-# Murmur — architecture and working agreement
+# Murmur, architecture and working agreement
 
 Murmur is push-to-talk dictation for macOS: hold a key, speak, release, and polished text
 lands wherever you were typing. It is a fork of `per-simmons/murmur-youtube`, rebuilt to be
@@ -23,7 +23,7 @@ a product that can stand next to Wispr Flow.
 
 ```
 Sources/MurmurDictionary   correction rules. Platform-neutral; shared contract with windows/.
-Sources/MurmurKit          pure logic. Foundation only — builds and tests on Linux too.
+Sources/MurmurKit          pure logic. Foundation only, builds and tests on Linux too.
   Models/                  shared value types (HistoryRecord, AppContext, Snippet, styles…)
   Text/                    TextPipeline, SnippetStore
   History/                 HistoryStore (JSON + recordings/)
@@ -36,7 +36,7 @@ Sources/Murmur             the macOS app
   Polish/                  PolishService (routing, timeout), Apple Intelligence, Keychain
   Stores/                  DictionaryStore
   Support/                 Settings, AppPaths, Log, Permissions
-  UI/DesignSystem          Tokens.swift — the only place literal design values live
+  UI/DesignSystem          Tokens.swift, the only place literal design values live
   UI/Components            shared controls
   UI/HUD                   floating pill
   UI/Main                  main window (Home, History, Dictionary, Snippets, Style)

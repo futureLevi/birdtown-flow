@@ -1,206 +1,63 @@
-# Working on this repo
+# Working on Murmur
 
-Read this before changing anything. It is written for a coding agent picking the project up
-cold, and it is mostly a list of things that look wrong but aren't, plus things that look
-fine and will bite you.
+Read `docs/ARCHITECTURE.md` first: layers, data flow, and the rules the code keeps. This
+file is the list of things that look wrong but aren't, and things that look fine and bite.
 
----
-
-## What this is
-
-Push-to-talk dictation. Hold a key, talk, release, and cleaned-up text is typed into
-whatever had focus. Two independent implementations:
-
-| | macOS | Windows |
-|---|---|---|
-| Language | Swift 6 | C# / .NET 10 |
-| UI | SwiftUI | Avalonia |
-| Speech | Apple `SpeechAnalyzer`, or Parakeet via FluidAudio | Parakeet via sherpa-onnx |
-| Location | repo root | `windows/` |
-
-**The macOS app works and is in daily use.**
-
-**The Windows app is complete but has never run on real hardware.** Every layer exists;
-CI builds it, runs 63 tests, publishes a single-file executable, launches it on Windows and
-confirms the platform layer loads and constructs. What has never happened is a person
-holding the key and speaking into a microphone. Describe it that way — not as "working",
-not as "unfinished".
-
----
-
-## The one rule that matters
-
-**`shared/dictionary-test-vectors.json` is the specification for correction behaviour.**
-
-Both implementations run it in CI. If you change how corrections work, change the vectors
-first, watch both sides go red, then make them green. Changing one implementation to "fix"
-a failing vector without changing the other is how the two silently diverge — and only one
-of them can be exercised by hand.
+## Build and verify
 
 ```bash
-swift test --filter VectorTests                    # macOS side
-cd windows && dotnet test Murmur.CrossPlatform.slnf # Windows side, runs anywhere
+make install        # build, bundle, sign, copy to /Applications, launch
+make test           # unit tests
+make snapshots      # every screen to ./snapshots, light and dark
+.build/debug/Murmur --transcribe file.wav [parakeetUltra|parakeetV3|parakeetV2|apple]
 ```
 
-The Swift copy at `Tests/MurmurDictionaryTests/dictionary-test-vectors.json` is a copy, and
-CI fails if it drifts from `shared/`. After editing the shared file:
+- `swift test` also runs on Linux: the manifest drops the app target there, and MurmurKit
+  plus MurmurDictionary are Foundation-only. Put new pure logic in MurmurKit, with tests.
+- CI (`.github/workflows/macos.yml`) builds every branch on macOS 26, renders snapshots, runs
+  the speech smoke test, and force-pushes logs and PNGs to `snapshots/<branch>`. Review UI
+  changes there; the renderer is `UI/Snapshots/SnapshotRenderer.swift` and each area
+  registers screens in its own `SnapshotCatalog+*.swift`.
+- Offscreen snapshots can't capture the macOS 26 glass sidebar (it renders as a white
+  panel) and the runner has Reduce Motion on. Neither is a bug in the app.
 
-```bash
-cp shared/dictionary-test-vectors.json Tests/MurmurDictionaryTests/
-```
+## Rules
 
----
+- **The HUD never takes focus.** It's a non-activating panel; if it became key, the user's
+  text field would lose focus and there'd be nothing to type into.
+- **Audio is written and a History row exists before transcription starts.**
+- **Polish can only make things better.** Time limit, `PolishGuard`, and any error all fall
+  back to the deterministic text.
+- **The dictionary runs last**, after polish. `shared/dictionary-test-vectors.json` is the
+  spec for correction behaviour (the upstream Windows app runs the same vectors); change the
+  vectors first, then `cp shared/dictionary-test-vectors.json Tests/MurmurDictionaryTests/`.
+- **No literal design values in views.** Everything comes from `UI/DesignSystem/Tokens.swift`.
+  Ember means recording or the primary action, nothing else.
+- **Every animation goes through `Motion`** so Reduce Motion is honoured.
+- **Settings live in `Support/Settings.swift`.** Our `Settings` class shadows SwiftUI's
+  scene of the same name; write `SwiftUI.Settings` for the scene.
 
-## Things that look like bugs and are not
+## macOS traps
 
-**`dotnet build Murmur.sln` fails on macOS** with `NETSDK1073`. Expected —
-`Murmur.Platform.Windows` targets `net10.0-windows`. Use `Murmur.CrossPlatform.slnf`, which
-omits it; everything else, including the whole UI suite, builds and tests on macOS in about
-half a second.
+- **`MainActor.assumeIsolated` asserts, it doesn't check.** Only use it where the code
+  provably runs on the main thread (event-tap callbacks on the main run loop, timers on
+  `RunLoop.main`). Otherwise `await MainActor.run`.
+- **TCC keys Accessibility to the code signature.** Ad-hoc signatures change every build, so
+  the grant silently stops working while the toggle still shows on. `make` signs with a
+  Developer ID when one exists. To reset one app only:
+  `tccutil reset Accessibility io.github.futurelevi.murmur` (never omit the bundle ID), then
+  quit System Settings before reopening it.
+- **Keep the checkout out of iCloud-synced folders**, or build with `make`, which puts build
+  products in `~/Library/Caches/MurmurBuild`. Sync engines modify files mid-compile.
+- **Secure Event Input** (password fields) hides key events from the tap. `HotkeyMonitor`
+  polls the modifier state while it's on, so a hidden key-up can't leave the mic open.
+- **AX calls into other apps need short timeouts**; an unresponsive app must never hang
+  Murmur's main thread.
+- **`log` may be shadowed in your shell.** Use `/usr/bin/log show --predicate
+  'subsystem == "io.github.futurelevi.murmur"'`.
 
-**`swift build` fails with "input file was modified during the build."** The repo lives in an
-iCloud-synced folder and the sync engine touches files mid-compile. **Always build with
-`make`**, which uses `--scratch-path` outside the synced tree. A bare `swift build` also
-writes a `.build/` directory into iCloud, which makes every subsequent build minutes slower.
-If you see this error, wait a few seconds and retry.
+## Not built yet
 
-**Compare mode doesn't type anything.** By design — `Settings.compareMode` runs every engine
-on one recording and shows them side by side. If both injected, two transcripts would fight
-over one text field. This is the single most confusing behaviour in the app.
-
-**The timing column isn't comparing like with like.** Apple and Parakeet are timed on local
-compute with the clock started *after* model load. Wispr Flow's number is its own
-`e2eLatency`, which includes a network round trip and its cleanup pass. Don't present them
-as one ranking.
-
-**`MainActor.assumeIsolated` will crash the process.** It does not check the claim, it
-asserts it. Use `await MainActor.run` from any non-main-actor context. This took the app
-down once already.
-
-**Mutating `@State` inside a `Canvas` draw closure floods the log and corrupts state.** The
-VU meter keeps its needle physics in a plain reference type the view merely holds, which is
-invisible to SwiftUI's state graph. Don't "clean that up" into `@State`.
-
----
-
-## Design system
-
-`Sources/MurmurYouTube/UI/DesignSystem.swift` defines every colour, size, radius, duration
-and material token. **Views must not contain literal values.** If a component needs a number
-that isn't a token, add the token rather than inlining it.
-
-The direction is 1980s field recorders — Sony TC-D5, Marantz PMD, Nakamichi, Braun. Silver
-face in light appearance, black face in dark. Two rules that are not negotiable:
-
-- **Red means recording.** Nothing else in the app is red.
-- **Amber and green are instrumentation only** — level meters, never UI chrome.
-
-Explicitly ruled out: neon, vaporwave, synthwave, purple/pink gradients, glowing text, chrome
-lettering, grid horizons. There are **no gradients anywhere**; depth comes from flat panels,
-hairline bevels and procedurally-drawn brushed grain.
-
----
-
-## macOS specifics
-
-**Code signing is load-bearing, not cosmetic.** TCC stores a code-signing *requirement* per
-entry, not just a path. An ad-hoc signature changes every build, so the rebuilt binary stops
-satisfying the stored requirement — and the symptom lies: the Accessibility toggle still
-shows as **on** while the app is untrusted. The `Makefile` auto-detects a Developer ID via
-`security find-identity`. Don't replace that with `--sign -`.
-
-If a grant does get wedged, reset that one row — never toggle, and never omit the bundle ID:
-
-```bash
-tccutil reset Accessibility ai.pivotstudio.murmur-youtube
-```
-
-A bare `tccutil reset Accessibility` wipes every app on the machine. Then quit System
-Settings entirely (⌘Q) before reopening; the Privacy pane caches its list.
-
-**`log` may be shadowed in the user's shell.** Use `/usr/bin/log` explicitly.
-
-**Don't run the `.app` from the repo folder.** It's iCloud-synced and the sync engine can
-corrupt the signature. `make install` puts the running copy in `/Applications`.
-
----
-
-## Windows specifics
-
-The specifics below were expensive to establish and several were found the hard way. Treat
-them as load-bearing. Full detail in `windows/README.md` and `docs/PARAKEET-WINDOWS.md`.
-
-**Three pinned versions that break silently at "latest":**
-
-| Package | Pin | Why |
-|---|---|---|
-| `NAudio` | 2.3.0 | 3.x targets .NET 9+ and will not restore |
-| `Avalonia.Headless.XUnit` | 11.3.20 | 12.x requires xUnit **v3**, a different package line |
-| `org.k2fsa.sherpa.onnx` | 1.13.5 | Bundles ONNX Runtime — never also reference `Microsoft.ML.OnnxRuntime` |
-
-**Right Alt is AltGr** on German, Polish, UK, Nordic and most Latin-American layouts. Binding
-push-to-talk there — and especially suppressing it — breaks typing `@`, `€`, `\`, `|` for
-those users. Default is **Right Ctrl**, and the hook **observes without swallowing**: if the
-key-down is swallowed and the key-up escapes, the target app believes Ctrl is held forever.
-
-**UI Automation cannot inject text.** `TextPattern` is documented read-only and
-`ValuePattern` replaces a whole field rather than inserting at the caret. `SendInput` is the
-primary path, not a fallback.
-
-**`Murmur.App` loads the platform layer by reflection, not by reference.** A direct
-reference would force the UI onto `net10.0-windows` and you would lose the ability to run it
-on your own machine. Two consequences that have already bitten once: the assembly is
-invisible to `PublishSingleFile`, so it is published as a loose file beside the exe *and*
-resolved by an explicit `AssemblyLoadContext` handler; and the published self-test checks
-this, because when it breaks the app starts perfectly and then does nothing at all when the
-key is pressed.
-
-**Keep `Murmur.Platform.Windows` logic-free.** Anything living there is code CI cannot
-exercise. Retries, debouncing and device-change handling belong in the platform-neutral
-projects behind an interface — those target plain `net10.0`, so `CA1416` turns any accidental
-Win32 call into a build error.
-
-**CI is the only place the Windows code is compiled.** Warnings are errors and the analyzers
-are strict on purpose. `--no-incremental` is mandatory: Roslyn does not re-emit analyzer
-warnings on a cached build, so without it the gate proves nothing.
-
----
-
-## Regex, if you touch the dictionary
-
-The two engines are not identical. Measured across 30 cases, **9 diverged**. Two affect this
-code and are handled — don't remove either:
-
-- `RegexOptions.CultureInvariant` on the C# side, or Turkish `İ` matches `i`.
-- **NFC normalization on both sides.** macOS returns decomposed strings, so without it an
-  accented trigger silently never fires.
-
-Two more are unfixable and simply avoided: ICU folds `ß` to `ss` and .NET doesn't; .NET's `.`
-splits surrogate pairs. Stay inside the safe subset — `\b`, `\d`, `\w`, `\s`, character
-classes, greedy/lazy quantifiers, alternation, `(?<name>…)`, fixed-length lookbehind,
-lookahead, `\p{L}`, and `$1`–`$9` in replacements. Nothing else.
-
----
-
-## What isn't built
-
-1. **Command Mode** — select text, hold a second key, "make this more formal."
-2. **Onboarding** — a first-run window walking through the macOS permissions.
-3. **Notarization** (macOS) and **code signing** (Windows). Both apps are unsigned for
-   distribution, so Windows users will meet SmartScreen.
-4. **An installer** for Windows, and model download from inside the app rather than by
-   following `docs/PARAKEET-WINDOWS.md` by hand.
-
-## What no amount of CI can verify
-
-On Windows, nobody has yet held the key and spoken. Specifically unverified:
-
-- Text injection landing in a foreground app — runners have an interactive desktop but
-  cannot take the foreground.
-- A real microphone: format negotiation, the OS privacy block, unplugging mid-capture.
-- The keyboard hook firing on a physical keypress.
-- Parakeet transcribing real speech, and whether ~2 GB resident is tolerable.
-
-Everything those feed into is behind an interface and tested with fakes. The bindings
-themselves are not. **First real-hardware run should start with `--selftest`, then a single
-short dictation into Notepad.**
+- **Command Mode**: select text, hold a key, say "make this more formal".
+- **Auto-learning the dictionary** from edits you make after a dictation.
+- **Notarization**, so downloads open without the Privacy & Security step.

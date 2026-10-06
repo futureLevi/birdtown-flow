@@ -1,201 +1,116 @@
-# Murmur YouTube
+<p align="center">
+  <img src="docs/media/icon.png" width="128" alt="Murmur icon">
+</p>
 
-Push-to-talk dictation for macOS. Hold a key, talk, release — cleaned-up text lands in
-whatever text field has focus. A Wispr Flow-shaped app, built native and fully on-device.
+<h1 align="center">Murmur</h1>
 
-**Status:** working skeleton. Builds, launches, arms the hotkey, transcribes, injects.
-Branding and the LLM cleanup tier are the next passes.
+<p align="center"><b>Speak anywhere. It types for you.</b><br>
+Push-to-talk dictation for macOS that runs entirely on your Mac.</p>
 
----
+<p align="center">
+  <img src="docs/media/hud.gif" width="600" alt="The Murmur pill: listening, transcribing, done">
+</p>
 
-## Coexisting with another dictation app
+Hold **fn**, talk, let go. Clean, punctuated text lands wherever your cursor is: Slack,
+Mail, Cursor, Terminal, a browser, anything. Recognition runs on the Neural Engine with
+**Parakeet Ultra**, so a 30-second thought is ready a few hundred milliseconds after you
+release the key, and nothing you say leaves the machine unless you turn on cloud polish.
 
-This app is built to run alongside other dictation tools without colliding with them, which
-is not automatic on macOS and is worth understanding before changing anything:
+Murmur is a fork of [per-simmons/murmur-youtube](https://github.com/per-simmons/murmur-youtube),
+rebuilt into a product meant to stand next to Wispr Flow.
 
-- **Bundle ID `ai.pivotstudio.murmur-youtube`** — TCC keys Accessibility and Microphone
-  grants to the bundle ID, so granting or revoking a permission here has no effect on any
-  other app, and vice versa.
-- **Executable `MurmurYouTube`** — distinct enough that `pkill -x MurmurYouTube` cannot
-  match a differently-named binary. The `Makefile` only ever targets `$(EXEC)`.
-- **Hotkey is configurable** (Right ⌥ / fn / Right ⌘) precisely because another tool may
-  already own the key you'd reach for first. The event tap inspects only its own keycode
-  and passes everything else through untouched.
+## What it does
 
-If you run more than one dictation app, give each a different push-to-talk key. Two apps on
-the same key both record, and whichever injects text will fight the other.
+| | |
+|---|---|
+| **Dictation** | Hold the key to talk. Double-tap it, or press Space while holding it, for hands-free; tap again to finish. Esc cancels. Your hotkey never hijacks shortcuts like fn+← or ⌥+letter. |
+| **Recognition** | Parakeet Ultra (NVIDIA's Parakeet TDT v3, post-trained by moondream) via FluidAudio on the Neural Engine. Parakeet v3, v2 and Apple Speech are one click away in Settings. While the model downloads, Apple Speech fills in, so it works from the first minute. |
+| **History** | Every dictation with its audio. Search, copy, paste again, play it back, retry the transcription, and see exactly what the dictionary and polish changed. Audio is saved before transcription starts, so a failure never loses what you said. |
+| **Paste last** | ⌃⌥V types your most recent dictation again, anywhere. |
+| **Dictionary** | Teach it names and jargon. Words bias the recognizer (CTC vocabulary boosting), and "hear X → write Y" corrections are guaranteed. Also a plain text file you can edit by hand. |
+| **Snippets** | Say "my calendly link", get the URL. |
+| **Styles** | Formal, casual, very casual or excited, chosen per kind of app: personal messages, work chat, email, everything else. Gmail and Slack in a browser are recognised by window title. |
+| **AI polish** (optional) | Removes false starts and applies self-corrections ("at 3, no wait, 4" → "at 4"). Runs on Apple Intelligence on-device, Claude with your Anthropic key, or any OpenAI-compatible endpoint (OpenAI, Groq, Ollama, LM Studio). It has a hard time limit and a guard that rejects rewrites that answer, refuse or invent; either way the plain transcript is used. Off by default. |
+| **The pill** | A small dark HUD at the bottom of the screen that never takes focus: a live waveform while you talk, a travelling wave while it thinks, a check when it's done. Honors Reduce Motion. |
 
----
+Quiet, synthesized sounds mark start, hands-free, stop, done, cancel and error, and can be
+turned off.
 
-## Quick start
+## Install
 
-```bash
-make install     # builds, bundles, signs, copies to /Applications, launches
-```
+**Download:** grab `Murmur.zip` from the [nightly release](https://github.com/futureLevi/murmur-youtube/releases/tag/nightly),
+unzip, and move `Murmur.app` to Applications. It isn't notarized, so macOS blocks the first
+launch: open **System Settings → Privacy & Security** and click **Open Anyway** (or run
+`xattr -dr com.apple.quarantine /Applications/Murmur.app`). The nightly is ad-hoc signed, so
+after each update macOS asks for Accessibility again.
 
-Then grant two permissions — neither is optional, and neither can be requested silently:
-
-| Permission | Where | Needed for |
-|---|---|---|
-| **Accessibility** | System Settings ▸ Privacy & Security ▸ Accessibility | The `CGEventTap` that sees the hotkey, and the AX text insert |
-| **Microphone** | Prompted on first dictation | Audio capture |
-
-Restart Murmur YouTube after granting Accessibility. Then hold **Right ⌥** and talk.
-
-### Why grants survive rebuilds here
-
-TCC stores a *code-signing requirement* per entry, not just a path. An ad-hoc signature
-changes on every build, so the rebuilt binary stops satisfying the stored requirement —
-and the symptom is nasty: the Accessibility toggle still **shows as on** while the app is
-reported untrusted, and flipping it changes nothing because the stale row is the problem.
-
-The `Makefile` therefore signs with a stable Developer ID (auto-detected via
-`security find-identity`, falling back to ad-hoc). Verified: rebuild + reinstall keeps both
-grants with no re-prompt.
-
-If a grant ever does get wedged, reset that one row and re-add — never toggle:
+**Build from source** (macOS 26, Xcode 26):
 
 ```bash
-tccutil reset Accessibility ai.pivotstudio.murmur-youtube
-tccutil reset Microphone   ai.pivotstudio.murmur-youtube
+git clone https://github.com/futureLevi/murmur-youtube.git murmur
+cd murmur
+make install      # builds, signs, installs to /Applications, launches
 ```
 
-Always pass the bundle ID. A bare `tccutil reset Accessibility` wipes **every** app on the
-machine. Then quit System Settings entirely (⌘Q) before reopening — that pane caches its
-list and will otherwise show the row you just deleted.
+`make install` signs with your Developer ID if you have one, which keeps the Accessibility
+grant across rebuilds.
 
-> **Keep the build out of iCloud.** `~/Desktop` and `~/Documents` are file-provider synced
-> on this machine; the sync engine can materialize/dematerialize files inside an `.app` and
-> corrupt its signature. `make install` puts the running copy in `/Applications`.
+## First run
 
-Other targets: `make app` (bundle only), `make run` (run in place), `make clean`.
+Onboarding walks through it in about a minute:
 
----
+1. **Microphone**, to hear you while the key is held.
+2. **Accessibility**, to notice the shortcut and type into other apps.
+3. **Speech model**: Parakeet Ultra, a one-time ≈620 MB download that then runs offline.
+4. **Shortcut**: fn, Right ⌥, Right ⌘ or Right ⌃. If you pick fn, set **System Settings →
+   Keyboard → Press 🌐 key to: Do Nothing**, or macOS opens the emoji picker too. If Wispr
+   Flow is still running on the same key, quit it or pick another key.
+5. **Try it** in a practice field.
 
-## Architecture
+## Privacy
 
-```
- hold key ─► HotkeyMonitor ──► DictationController ◄── Settings
-                                │
-                     ┌──────────┼──────────┐
-                     ▼          ▼          ▼
-              AudioCapture  HUDPanel   TranscriptionEngine
-                     │                      │
-                (AudioChunk) ──ordered──► AppleSpeechEngine
-                                            │
-                                       (transcript)
-                                            ▼
-                                      TextFormatter
-                                            ▼
-                                      TextInjector ─► focused app
-```
+Audio and text stay on this Mac. History lives in
+`~/Library/Application Support/Murmur/` (keep text forever by default; keep audio 7 days by
+default, both adjustable). Models live in `~/Library/Application Support/FluidAudio/Models/`.
+The only time anything is sent anywhere is when you choose a cloud polisher, and then only
+the transcript text goes to the provider you picked. API keys are stored in your Keychain.
 
-### Decisions worth knowing
+## How it's built
 
-**The HUD must never take focus.** `HUDPanel` is a `.nonactivatingPanel` with
-`canBecomeKey == false`. This is the load-bearing detail of the whole app: if the overlay
-took key status, the user's text field would lose focus and there'd be nothing left to
-inject into. Everything else is replaceable; this isn't.
-
-**The hotkey needs a `CGEventTap`, not `NSEvent`.** `fn` and left/right modifier
-discrimination don't surface through `NSEvent.addGlobalMonitorForEvents` or the Carbon
-hotkey API. A session event tap is the only way to see them — which is why Accessibility
-permission is a hard requirement rather than a nicety.
-
-**Audio ordering is explicit.** `AudioCapture` yields into an `AsyncStream` drained by a
-single task. Spawning a `Task` per buffer would be simpler and would silently corrupt the
-transcript, because unstructured tasks have no ordering guarantee.
-
-**Buffers are copied, never borrowed.** `AVAudioEngine` recycles the buffer it hands to a
-tap the instant the callback returns. `AudioChunk`'s `@unchecked Sendable` is only sound
-because `AudioCapture` always allocates fresh storage before handing off.
-
-**Two swappable seams.** `TranscriptionEngine` and `TextFormatter` are protocols so the
-two components most likely to change can change without touching anything else.
-
-### Layout
+Swift 6 with strict concurrency, SwiftUI and AppKit, SwiftPM, macOS 26.
 
 ```
-Sources/MurmurYouTube/
-├── MurmurYouTubeApp.swift              @main, AppDelegate, MenuBarExtra
-├── Core/
-│   ├── DictationController.swift   state machine, wires everything
-│   ├── HotkeyMonitor.swift         CGEventTap on .flagsChanged
-│   ├── AudioCapture.swift          AVAudioEngine tap + format conversion + RMS
-│   └── TextInjector.swift          AX insert, pasteboard+⌘V fallback
-├── Transcription/
-│   ├── TranscriptionEngine.swift   protocol + AudioChunk
-│   └── AppleSpeechEngine.swift     SpeechAnalyzer / SpeechTranscriber
-├── Formatting/
-│   └── TextFormatter.swift         protocol + RuleBasedFormatter
-├── UI/
-│   ├── HUDPanel.swift              non-activating floating panel
-│   └── HUDView.swift               waveform + live transcript, Brand palette
-└── Support/
-    ├── Settings.swift, Permissions.swift, Log.swift
+Sources/MurmurDictionary   correction rules (shared contract with windows/)
+Sources/MurmurKit          pure logic, tested on Linux too: pipeline, styles, snippets,
+                           history, stats, polish prompt, guard and HTTP clients
+Sources/Murmur             the app: hotkeys, audio, engines, injection, HUD, UI
 ```
 
----
+See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the data flow and the rules the code
+keeps (the HUD never takes focus; audio is saved before transcription; polish can only make
+things better; the dictionary runs last).
 
-## Speech engine
+```bash
+make test         # unit tests (swift test also runs the logic layers on Linux)
+make snapshots    # renders every screen to ./snapshots in light and dark
+```
 
-Default is Apple's **`SpeechAnalyzer` / `SpeechTranscriber`**, new in macOS 26: no
-dependency, no bundled model, no cloud path, real streaming with `.volatileResults` so
-text appears while you're still talking. The OS downloads and manages model assets, so the
-first run for a locale may pause on `AssetInstallationRequest`.
+CI builds and tests every push on a macOS 26 runner, renders every screen to PNG, runs a
+speech smoke test (synthesized speech through the real Parakeet model), and publishes logs
+and screenshots to the `snapshots/<branch>` branch. Pushes to `main` refresh the nightly
+release.
 
-The intended upgrade is **Parakeet v3** via FluidAudio (CoreML on the Neural Engine) —
-measurably better English WER, ~110× realtime, ~66 MB resident. Implementing
-`TranscriptionEngine` is the entire cost of switching; `DictationController` doesn't
-change.
+## Credits
 
-| | Apple SpeechTranscriber | Parakeet v3 (FluidAudio) | Whisper large-v3 (WhisperKit) |
-|---|---|---|---|
-| Dependency | none | SwiftPM | SwiftPM |
-| Model download | OS-managed | ~600 MB | ~1.5 GB |
-| English accuracy | good | best | good |
-| Languages | many | 25 | 99 |
-| Latency | low | ~80 ms | 200–500 ms |
+- [per-simmons/murmur-youtube](https://github.com/per-simmons/murmur-youtube), the original
+  app this fork grew from, and its dictionary contract.
+- [NVIDIA Parakeet TDT](https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3) and
+  [moondream's Parakeet Ultra](https://huggingface.co/moondream/parakeet-ultra).
+- [FluidAudio](https://github.com/FluidInference/FluidAudio) for CoreML models on the Neural
+  Engine and CTC vocabulary boosting.
 
----
+The `windows/` folder is the upstream Windows app and isn't maintained in this fork.
 
-## Not built yet
-
-1. **LLM cleanup tier.** `RuleBasedFormatter` strips fillers, fixes spacing, capitalizes
-   sentences and adds terminal punctuation — genuinely useful, entirely deterministic. The
-   real win is a second `TextFormatter` backed by Apple's on-device Foundation Models
-   (macOS 26) for tone, list formatting, and honoring spoken corrections, with Claude as an
-   optional higher-quality tier.
-2. **Command Mode.** Select text, hold a second hotkey, say "make this more formal."
-   Needs AX read of `kAXSelectedTextAttribute` plus an LLM round-trip.
-3. **Personal dictionary.** Names and jargon the ASR keeps missing. `SpeechAnalyzer`
-   supports this through `AnalysisContext` / `SFCustomLanguageModelData`.
-4. **Branding.** `Brand` in `HUDView.swift` is a two-color placeholder gradient. App icon,
-   real palette, HUD motion design, onboarding.
-5. **Onboarding.** A first-run window that walks through both permissions instead of
-   relying on the menu's "Grant…" items.
-6. **Developer ID signing + notarization.** Ends the TCC-reset churn and makes the app
-   distributable.
-
----
-
-## Verified
-
-Driven with a synthetic Right ⌥ hold (`scratchpad/ptt/ptt2.swift` posts `flagsChanged`
-events) and confirmed via `/usr/bin/log show --predicate 'subsystem ==
-"ai.pivotstudio.murmur-youtube"'`:
-
-- Builds clean under Swift 6 strict concurrency.
-- Signs with Developer ID; grants survive rebuild + reinstall.
-- Launches as an accessory app, no Dock icon, menu bar item present.
-- Event tap arms on grant without a restart (the poller catches it).
-- Full state machine: `starting → listening → finishing → idle`, no errors.
-- `SpeechAnalyzer` starts; models already installed, no download stall.
-- Audio capture runs and converts native 48 kHz → 16 kHz for the engine.
-- HUD renders bottom-center at `{{790, 96}, {340, 76}}` without taking focus.
-- Silence produces an empty transcript and injects nothing.
-
-**Not yet verified:** speech → transcript → cleanup → injection. Synthetic key events
-can't produce audio, so this needs a human to hold the key and talk.
-
-> `log` is shadowed in this shell — use `/usr/bin/log` explicitly or it returns nothing.
+**License:** the upstream repository doesn't include a license, so its code is all rights
+reserved by its author. Ask the original author before redistributing or selling builds of
+this fork.
