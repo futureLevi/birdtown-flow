@@ -36,18 +36,14 @@ enum HUDWave {
                 opacities[index] = rest + (peak - rest) * min(1, voice * 1.7 + ripple * 0.12)
             }
         case .transcribing, .polishing:
+            // The orb's spinning ring says "thinking", so the bars step back: a low dome that
+            // breathes slowly instead of a second moving thing competing with the ring.
+            let breath = reduceMotion ? 0.5 : 0.5 + 0.5 * sin(2 * .pi * time * Motion.thinkingFrequency)
             for index in 0..<count {
-                let position = Double(index) / Double(count - 1)
-                let crest: Double
-                if reduceMotion {
-                    crest = 0.35 + 0.15 * sin(time * 1.4)
-                } else {
-                    // A soft crest travelling left to right: thinking, not loading.
-                    let wave = 0.5 + 0.5 * sin(2 * .pi * (time * Motion.thinkingFrequency - position * 0.85))
-                    crest = wave * wave
-                }
-                heights[index] = minHeight + 1.5 + CGFloat(crest) * 7.5
-                opacities[index] = 0.3 + 0.62 * crest
+                let edge = abs(Double(index) - centre) / centre
+                let dome = 1 - 0.55 * edge * edge
+                heights[index] = minHeight + Layout.HUD.thinkingLift * CGFloat(dome)
+                opacities[index] = (0.26 + 0.18 * breath) * (0.7 + 0.3 * dome)
             }
         default:
             break
@@ -123,7 +119,7 @@ struct HUDBars: View {
                 let opacity = index < opacities.count ? opacities[index] : Palette.HUD.barRestOpacity
                 context.fill(
                     Path(roundedRect: rect, cornerRadius: width / 2),
-                    with: .color(Palette.HUD.barColor.opacity(opacity))
+                    with: .color(Palette.HUD.bar.opacity(opacity))
                 )
             }
         }
@@ -132,45 +128,46 @@ struct HUDBars: View {
     }
 }
 
-/// Ember record dot with a soft breathing pulse and a halo that brightens with the voice.
-struct HUDRecordDot: View {
-    let breath: Double
+/// The logo's spectrum disc as the pill's live light. One instance lives across listening,
+/// hands-free, transcribing and polishing, so it morphs rather than pops: it turns with the
+/// voice, hollows into the spinning comet ring when the key is released, and in hands-free it
+/// slides to the right end and becomes Stop, a warm-white square on the disc like the logo's
+/// white shapes.
+struct HUDOrb: View {
+    let mode: SpectrumOrb.Mode
     let level: Float
+    let isStop: Bool
+    let isHovered: Bool
+    let phase: Double?
     let reduceMotion: Bool
+    let stop: @MainActor () -> Void
 
     var body: some View {
-        let diameter = Layout.HUD.recordDot
-        let glow = min(1, 0.25 + Double(level) * 1.4) * (0.7 + 0.3 * breath)
-        ZStack {
-            Circle()
-                .fill(RadialGradient(
-                    colors: [Palette.HUD.emberGlow, Palette.HUD.emberGlow.opacity(0)],
-                    center: .center, startRadius: 0, endRadius: diameter * 1.5
-                ))
-                .frame(width: diameter * 3, height: diameter * 3)
-                .opacity(glow)
-            Circle()
-                .fill(Palette.HUD.ember)
-                .frame(width: diameter, height: diameter)
-                .scaleEffect(reduceMotion ? 1 : 0.88 + 0.12 * breath)
-                .opacity(0.82 + 0.18 * breath)
+        // Painted once at the Stop size and scaled down as the record light, so moving between
+        // the two is a smooth scale rather than a repaint.
+        let side = Layout.HUD.stopOrb
+        let scale = isStop ? (isHovered ? Layout.HUD.stopHoverScale : 1) : Layout.HUD.orb / side
+        let label: String = isStop ? "Stop and insert" : "Listening"
+        Button {
+            if isStop { stop() }
+        } label: {
+            ZStack {
+                SpectrumOrb(mode: mode, diameter: side, level: level, showsHalo: !isStop, phase: phase,
+                            reduceMotionOverride: reduceMotion)
+                RoundedRectangle(cornerRadius: Layout.HUD.stopGlyphRadius, style: .continuous)
+                    .fill(Palette.HUD.bar)
+                    .frame(width: Layout.HUD.stopGlyph, height: Layout.HUD.stopGlyph)
+                    .opacity(isStop ? 1 : 0)
+            }
+            .frame(width: side, height: side)
+            .scaleEffect(scale)
+            .contentShape(Circle())
         }
-        .accessibilityHidden(true)
-    }
-}
-
-/// Polishing: a small sparkle that twinkles in the record dot's place.
-struct HUDSparkle: View {
-    let breath: Double
-    let reduceMotion: Bool
-
-    var body: some View {
-        Image(systemName: "sparkle")
-            .font(Typography.hudGlyph)
-            .foregroundStyle(Palette.HUD.ink)
-            .scaleEffect(reduceMotion ? 1 : 0.84 + 0.16 * breath)
-            .opacity(0.7 + 0.3 * breath)
-            .accessibilityHidden(true)
+        .buttonStyle(.plain)
+        .allowsHitTesting(isStop)
+        .accessibilityLabel(label)
+        .accessibilityHidden(!isStop)
+        .help(label)
     }
 }
 
@@ -198,14 +195,14 @@ struct HUDLiveContent: View {
     private func liveFrame(at time: Double, smooth: Bool) -> some View {
         let wave = HUDWave.frame(kind: state.kind, levels: state.levels, at: time, reduceMotion: reduceMotion)
         let heights = smooth ? springs.step(toward: wave.heights, at: time, critical: reduceMotion) : wave.heights
-        let breath = reduceMotion ? 1 : 0.5 + 0.5 * sin(2 * .pi * time / Motion.breathPeriod)
+        let thinking = state.kind == .transcribing || state.kind == .polishing
         let midY = size.height / 2
         let handsFree = state.kind == .handsFree
         let layout = HUDMetrics.handsFreeLayout(width: size.width)
         let barsX = handsFree ? layout.bars : size.width / 2
 
         return ZStack {
-            accessory(breath: breath)
+            accessory
                 .position(x: HUDMetrics.capCentre, y: midY)
 
             HUDBars(heights: heights, opacities: wave.opacities)
@@ -221,30 +218,25 @@ struct HUDLiveContent: View {
                     .transition(.opacity)
                     .accessibilityLabel("Recording time")
 
-                HUDStopButton(isHovered: state.hover == .stop, breath: breath, action: actions.stop)
-                    .position(x: layout.stop, y: midY)
-                    .transition(.opacity.combined(with: .scale(scale: 0.6)))
             }
+
+            // The one orb, outside any per-state branch so it keeps its identity (and its
+            // motion) from listening through thinking.
+            HUDOrb(mode: thinking ? .thinking : .live, level: state.level, isStop: handsFree,
+                   isHovered: state.hover == .stop, phase: frozenTime, reduceMotion: reduceMotion,
+                   stop: actions.stop)
+                .position(x: handsFree ? layout.stop : HUDMetrics.capCentre, y: midY)
         }
         .frame(width: size.width, height: size.height)
     }
 
-    @ViewBuilder
-    private func accessory(breath: Double) -> some View {
+    /// Hands-free puts Cancel in the left cap the orb leaves for the Stop end.
+    private var accessory: some View {
         ZStack {
-            switch state.kind {
-            case .listening:
-                HUDRecordDot(breath: breath, level: state.level, reduceMotion: reduceMotion)
-                    .transition(.opacity.combined(with: .scale(scale: 0.4)))
-            case .handsFree:
+            if state.kind == .handsFree {
                 HUDIconButton(symbol: "xmark", label: "Cancel dictation", isHovered: state.hover == .cancel,
                               action: actions.cancel)
                     .transition(.opacity.combined(with: .scale(scale: 0.6)))
-            case .polishing:
-                HUDSparkle(breath: breath, reduceMotion: reduceMotion)
-                    .transition(.opacity.combined(with: .scale(scale: 0.4)))
-            default:
-                EmptyView()
             }
         }
     }

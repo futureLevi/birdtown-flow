@@ -15,6 +15,9 @@ extension SnapshotCatalog {
         shots.append(SnapshotRenderer.Shot("hud-sheet", size: HUDPreview.sheetSize) {
             HUDPreviewSheet()
         })
+        shots.append(SnapshotRenderer.Shot("hud-check-compare", size: HUDPreview.sceneSize) {
+            HUDCheckComparison()
+        })
         shots.append(SnapshotRenderer.Shot("brand-icon-512", size: CGSize(width: 512, height: 512)) {
             AppIconArtwork(size: 512)
         })
@@ -283,5 +286,28 @@ struct BrandPreviewSheet: View {
                 SpectrumOrb(mode: .thinking, diameter: side, showsHalo: true, phase: 0.3)
             }
         }
+    }
+}
+
+/// The done check in warm white and in success green, side by side on the pill's navy, to
+/// choose between them.
+struct HUDCheckComparison: View {
+    var body: some View {
+        ZStack {
+            HUDBackdrop()
+            HStack(spacing: Spacing.xxxl) {
+                check(Palette.HUD.check)
+                check(Palette.HUD.success)
+            }
+        }
+        .frame(width: HUDPreview.sceneSize.width, height: HUDPreview.sceneSize.height)
+    }
+
+    private func check(_ colour: Color) -> some View {
+        ZStack {
+            HUDPillBody()
+            HUDDrawnCheck(animated: false, color: colour)
+        }
+        .frame(width: Layout.HUD.height, height: Layout.HUD.height)
     }
 }

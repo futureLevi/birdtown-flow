@@ -237,8 +237,7 @@ enum Elevation {
 // MARK: - HUD additions (owned by the HUD area; additive only)
 
 extension Palette.HUD {
-    /// Waveform bars are drawn in white; opacity carries loudness.
-    static let barColor = Color.white
+    /// Waveform bars are drawn in the logo's warm white (`bar`); opacity carries loudness.
     static let barRestOpacity: Double = 0.42
     static let barPeakOpacity: Double = 0.95
     /// The resting idle pill is a whisper until hovered.
@@ -250,11 +249,9 @@ extension Palette.HUD {
     /// Round HUD buttons at rest and under the pointer.
     static let control = Color.white.opacity(0.08)
     static let controlHover = Color.white.opacity(0.18)
-    /// Soft halo behind the live orb; brightens with the voice.
-    static let emberGlow = Color(hex: 0x8291FF, alpha: 0.5)
+    /// The done check: the logo's warm white, a nod rather than a celebration.
+    static let check = Color(hex: 0xFEFCF8)
     static let dangerSoft = Color(hex: 0xFF6B7A, alpha: 0.18)
-    static let successSoft = Color(hex: 0x4FD39A, alpha: 0.18)
-    static let onEmber = Color.white
     /// The pill's shadow is built from stacked layers (see `HUDPillBody`), shaped by
     /// `Elevation.hud`'s radius and offset.
     static let shadow = Color.black
@@ -273,6 +270,12 @@ extension Layout.HUD {
     /// Extra pointer slack around the tiny idle pill.
     static let hitSlop: CGFloat = 10
     static let buttonSize: CGFloat = 24
+    /// The spectrum orb as the record light, and as the hands-free Stop button.
+    static let orb: CGFloat = 14
+    static let stopOrb: CGFloat = 24
+    static let stopHoverScale: CGFloat = 1.08
+    /// How far the bars rise into their resting dome while the orb spins.
+    static let thinkingLift: CGFloat = 2.5
     static let stopGlyph: CGFloat = 8
     static let stopGlyphRadius: CGFloat = 2
     static let timerWidth: CGFloat = 32
@@ -310,9 +313,7 @@ extension Motion {
     /// `pill`'s spring parameters, for code that evaluates the curve itself (the README film).
     static let pillResponse: Double = 0.38
     static let pillDamping: Double = 0.74
-    /// Record dot breathing period, seconds.
-    static let breathPeriod: Double = 1.8
-    /// Travelling "thinking" wave, cycles per second.
+    /// The bars' slow breathing while the orb spins, cycles per second.
     static let thinkingFrequency: Double = 0.8
 }
 
