@@ -74,7 +74,9 @@ enum LogoPainter {
     // MARK: - Drawing
 
     /// The whole icon: navy tile, ring, spectrum disc and bars.
-    static func drawIcon(in cg: CGContext, tile: CGRect, variant: Variant) {
+    /// - Parameter snapToPixels: for small exports drawn at 1 unit = 1 pixel, rounds bar
+    ///   geometry to whole pixels so 16 and 32 px icons stay crisp.
+    static func drawIcon(in cg: CGContext, tile: CGRect, variant: Variant, snapToPixels: Bool = false) {
         let g = geometry(variant)
         let side = tile.width
         let centre = CGPoint(x: tile.midX, y: tile.midY)
@@ -90,7 +92,7 @@ enum LogoPainter {
         if g.showsRing {
             drawRing(in: cg, centre: centre, outer: g.ringOuter * side, inner: g.ringInner * side)
         }
-        drawBars(in: cg, centre: centre, side: side, geometry: g)
+        drawBars(in: cg, centre: centre, side: side, geometry: g, snap: snapToPixels)
         cg.restoreGState()
     }
 
@@ -173,14 +175,23 @@ enum LogoPainter {
         cg.restoreGState()
     }
 
-    private static func drawBars(in cg: CGContext, centre: CGPoint, side: CGFloat, geometry g: Geometry) {
-        let width = g.barWidth * side
+    private static func drawBars(
+        in cg: CGContext, centre: CGPoint, side: CGFloat, geometry g: Geometry, snap: Bool = false
+    ) {
+        let width = snap ? max(1, (g.barWidth * side).rounded()) : g.barWidth * side
+        let pitch = snap ? max(width + 1, (g.barPitch * side).rounded()) : g.barPitch * side
         let count = g.barHeights.count
         func capsule(index: Int, dy: CGFloat, grow: CGFloat) -> CGPath {
-            let x = centre.x + (CGFloat(index) - CGFloat(count - 1) / 2) * g.barPitch * side
-            let height = g.barHeights[index] * side
-            let rect = CGRect(x: x - width / 2 - grow, y: centre.y - height / 2 + dy - grow,
-                              width: width + grow * 2, height: height + grow * 2)
+            var x = centre.x + (CGFloat(index) - CGFloat(count - 1) / 2) * pitch - width / 2
+            var height = g.barHeights[index] * side
+            var y = centre.y - height / 2
+            if snap {
+                // Whole-pixel edges: round the left edge and height, keep the bar centred.
+                x = x.rounded()
+                height = max(width, height.rounded())
+                y = (centre.y - height / 2).rounded()
+            }
+            let rect = CGRect(x: x - grow, y: y + dy - grow, width: width + grow * 2, height: height + grow * 2)
             return CGPath(roundedRect: rect, cornerWidth: rect.width / 2, cornerHeight: rect.width / 2, transform: nil)
         }
         // A faint two-step shadow below each bar.

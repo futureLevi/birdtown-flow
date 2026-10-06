@@ -47,6 +47,19 @@ enum IconExporter {
         }
     }
 
+    /// The tile for an icon of `pixels`: Apple's grid, but on whole pixels at small sizes so the
+    /// edges stay crisp, and a little larger at 16 px, where every pixel of content counts.
+    static func tileRect(pixels: Int) -> CGRect {
+        let canvas = CGFloat(pixels)
+        guard pixels < 48 else {
+            return LogoPainter.tileRect(inCanvas: CGRect(x: 0, y: 0, width: canvas, height: canvas))
+        }
+        let ideal = canvas * LogoPainter.tileFraction
+        let side = pixels < 24 ? canvas - 2 : (ideal / 2).rounded() * 2
+        let origin = (canvas - side) / 2
+        return CGRect(x: origin, y: origin, width: side, height: side)
+    }
+
     /// One icon image, `pixels` square.
     static func png(pixels: Int) throws -> Data {
         let side = CGFloat(pixels)
@@ -63,22 +76,24 @@ enum IconExporter {
         cg.translateBy(x: 0, y: side)
         cg.scaleBy(x: 1, y: -1)
 
-        let tile = LogoPainter.tileRect(inCanvas: CGRect(x: 0, y: 0, width: side, height: side))
+        let tile = tileRect(pixels: pixels)
 
-        // The drop shadow macOS icons carry in their artwork. Shadow offsets are in base space
-        // (y-up here), so a negative height falls downward on screen.
+        // The drop shadow macOS icons carry in their artwork, lighter at small sizes where it
+        // would only blur the tile's edge. Shadow offsets are in base space (y-up here), so a
+        // negative height falls downward on screen.
+        let shadowAlpha: CGFloat = pixels < 24 ? 0 : pixels < 48 ? 0.16 : 0.32
         cg.saveGState()
         cg.setShadow(
-            offset: CGSize(width: 0, height: -side * 10 / 1024),
-            blur: side * 24 / 1024,
-            color: CGColor(gray: 0, alpha: 0.32)
+            offset: CGSize(width: 0, height: -max(0.5, side * 10 / 1024)),
+            blur: max(0.5, side * 24 / 1024),
+            color: CGColor(gray: 0, alpha: shadowAlpha)
         )
         cg.addPath(LogoPainter.tilePath(tile))
         cg.setFillColor(LogoPainter.rgb(LogoPainter.Colors.navyInk))
         cg.fillPath()
         cg.restoreGState()
 
-        LogoPainter.drawIcon(in: cg, tile: tile, variant: .forCanvas(pixels: side))
+        LogoPainter.drawIcon(in: cg, tile: tile, variant: .forCanvas(pixels: side), snapToPixels: pixels < 48)
 
         guard let image = cg.makeImage() else { throw ExportError.context }
         let rep = NSBitmapImageRep(cgImage: image)
