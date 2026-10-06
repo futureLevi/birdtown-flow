@@ -104,6 +104,10 @@ final class HotkeyMonitor {
     /// Keys whose key-down we swallowed; their auto-repeats and key-up are swallowed too, so
     /// the target app never sees half a keystroke.
     private var swallowed: Set<Int64> = []
+    /// Polls for a release the tap couldn't see; see `checkStillHeld()`.
+    private var releaseWatch: Timer?
+    /// Consecutive polls that found the key up. Two in a row are needed before acting.
+    private var missedReleaseReadings = 0
 
     var key: PushToTalkKey = .fn
     /// Receives every gesture. The return value only matters for `.space` and `.escape`.
@@ -174,6 +178,7 @@ final class HotkeyMonitor {
         }
         tap = nil
         runLoopSource = nil
+        stopReleaseWatch()
         isPressed = false
         knownModifiers = 0
         swallowed.removeAll()
@@ -221,6 +226,7 @@ final class HotkeyMonitor {
             if nowPressed != isPressed {
                 isPressed = nowPressed
                 knownModifiers = held
+                if nowPressed { startReleaseWatch() } else { stopReleaseWatch() }
                 _ = handler?(nowPressed ? .keyDown : .keyUp)
             }
             return key.shouldConsumeEvent
@@ -265,7 +271,53 @@ final class HotkeyMonitor {
         guard isPressed else { return }
         if !CGEventSource.flagsState(.combinedSessionState).contains(key.unionFlag) {
             isPressed = false
+            stopReleaseWatch()
             _ = handler?(.keyUp)
         }
+    }
+
+    // MARK: - Missed releases under Secure Event Input
+
+    private func startReleaseWatch() {
+        stopReleaseWatch()
+        // Scheduled on the main run loop, so the block provably runs on the main thread.
+        let timer = Timer(timeInterval: 0.25, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated { self?.checkStillHeld() }
+        }
+        RunLoop.main.add(timer, forMode: .common)
+        releaseWatch = timer
+    }
+
+    private func stopReleaseWatch() {
+        releaseWatch?.invalidate()
+        releaseWatch = nil
+        missedReleaseReadings = 0
+    }
+
+    /// When focus lands in a password field mid-hold, macOS turns on Secure Event Input,
+    /// which hides every key event from taps — our key's release included — without
+    /// disabling the tap, so `resyncAfterGap` never runs and the microphone would stay open
+    /// until the next press. Only while secure input is on, poll the modifier state instead.
+    /// Gated on secure input so a quirk in the polled state can never cut a normal dictation
+    /// short, and two consecutive readings are required before acting.
+    private func checkStillHeld() {
+        guard isPressed else {
+            stopReleaseWatch()
+            return
+        }
+        guard IsSecureEventInputEnabled() else {
+            missedReleaseReadings = 0
+            return
+        }
+        if CGEventSource.flagsState(.combinedSessionState).contains(key.unionFlag) {
+            missedReleaseReadings = 0
+            return
+        }
+        missedReleaseReadings += 1
+        guard missedReleaseReadings >= 2 else { return }
+        Log.hotkey.notice("release missed under secure input; resyncing")
+        isPressed = false
+        stopReleaseWatch()
+        _ = handler?(.keyUp)
     }
 }
