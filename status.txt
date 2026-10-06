@@ -1,0 +1,7 @@
+sha=7711fbe69924f77b0c8b5180cbb02be13da646b6
+branch=polish/hud
+build=success
+test=success
+snapshots=success
+speech=success
+release=skipped
