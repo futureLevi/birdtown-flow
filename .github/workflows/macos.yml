@@ -72,6 +72,13 @@ jobs:
           kill $pid 2>/dev/null || true
           ls -la snapshots | head -80
 
+      - name: Export icon
+        id: icon
+        if: steps.build.outcome == 'success'
+        continue-on-error: true
+        run: |
+          .build/debug/BirdtownFlow --export-icon "$PWD/exported/AppIcon.iconset" "$PWD/exported/icon-1024.png" 2>&1 | tee export-icon.log
+
       - name: Cache speech models
         if: steps.build.outcome == 'success'
         uses: actions/cache@v4
@@ -97,7 +104,11 @@ jobs:
         continue-on-error: true
         run: |
           set -o pipefail
-          make icon > icon.log 2>&1 || echo "icon generation failed; using the committed icon" | tee -a icon.log
+          # The icon comes from the logo's drawing code, exported in the step above.
+          if [ -d exported/AppIcon.iconset ]; then
+            rm -rf Resources/AppIcon.iconset && cp -R exported/AppIcon.iconset Resources/
+            iconutil -c icns Resources/AppIcon.iconset -o Resources/AppIcon.icns > icon.log 2>&1 || echo "iconutil failed; using the committed icon" | tee -a icon.log
+          fi
           make app CONFIG=release STAGE="$PWD/dist" 2>&1 | tee release.log
           cd dist && ditto -c -k --sequesterRsrc --keepParent "Birdtown Flow.app" BirdtownFlow.zip
           ls -la
@@ -110,7 +121,7 @@ jobs:
           BR="snapshots/${GITHUB_REF_NAME}"
           rm -rf out && mkdir -p out
           [ -d snapshots ] && cp -R snapshots out/ || true
-          for f in build.log test.log snapshots.log release.log icon.log speech.log; do [ -f "$f" ] && cp "$f" out/ || true; done
+          for f in build.log test.log snapshots.log release.log icon.log speech.log export-icon.log; do [ -f "$f" ] && cp "$f" out/ || true; done
           grep -E "error:" build.log | sort -u | head -200 > out/errors.txt 2>/dev/null || true
           {
             echo "sha=${GITHUB_SHA}"
@@ -122,8 +133,9 @@ jobs:
             echo "release=${{ steps.release.outcome }}"
           } > out/status.txt
           if [ -f dist/BirdtownFlow.zip ]; then cp dist/BirdtownFlow.zip out/; fi
-          # The icon is regenerated from Tools/makeicon.swift on main; publish it so it can be committed.
-          if [ -f icon.log ] && [ -d Resources/AppIcon.iconset ]; then mkdir -p out/icon && cp -R Resources/AppIcon.iconset Resources/AppIcon.icns out/icon/ 2>/dev/null || true; fi
+          # The exported icon set (and the .icns on main), so they can be reviewed and committed.
+          if [ -d exported ]; then mkdir -p out/icon && cp -R exported/* out/icon/; fi
+          if [ -f Resources/AppIcon.icns ] && [ -f icon.log ]; then cp Resources/AppIcon.icns out/icon/; fi
           cat out/status.txt
           cd out
           git init -q

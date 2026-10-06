@@ -57,6 +57,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 return
             }
 
+            // `BirdtownFlow --export-icon <AppIcon.iconset> [preview.png]` renders the icon set.
+            if let index = args.firstIndex(of: "--export-icon") {
+                let iconset = index + 1 < args.count ? args[index + 1] : "AppIcon.iconset"
+                let preview = index + 2 < args.count ? URL(fileURLWithPath: args[index + 2]) : nil
+                exit(IconExporter.run(iconset: URL(fileURLWithPath: iconset), preview: preview))
+            }
+
             // `BirdtownFlow --transcribe <file.wav> [engine]` is the speech smoke test CI runs.
             if let index = args.firstIndex(of: "--transcribe") {
                 let path = index + 1 < args.count ? args[index + 1] : ""

@@ -32,8 +32,9 @@ test:
 snapshots: build
 	"$(BUILD)/$(EXEC)" --render-snapshots "$(CURDIR)/snapshots"
 
-icon:
-	@swift Tools/makeicon.swift
+## Renders every icon size from the logo's drawing code (LogoPainter) and builds the .icns.
+icon: build
+	"$(BUILD)/$(EXEC)" --export-icon "$(CURDIR)/Resources/AppIcon.iconset" "$(CURDIR)/docs/media/icon.png"
 	@iconutil -c icns Resources/AppIcon.iconset -o Resources/AppIcon.icns
 	@echo "wrote Resources/AppIcon.icns"
 

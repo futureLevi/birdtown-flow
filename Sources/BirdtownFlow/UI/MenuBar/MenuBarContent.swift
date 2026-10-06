@@ -258,7 +258,7 @@ private struct MenuRow: View {
 
 // MARK: - Menu bar icon
 
-/// The menu bar icon: Murmur's five bars, plus an Ember dot while listening or working.
+/// The menu bar icon: the logo's five bars, plus a live dot while listening or working.
 struct MenuBarLabel: View {
     @Environment(AppModel.self) private var model
 
@@ -277,22 +277,21 @@ enum MenuBarGlyph {
     static let idle = make(active: false)
     static let active = make(active: true)
 
-    /// Icon artwork in points, sized for the menu bar's 22 pt height.
+    /// Icon artwork in points, sized for the menu bar's 22 pt height: the logo's five
+    /// mirrored bars, in its exact proportions (`LogoBars`).
     nonisolated private static func make(active: Bool) -> NSImage {
-        let image = NSImage(size: NSSize(width: 19, height: 16), flipped: false) { rect in
-            let heights: [CGFloat] = [5, 9, 13, 8, 6]
-            let barWidth: CGFloat = 2
-            let gap: CGFloat = 1.6
-            let dot: CGFloat = 5
-            let barsWidth = CGFloat(heights.count) * barWidth + CGFloat(heights.count - 1) * gap
-            // Leave room on the right for the dot so the bars never shift between states.
-            let originX = rect.minX + (rect.width - dot - barsWidth) / 2
+        let image = NSImage(size: NSSize(width: 21, height: 16), flipped: false) { rect in
+            let tallest: CGFloat = 14
+            let heights: [CGFloat] = [0.345, 0.658, 1, 0.658, 0.345].map { $0 * tallest }
+            let barWidth: CGFloat = 0.164 * tallest
+            let pitch: CGFloat = 0.278 * tallest
+            let originX = rect.minX + 0.5
             // A template is tinted by the menu bar; the coloured variant must pick the
             // appearance's label colour itself, which resolves at draw time.
             (active ? NSColor.labelColor : NSColor.black).setFill()
             for (index, height) in heights.enumerated() {
                 let bar = NSRect(
-                    x: originX + CGFloat(index) * (barWidth + gap),
+                    x: originX + CGFloat(index) * pitch,
                     y: rect.midY - height / 2,
                     width: barWidth,
                     height: height
@@ -300,8 +299,10 @@ enum MenuBarGlyph {
                 NSBezierPath(roundedRect: bar, xRadius: barWidth / 2, yRadius: barWidth / 2).fill()
             }
             if active {
+                // Top-right, clear of the short outer bar.
+                let dot: CGFloat = 5
                 NSColor(Palette.ember).setFill()
-                NSBezierPath(ovalIn: NSRect(x: rect.maxX - dot, y: rect.maxY - dot - 1, width: dot, height: dot)).fill()
+                NSBezierPath(ovalIn: NSRect(x: rect.maxX - dot, y: rect.maxY - dot, width: dot, height: dot)).fill()
             }
             return true
         }
