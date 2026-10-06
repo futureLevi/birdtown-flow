@@ -84,7 +84,7 @@ public enum PolishPrompt {
         case .casual:
             "Casual. Normal capitalization, light punctuation, conversational. A one-sentence message needs no final period."
         case .veryCasual:
-            "Very casual. All lowercase apart from acronyms, links and vocabulary terms; minimal punctuation; no final period. Like texting a friend."
+            "Very casual. All lowercase apart from acronyms, links and vocabulary terms; light punctuation and no final period, but keep question and exclamation marks. Like texting a friend."
         case .excited:
             "Excited. Casual and upbeat; end with a single exclamation mark instead of a period, but never on a question."
         }
@@ -144,6 +144,7 @@ public enum PolishPrompt {
         - The speaker's own words, phrasing, tone and meaning. Do not rephrase for style, swap in \
         fancier words, or make it more formal than the style below.
         - Everything they said. Do not summarize, shorten or drop content beyond the disfluencies above.
+        - The language they spoke. Never translate, even when the transcript mixes languages.
         - Names, product names, links, email addresses, code and technical terms exactly as dictated, \
         apart from correcting their spelling to match the vocabulary.
 

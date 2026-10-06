@@ -111,7 +111,7 @@ enum Cleanup {
     /// "new line"/"new paragraph", swallowing the comma the engine put before it and whatever
     /// punctuation it put after. A full stop before it stays — it ended the previous sentence.
     private static let command = makeRegex(
-        "(?:[ \\t]*[,;])?[ \\t]*" + wordFenceBefore + "new[ \\t\\-]+(paragraph|line)" + wordFenceAfter
+        "(?:[ \\t]*[,;])?[ \\t]*\u{E000}?[ \\t]*" + wordFenceBefore + "new[ \\t\\-]+(paragraph|line)" + wordFenceAfter
             + "[ \\t]*[.,;:!?]*[ \\t]*",
         caseInsensitive: true)
     private static let followedByOf = makeRegex("^of(?![\\p{L}\\p{N}])", caseInsensitive: true)
@@ -156,6 +156,9 @@ enum Cleanup {
         text = leadingCommas.replacingMatches(in: text, template: "$1$2")
         text = extraBlankLines.replacingMatches(in: text, template: "\n\n")
         text = resolveCapitalizeMarks(text)
+        // A mark can sit between a space and a line break; with marks gone, tidy that seam.
+        text = horizontalSpace.replacingMatches(in: text, template: " ")
+        text = spaceAroundNewline.replacingMatches(in: text, template: "\n")
         // Trailing breaks are trimmed too: a stray "\n" typed into Slack would send the message.
         return text.trimmingCharacters(in: .whitespacesAndNewlines)
     }

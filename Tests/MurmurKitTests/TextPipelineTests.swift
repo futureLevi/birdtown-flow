@@ -114,6 +114,21 @@ struct PrepareTests {
         #expect(TextPipeline.prepare(input) == expected)
     }
 
+    @Test("Running prepare twice changes nothing", arguments: [
+        "Um, so, I I think we should, uh, go. New paragraph. Thanks!",
+        "W- what time is it? Hmm, new line, see you to- tomorrow.",
+        "So, um, here's the thing: the the plan is fine.",
+    ])
+    func idempotent(input: String) {
+        let once = TextPipeline.prepare(input)
+        #expect(TextPipeline.prepare(once) == once)
+    }
+
+    @Test("Windows line endings become newlines")
+    func carriageReturns() {
+        #expect(TextPipeline.prepare("One\r\ntwo\rthree") == "One\ntwo\nthree")
+    }
+
     @Test("Brand casing is never forced at a sentence start")
     func brandCasing() {
         #expect(TextPipeline.prepare("Um, iPhone sales are up.") == "iPhone sales are up.")
@@ -267,6 +282,25 @@ struct FinalizeTests {
     @Test("Newlines survive styles", arguments: WritingStyle.allCases)
     func newlinesSurvive(style: WritingStyle) {
         #expect(finalize("first line\n\nsecond line", style).text.contains("\n\n"))
+    }
+
+    @Test("Applying a style twice changes nothing", arguments: WritingStyle.allCases)
+    func styleIdempotent(style: WritingStyle) {
+        for text in ["sounds good. see you at 3pm", "Is that OK with the team?", "Ship it\nthen tell Sam", "Great news."] {
+            let once = finalize(text, style).text
+            #expect(finalize(once, style).text == once)
+        }
+    }
+
+    @Test("Snippet next to the dictionary and a style, end to end")
+    func endToEnd() {
+        let prepared = TextPipeline.prepare("Um, so, book a call with cloud code using my calendly link.")
+        let result = finalize(prepared, .casual,
+                              snippets: [calendly],
+                              dictionary: [.correction(hear: "cloud code", write: "Claude Code")])
+        #expect(result.text == "So, book a call with Claude Code using https://calendly.com/levi/30min")
+        #expect(result.snippets == ["my calendly link"])
+        #expect(result.corrections.map(\.to) == ["Claude Code"])
     }
 
     @Test("Empty input stays empty")
