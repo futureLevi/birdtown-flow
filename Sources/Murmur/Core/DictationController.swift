@@ -53,6 +53,8 @@ final class DictationController {
         static let copiedDisplay: Duration = .milliseconds(2200)
         static let cancelledDisplay: Duration = .milliseconds(500)
         static let failedDisplay: Duration = .milliseconds(2500)
+        /// Closing the microphone and collecting its samples.
+        static let recorderStop: Duration = .seconds(5)
         /// Waiting for a model that's still loading.
         static let modelWait: Duration = .seconds(30)
         static let transcription: Duration = .seconds(60)
@@ -279,11 +281,13 @@ final class DictationController {
         doubleTapTask?.cancel()
         doubleTapTask = nil
 
-        guard current.isVisible, current.blocked == nil else {
+        if let blocked = current.blocked {
             recorder.cancel()
-            resetToIdle()
+            fail(blocked)
             return
         }
+        // Normally visible by now; if the announcement was delayed (a busy main thread), the
+        // hold was still long enough to be deliberate, so process it rather than drop it.
 
         isStopping = true
         let releasedAt = Date()
@@ -473,6 +477,11 @@ final class DictationController {
                 discardSession()
                 return
             }
+            // A slip shorter than the chord grace stays invisible; a second press announces it.
+            if !current.isVisible {
+                armTask?.cancel()
+                armTask = nil
+            }
             current.awaitingSecondTap = true
             session = current
             let generation = current.generation
@@ -558,7 +567,19 @@ final class DictationController {
     private func isCurrent(_ id: UUID) -> Bool { processing?.id == id }
 
     private func finish(_ session: Session, releasedAt: Date, id: UUID) async {
-        let audio = await recorder.stop()
+        // CoreAudio can wedge stopping a device that's being unplugged; never wait forever.
+        let recorder = self.recorder
+        let audio: CapturedAudio
+        do {
+            audio = try await Watchdog.run(within: Timing.recorderStop) { await recorder.stop() }
+        } catch {
+            guard isCurrent(id) else { return }
+            Log.audio.error("the recorder didn't hand over its audio in time")
+            isStopping = false
+            processing = nil
+            fail("The microphone stopped responding")
+            return
+        }
         guard isCurrent(id) else { return }
         isStopping = false
         isHandsFree = false

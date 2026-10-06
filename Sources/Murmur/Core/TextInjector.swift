@@ -310,13 +310,15 @@ enum TextInjector {
 
         guard let saved, !saved.isEmpty else { return }
         // The paste is asynchronous in the target app; restore only once it's had time to read.
+        // The task reads the snapshot back from `pendingRestore` rather than capturing it, so
+        // a newer paste can take it over by cancelling this one.
         let task = Task { @MainActor in
             try? await Task.sleep(for: .milliseconds(550))
-            guard !Task.isCancelled else { return }
+            guard !Task.isCancelled, let pending = pendingRestore else { return }
             pendingRestore = nil
             // Someone copied something since: theirs wins.
-            guard pasteboard.changeCount == ours else { return }
-            restore(saved, to: pasteboard)
+            guard NSPasteboard.general.changeCount == ours else { return }
+            restore(pending.snapshot, to: .general)
         }
         pendingRestore = (saved, task)
     }
