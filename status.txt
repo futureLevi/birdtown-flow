@@ -1,0 +1,7 @@
+sha=bd1c4c71d93b2c19db844d9107d17f9aac882a6d
+branch=restyle/base
+build=success
+test=success
+snapshots=success
+speech=success
+release=skipped
