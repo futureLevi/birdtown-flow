@@ -15,7 +15,7 @@ struct MurmurApp: App {
         .windowToolbarStyle(.unified(showsTitle: false))
         .commands { MurmurCommands() }
 
-        Settings {
+        SwiftUI.Settings {
             SettingsView()
                 .environment(AppModel.shared)
         }

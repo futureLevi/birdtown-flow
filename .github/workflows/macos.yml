@@ -78,6 +78,7 @@ jobs:
         continue-on-error: true
         run: |
           set -o pipefail
+          make icon > icon.log 2>&1 || echo "icon generation failed; using the committed icon" | tee -a icon.log
           make app CONFIG=release STAGE="$PWD/dist" 2>&1 | tee release.log
           cd dist && ditto -c -k --sequesterRsrc --keepParent Murmur.app Murmur.zip
           ls -la
@@ -90,7 +91,7 @@ jobs:
           BR="snapshots/${GITHUB_REF_NAME}"
           rm -rf out && mkdir -p out
           [ -d snapshots ] && cp -R snapshots out/ || true
-          for f in build.log test.log snapshots.log release.log; do [ -f "$f" ] && cp "$f" out/ || true; done
+          for f in build.log test.log snapshots.log release.log icon.log; do [ -f "$f" ] && cp "$f" out/ || true; done
           grep -E "error:" build.log | sort -u | head -200 > out/errors.txt 2>/dev/null || true
           {
             echo "sha=${GITHUB_SHA}"
