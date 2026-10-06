@@ -73,9 +73,11 @@ struct DictionaryView: View {
         }
         .sheet(isPresented: $isAdding) {
             DictionaryEditorSheet(original: nil) { model.dictionary.add($0) }
+                .environment(model)
         }
         .sheet(item: $editing) { entry in
             DictionaryEditorSheet(original: entry) { model.dictionary.update($0) }
+                .environment(model)
         }
     }
 
@@ -227,6 +229,9 @@ struct DictionaryEditorSheet: View {
     @State private var kind: DictionaryEntry.Kind
     @State private var write: String
     @State private var hear: String
+    /// Fixed for the sheet's lifetime, so the duplicate check can exclude this entry.
+    @State private var draftID: UUID
+    @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
 
     init(
@@ -241,11 +246,12 @@ struct DictionaryEditorSheet: View {
         _kind = State(initialValue: original?.kind ?? kind)
         _write = State(initialValue: original?.write ?? "")
         _hear = State(initialValue: original?.hear ?? "")
+        _draftID = State(initialValue: original?.id ?? UUID())
     }
 
     private var draft: DictionaryEntry {
         DictionaryEntry(
-            id: original?.id ?? UUID(),
+            id: draftID,
             kind: kind,
             write: write.trimmingCharacters(in: .whitespacesAndNewlines),
             hear: kind == .correction ? hear.trimmingCharacters(in: .whitespacesAndNewlines) : "",
@@ -254,7 +260,39 @@ struct DictionaryEditorSheet: View {
     }
 
     private var canSave: Bool {
-        !draft.write.isEmpty && (kind == .term || !draft.hear.isEmpty)
+        !draft.write.isEmpty && (kind == .term || !draft.hear.isEmpty) && problem == nil
+    }
+
+    /// Why this entry can't be saved. Unlike `DictionaryWarning`s these block saving: each
+    /// would corrupt the plain-text file or quietly shadow an entry that already exists.
+    private var problem: String? {
+        let entry = draft
+        let fields = (kind == .correction ? [entry.hear, entry.write] : [entry.write]).filter { !$0.isEmpty }
+        if fields.contains(where: { $0.contains("->") }) {
+            return "“->” separates the two sides in the dictionary file, so it can't appear in an entry."
+        }
+        if fields.contains(where: { $0.hasPrefix("#") }) {
+            return "An entry can't start with “#”. The dictionary file reads that as a comment."
+        }
+        if fields.contains(where: { $0.contains(where: \.isNewline) }) {
+            return "Each entry has to fit on one line."
+        }
+        let others = model.dictionary.entries.filter { $0.id != entry.id }
+        switch kind {
+        case .term:
+            guard !entry.write.isEmpty else { return nil }
+            if others.contains(where: { $0.kind == .term && $0.write.caseInsensitiveCompare(entry.write) == .orderedSame }) {
+                return "“\(entry.write)” is already in your vocabulary."
+            }
+        case .correction:
+            guard !entry.hear.isEmpty else { return nil }
+            if let clash = others.first(where: {
+                $0.kind == .correction && $0.hear.caseInsensitiveCompare(entry.hear) == .orderedSame
+            }) {
+                return "“\(clash.hear)” already becomes “\(clash.write)”. Edit that entry instead."
+            }
+        }
+        return nil
     }
 
     var body: some View {
@@ -289,6 +327,17 @@ struct DictionaryEditorSheet: View {
                 text: $write,
                 prompt: kind == .term ? "Anthropic" : "Claude Code"
             )
+
+            if let problem {
+                HStack(alignment: .firstTextBaseline, spacing: Spacing.s) {
+                    Image(systemName: "xmark.octagon.fill")
+                        .foregroundStyle(Palette.danger)
+                    Text(problem)
+                        .foregroundStyle(Palette.inkSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .font(Typography.callout)
+            }
 
             ForEach(DictionaryWarning.check(draft)) { warning in
                 HStack(alignment: .firstTextBaseline, spacing: Spacing.s) {

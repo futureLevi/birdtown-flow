@@ -165,25 +165,28 @@ private struct StyleBubble: View {
     }
 }
 
-/// The spoken sentence each category's previews start from, run through the real pipeline.
+/// What the engine hands the pipeline for each category's previews. Parakeet returns
+/// punctuated, capitalised text, so the samples look like that: one sentence of at most
+/// `TextPipeline.casualPeriodWordLimit` words, ending in a full stop, with an "I" or a name
+/// to lowercase and an acronym or two that very casual keeps. That way every style shows its
+/// rule: formal keeps the period, casual drops it, very casual lowercases, excited exclaims.
 enum StyleSample {
     static func spoken(for category: AppCategory) -> String {
         switch category {
         case .personal:
-            "hey are you still up for dinner tonight i can bring dessert"
+            "Just landed, I'll grab a cab and see you at home in an hour."
         case .work:
-            "quick update the deploy went out and the dashboards look healthy let me know if anything looks off"
+            "The API deploy is out and the dashboards look healthy, so I'm logging off."
         case .email:
-            "hi sarah thanks for sending the contract over i'll review it today and get back to you tomorrow morning"
+            "Thanks for the contract, Sarah, and I'll have notes back to you by Friday."
         case .other:
-            "remember to renew the domain before friday and update the dns records afterwards"
+            "Remember to renew the domain and update the DNS records before Friday."
         }
     }
 
     static func preview(for category: AppCategory, style: WritingStyle) -> String {
-        let prepared = TextPipeline.prepare(spoken(for: category))
-        return TextPipeline.finalize(
-            prepared,
+        TextPipeline.finalize(
+            TextPipeline.prepare(spoken(for: category)),
             style: style,
             corrector: DictionaryCorrector(entries: []),
             snippets: []

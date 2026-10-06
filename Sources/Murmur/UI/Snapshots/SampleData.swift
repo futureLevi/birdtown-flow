@@ -62,6 +62,8 @@ enum SampleData {
         var engine = "Parakeet Ultra"
         var snippets: [String] = []
         var error: String?
+        /// A polish fallback note on a dictation that still went through.
+        var note: String?
     }
 
     private static let specs: [Spec] = [
@@ -76,7 +78,8 @@ enum SampleData {
              wpm: 148),
         Spec(day: 0, at: 0.86, app: App.messages, style: .casual,
              raw: "running like ten minutes late grab us a table by the window if you can",
-             text: "Running ten minutes late, grab us a table by the window if you can", wpm: 171),
+             text: "Running ten minutes late, grab us a table by the window if you can", wpm: 171,
+             note: "Timed out after 4 s"),
         Spec(day: 0, at: 0.78, app: App.gmail, style: .formal,
              raw: "hi priya thanks for the intro to the team at northwind i'd love to find thirty minutes next week to walk through how we label manipulation data does tuesday or wednesday afternoon work",
              text: "Hi Priya,\n\nThanks for the intro to the team at Northwind. I'd love to find thirty minutes next week to walk through how we label manipulation data. Does Tuesday or Wednesday afternoon work?",
@@ -194,31 +197,9 @@ enum SampleData {
                     totalMs: transcribe + polish + 40
                 ),
                 outcome: failed ? .failed : .inserted,
-                errorMessage: spec.error
+                errorMessage: spec.error ?? spec.note
             )
         }
-    }
-
-    /// Headline numbers for the sample records, computed here so snapshots don't depend on
-    /// `DictationStats.compute` being finished.
-    static func stats(for records: [HistoryRecord], now: Date = Date()) -> DictationStats {
-        let useful = records.filter { $0.hasText && ($0.outcome == .inserted || $0.outcome == .copied) }
-        let weekAgo = now.addingTimeInterval(-7 * 86_400)
-        let total = useful.reduce(0) { $0 + $1.wordCount }
-        let thisWeek = useful.filter { $0.createdAt >= weekAgo }.reduce(0) { $0 + $1.wordCount }
-        let rates = useful.compactMap(\.wordsPerMinute)
-        let averageWPM = rates.isEmpty ? 0 : rates.reduce(0, +) / rates.count
-        let spokenMinutes = useful.reduce(0) { $0 + $1.audioDuration } / 60
-        let typedMinutes = Double(total) / Double(DictationStats.typingWPM)
-        let days = Set(useful.map { Calendar.current.startOfDay(for: $0.createdAt) }).count
-        return DictationStats(
-            totalWords: total,
-            wordsThisWeek: thisWeek,
-            averageWPM: averageWPM,
-            dayStreak: days,
-            minutesSaved: max(0, Int((typedMinutes - spokenMinutes).rounded())),
-            dictationCount: useful.count
-        )
     }
 
     /// A healthy Mac: permissions granted, shortcut armed, model ready.

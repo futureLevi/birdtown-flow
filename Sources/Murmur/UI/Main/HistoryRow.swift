@@ -21,7 +21,6 @@ struct HistoryRow: View {
     @State private var showsOriginal: Bool
     @State private var didCopy = false
     @State private var copyReset: Task<Void, Never>?
-    @State private var isRetrying = false
     @State private var isAddingWord = false
 
     @Environment(AppModel.self) private var model
@@ -71,6 +70,7 @@ struct HistoryRow: View {
             DictionaryEditorSheet(original: nil, kind: .correction, context: record.finalText) { entry in
                 model.dictionary.add(entry)
             }
+            .environment(model)
         }
         .animation(Motion.resolve(Motion.fadeFast, reduceMotion: reduceMotion), value: isHovered)
         .animation(Motion.resolve(Motion.smooth, reduceMotion: reduceMotion), value: showsOriginal)
@@ -132,8 +132,11 @@ struct HistoryRow: View {
                     }
                     .buttonStyle(.murmurPrimary)
                     .controlSize(.small)
-                    .disabled(isRetrying)
-                    Text("The audio is saved, so nothing you said is lost.")
+                    .disabled(isRetrying || audioURL == nil)
+                    .help(audioURL == nil ? "The audio for this dictation wasn't kept" : "Transcribe the saved audio again")
+                    Text(audioURL == nil
+                         ? "The audio wasn't kept, so this one can't be retried."
+                         : "The audio is saved, so nothing you said is lost.")
                         .font(Typography.callout)
                         .foregroundStyle(Palette.inkTertiary)
                 }
@@ -145,7 +148,10 @@ struct HistoryRow: View {
                 .foregroundStyle(Palette.inkTertiary)
         case .inserted, .copied:
             VStack(alignment: .leading, spacing: Spacing.xs) {
-                Text(record.finalText)
+                // Collapsed, an email's "Hi Priya,\n\n" would spend two of three lines on the
+                // greeting; fold line breaks into spaces like Mail's previews. Expanded shows
+                // the text exactly as it was typed.
+                Text(isExpanded ? record.finalText : Self.flattened(record.finalText))
                     .font(Typography.transcript)
                     .foregroundStyle(Palette.ink)
                     .lineSpacing(Spacing.transcriptLine)
@@ -179,12 +185,13 @@ struct HistoryRow: View {
             }
             if record.outcome == .copied {
                 Badge(text: "On clipboard", symbol: "doc.on.clipboard")
-                    .help("There was no text field to type into, so Murmur left the text on the clipboard.")
+                    .help("Murmur put this on the clipboard instead of typing it.")
             }
             Text(meta)
                 .font(Typography.caption)
                 .foregroundStyle(Palette.inkTertiary)
                 .lineLimit(1)
+                .help(polishNote.map { "AI polish wasn't used: \($0)" } ?? "")
         }
     }
 
@@ -286,15 +293,24 @@ struct HistoryRow: View {
 
     private var audioURL: URL? { model.history.audioURL(for: record) }
 
+    private var isRetrying: Bool { RetryTracker.shared.isRetrying(record.id) }
+
     private var correctionCount: Int { record.corrections.reduce(0) { $0 + $1.count } }
 
     /// Whether the text probably runs past `transcriptLines`: a cheap estimate from
     /// paragraph lengths, since SwiftUI can't report truncation.
     private var isLong: Bool {
-        let perLine = Double(Layout.Main.transcriptCharsPerLine)
-        let lines = record.finalText.split(separator: "\n", omittingEmptySubsequences: false)
-            .reduce(0) { $0 + max(1, Int((Double($1.count) / perLine).rounded(.up))) }
-        return lines > Layout.Main.transcriptLines
+        // Line breaks always count as "more": the collapsed preview folds them away.
+        if record.finalText.contains(where: \.isNewline) { return true }
+        let lines = (Double(record.finalText.count) / Double(Layout.Main.transcriptCharsPerLine)).rounded(.up)
+        return Int(lines) > Layout.Main.transcriptLines
+    }
+
+    static func flattened(_ text: String) -> String {
+        text.split(whereSeparator: \.isNewline)
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
+            .joined(separator: " ")
     }
 
     /// "Slack", or "Gmail in Google Chrome" when the window title gives a web app away.
@@ -317,7 +333,26 @@ struct HistoryRow: View {
             parts.append(Duration.seconds(record.audioDuration).formatted(.time(pattern: .minuteSecond)))
         }
         if let wpm = record.wordsPerMinute { parts.append("\(wpm) wpm") }
+        if let note = polishNote { parts.append("Polish skipped · \(Self.shortNote(note))") }
         return parts.joined(separator: " · ")
+    }
+
+    /// Core keeps polish fallback notes ("Timed out after 4 s") on records that succeeded.
+    /// They're information, not errors: only `.failed` records show their message in red.
+    private var polishNote: String? {
+        guard record.outcome != .failed,
+              let note = record.errorMessage?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !note.isEmpty
+        else { return nil }
+        return note
+    }
+
+    /// "Rewrite rejected: it changed what was said" → "rewrite rejected". Acronyms keep case.
+    static func shortNote(_ note: String) -> String {
+        let head = (note.split(separator: ":", maxSplits: 1).first.map(String.init) ?? note)
+            .trimmingCharacters(in: .whitespaces)
+        guard let first = head.split(separator: " ").first, first != first.uppercased() else { return head }
+        return head.prefix(1).lowercased() + head.dropFirst()
     }
 
     // MARK: - Actions
@@ -326,6 +361,10 @@ struct HistoryRow: View {
         let pasteboard = NSPasteboard.general
         pasteboard.clearContents()
         pasteboard.setString(record.finalText, forType: .string)
+        flashCopied()
+    }
+
+    private func flashCopied() {
         didCopy = true
         copyReset?.cancel()
         copyReset = Task {
@@ -337,10 +376,11 @@ struct HistoryRow: View {
 
     private func retry() {
         guard !isRetrying else { return }
-        isRetrying = true
+        let id = record.id
         Task {
-            await model.controller.retry(record)
-            isRetrying = false
+            await RetryTracker.shared.retry(record, using: model.controller)
+            // A successful retry puts the text on the clipboard; say so where the user looked.
+            if model.history.record(id: id)?.outcome == .copied { flashCopied() }
         }
     }
 }

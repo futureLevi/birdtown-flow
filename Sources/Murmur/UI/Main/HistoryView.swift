@@ -105,7 +105,7 @@ struct HistoryView: View {
                     header(searched: searched)
                         .padding(.bottom, Spacing.xs)
                     if visible.isEmpty {
-                        emptyState
+                        emptyState(searchMatches: searched.count)
                     } else {
                         ForEach(HistoryDay.group(visible)) { day in
                             Section {
@@ -121,8 +121,11 @@ struct HistoryView: View {
             .focusable()
             .focusEffectDisabled()
             .focused($listFocused)
-            .onDeleteCommand { requestDelete(selection) }
+            // Only what's on screen: a search may have hidden rows selected earlier.
+            .onDeleteCommand { requestDelete(selection.intersection(visible.map(\.id))) }
             .onExitCommand { selection = [] }
+            .onChange(of: query) { _, _ in selection = [] }
+            .onChange(of: filter) { _, _ in selection = [] }
             .onChange(of: model.focusedRecordID, initial: true) { _, id in
                 reveal(id, proxy: proxy)
             }
@@ -207,17 +210,20 @@ struct HistoryView: View {
 
     // MARK: - Empty states
 
+    /// Distinguishes "no history at all", "the search matched nothing" and "the search (or
+    /// everything) matched, but not this filter" — each needs a different way out.
     @ViewBuilder
-    private var emptyState: some View {
+    private func emptyState(searchMatches: Int) -> some View {
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
-        if model.history.records.isEmpty {
+        // Records waiting out the undo window are hidden but still in the store.
+        if model.history.records.isEmpty || (trimmed.isEmpty && searchMatches == 0) {
             EmptyState(
                 symbol: "waveform",
                 title: "Your words will gather here",
                 message: "Every dictation lands in History with its audio, so you can copy it, paste it "
                     + "again or retry it. Hold your shortcut and say something to begin."
             )
-        } else if !trimmed.isEmpty {
+        } else if searchMatches == 0 {
             EmptyState(
                 symbol: "magnifyingglass",
                 title: "Nothing matches “\(trimmed)”",
@@ -226,13 +232,22 @@ struct HistoryView: View {
                 Button("Clear Search") { query = "" }
                     .buttonStyle(.murmurSecondary)
             }
+        } else if filter == .failed {
+            EmptyState(
+                symbol: "checkmark",
+                title: trimmed.isEmpty ? "Nothing has failed" : "No failed dictations match",
+                message: "Every dictation made it through. If one ever doesn't, it waits here with its audio."
+            ) {
+                Button("Show All") { filter = .all }
+                    .buttonStyle(.murmurSecondary)
+            }
         } else {
             EmptyState(
-                symbol: filter == .failed ? "checkmark" : "line.3.horizontal.decrease",
-                title: filter == .failed ? "Nothing has failed" : "Nothing here yet",
-                message: filter == .failed
-                    ? "Every dictation made it through. If one ever doesn't, it waits here with its audio."
-                    : "No dictations match this filter."
+                symbol: "line.3.horizontal.decrease",
+                title: trimmed.isEmpty ? "None of these yet" : "None of these match “\(trimmed)”",
+                message: filter == .corrected
+                    ? "Dictations your dictionary corrected will show up here."
+                    : "Dictations rewritten by AI polish will show up here."
             ) {
                 Button("Show All") { filter = .all }
                     .buttonStyle(.murmurSecondary)

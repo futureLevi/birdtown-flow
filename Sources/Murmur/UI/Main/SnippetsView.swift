@@ -75,9 +75,11 @@ struct SnippetsView: View {
         }
         .sheet(isPresented: $isAdding) {
             SnippetEditorSheet(original: nil) { model.snippets.add($0) }
+                .environment(model)
         }
         .sheet(item: $editing) { snippet in
             SnippetEditorSheet(original: snippet) { model.snippets.update($0) }
+                .environment(model)
         }
     }
 
@@ -181,8 +183,13 @@ struct SnippetEditorSheet: View {
         model.snippets.hasConflict(trigger: trimmedTrigger, excluding: original?.id)
     }
 
+    /// The pipeline matches triggers word by word, so one made only of punctuation never fires.
+    private var triggerHasWords: Bool {
+        trimmedTrigger.contains { $0.isLetter || $0.isNumber }
+    }
+
     private var canSave: Bool {
-        !trimmedTrigger.isEmpty && !expansion.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !hasConflict
+        triggerHasWords && !expansion.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !hasConflict
     }
 
     var body: some View {
@@ -195,7 +202,15 @@ struct SnippetEditorSheet: View {
 
             VStack(alignment: .leading, spacing: Spacing.xs) {
                 LabeledInput(label: "When you say", text: $trigger, prompt: "my calendly link")
-                if hasConflict {
+                if !trimmedTrigger.isEmpty && !triggerHasWords {
+                    HStack(alignment: .firstTextBaseline, spacing: Spacing.xs) {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .foregroundStyle(Palette.warning)
+                        Text("A trigger needs at least one word you can say.")
+                            .foregroundStyle(Palette.inkSecondary)
+                    }
+                    .font(Typography.caption)
+                } else if hasConflict {
                     HStack(alignment: .firstTextBaseline, spacing: Spacing.xs) {
                         Image(systemName: "exclamationmark.triangle.fill")
                             .foregroundStyle(Palette.warning)

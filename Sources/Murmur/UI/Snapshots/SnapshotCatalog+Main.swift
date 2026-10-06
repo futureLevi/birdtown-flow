@@ -6,13 +6,8 @@ extension SnapshotCatalog {
     static var main: [SnapshotRenderer.Shot] {
         let size = CGSize(width: 1040, height: 700)
         let records = SampleData.records()
-        let sample = MainPreview(
-            status: SampleData.readyStatus,
-            stats: SampleData.stats(for: records),
-            firstName: "Levi"
-        )
+        let sample = MainPreview(status: SampleData.readyStatus, firstName: "Levi")
         var firstRun = sample
-        firstRun.stats = nil
         firstRun.status?.model = .downloading(0.42)
         var search = sample
         search.historyQuery = "migration"
