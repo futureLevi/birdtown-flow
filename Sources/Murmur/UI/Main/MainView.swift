@@ -163,7 +163,7 @@ struct SidebarStatusView: View {
                         Text("Grant Accessibility")
                             .font(Typography.bodyEmphasis)
                             .foregroundStyle(Palette.ink)
-                        Text("So \(status.pushToTalkKey) can start dictation")
+                        Text("Needed for your shortcut")
                             .font(Typography.caption)
                             .foregroundStyle(Palette.inkSecondary)
                     }
