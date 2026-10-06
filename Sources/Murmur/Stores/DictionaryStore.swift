@@ -34,6 +34,9 @@ final class DictionaryStore {
     private var watcher: DispatchSourceFileSystemObject?
     /// Set while we're writing, so our own save doesn't read back as an external edit.
     private var isSaving = false
+    /// `false` for in-memory stores (previews, snapshots), which must never touch the
+    /// user's real dictionary file.
+    @ObservationIgnored private var persists = true
 
     static var fileURL: URL {
         AppPaths.support.appendingPathComponent("dictionary.txt")
@@ -42,6 +45,13 @@ final class DictionaryStore {
     private init() {
         load()
         startWatching()
+    }
+
+    /// In-memory only — for previews and snapshots. Never reads, writes or watches the file.
+    init(preview entries: [DictionaryEntry]) {
+        persists = false
+        self.entries = entries
+        revision = 1
     }
 
     // MARK: - Editing
@@ -122,6 +132,7 @@ final class DictionaryStore {
 
     private func save() {
         revision += 1
+        guard persists else { return }
         isSaving = true
         defer { isSaving = false }
 
