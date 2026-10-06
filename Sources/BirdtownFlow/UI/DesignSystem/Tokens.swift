@@ -530,6 +530,11 @@ extension Palette {
     static let keyFace = Color.adaptive(light: 0xFFFFFF, dark: 0x2A3359)
     static let keyLip = Color.adaptive(light: 0x0E183C, lightAlpha: 0.20, dark: 0x000000, darkAlpha: 0.60)
     static let keyHighlight = Color.adaptive(light: 0xFFFFFF, lightAlpha: 1, dark: 0xFFFFFF, darkAlpha: 0.12)
+    /// Style's sample message bubbles: a step darker than the card in light mode and a step
+    /// lighter in dark, like chat bubbles. `sunken` would read as a hole on navy.
+    static let bubble = Color.adaptive(light: 0xECEFF6, dark: 0x222A4B)
+    /// The bubble on a chosen card's Signal blue wash.
+    static let bubbleOnSelection = Color.adaptive(light: 0xFFFFFF, dark: 0x353F72)
 }
 
 extension Motion {
