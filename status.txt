@@ -1,0 +1,7 @@
+sha=cdfd1a4dea97c86446d2c4395073de5a1ef16de6
+branch=polish/kit
+build=success
+test=success
+snapshots=success
+speech=success
+release=skipped
