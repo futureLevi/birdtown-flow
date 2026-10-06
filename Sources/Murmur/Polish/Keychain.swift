@@ -1,4 +1,5 @@
 import Foundation
+import os
 import Security
 
 /// API keys live in the login keychain, never in UserDefaults.
@@ -25,8 +26,18 @@ enum Keychain {
 
     static let service = "io.github.futurelevi.murmur"
 
+    /// Keys already read this session, `""` meaning "known to be absent". Every dictation and
+    /// every Settings redraw asks for the key; without this each one is a keychain round trip,
+    /// and on an ad-hoc signed build (whose signature changes with every build) potentially a
+    /// keychain permission prompt. `set` keeps it current.
+    private static let cache = OSAllocatedUnfairLock<[Account: String]>(initialState: [:])
+
     /// The stored key, or `nil` when none is set.
     static func string(for account: Account) -> String? {
+        if let cached = cache.withLock({ $0[account] }) {
+            return cached.isEmpty ? nil : cached
+        }
+
         var query = baseQuery(for: account)
         query[kSecReturnData as String] = true
         query[kSecMatchLimit as String] = kSecMatchLimitOne
@@ -34,13 +45,17 @@ enum Keychain {
         var item: CFTypeRef?
         let status = SecItemCopyMatching(query as CFDictionary, &item)
         guard status == errSecSuccess else {
-            if status != errSecItemNotFound {
+            if status == errSecItemNotFound {
+                cache.withLock { $0[account] = "" }
+            } else {
+                // Not cached: a denied or interrupted read isn't proof the key is missing.
                 Log.polish.error("keychain read failed (\(status, privacy: .public)) for \(account.rawValue, privacy: .public)")
             }
             return nil
         }
         guard let data = item as? Data, let value = String(data: data, encoding: .utf8) else { return nil }
         let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        cache.withLock { $0[account] = trimmed }
         return trimmed.isEmpty ? nil : trimmed
     }
 
@@ -57,7 +72,10 @@ enum Keychain {
 
         guard !trimmed.isEmpty else {
             let status = SecItemDelete(query as CFDictionary)
-            if status != errSecSuccess, status != errSecItemNotFound {
+            if status == errSecSuccess || status == errSecItemNotFound {
+                cache.withLock { $0[account] = "" }
+            } else {
+                cache.withLock { $0[account] = nil }
                 Log.polish.error("keychain delete failed (\(status, privacy: .public)) for \(account.rawValue, privacy: .public)")
             }
             return
@@ -73,7 +91,10 @@ enum Keychain {
             item[kSecAttrAccessible as String] = kSecAttrAccessibleWhenUnlocked
             status = SecItemAdd(item as CFDictionary, nil)
         }
-        if status != errSecSuccess {
+        if status == errSecSuccess {
+            cache.withLock { $0[account] = trimmed }
+        } else {
+            cache.withLock { $0[account] = nil }
             Log.polish.error("keychain write failed (\(status, privacy: .public)) for \(account.rawValue, privacy: .public)")
         }
     }
