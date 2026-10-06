@@ -725,8 +725,7 @@ private struct ShortcutStep: View {
                         text: "The 🌐 key also opens Emoji or Dictation. Set “Press 🌐 key to” to “Do Nothing” so only Murmur hears it."
                     ) {
                         Button("Open Keyboard Settings…", action: SetupKit.openKeyboardSettings)
-                            .buttonStyle(.link)
-                            .font(Typography.callout.weight(.medium))
+                            .buttonStyle(SetupKit.InlineLinkStyle())
                     }
                 } else if wisprRunning {
                     SetupKit.Callout(
@@ -881,7 +880,7 @@ private struct PracticeStep: View {
                 Text("Murmur can't hear your shortcut yet.")
                     .foregroundStyle(Palette.inkSecondary)
                 Button("Fix Accessibility", action: onFixAccessibility)
-                    .buttonStyle(.link)
+                    .buttonStyle(SetupKit.InlineLinkStyle())
             }
             .font(Typography.callout)
         } else if phase.isRecording {

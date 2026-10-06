@@ -213,6 +213,19 @@ extension SetupKit {
             QuietButtonBody(configuration: configuration)
         }
     }
+
+    /// An inline link inside a sentence or callout: underlined ink rather than system blue,
+    /// which would fight the warm palette.
+    struct InlineLinkStyle: ButtonStyle {
+        func makeBody(configuration: Configuration) -> some View {
+            configuration.label
+                .font(Typography.callout.weight(.medium))
+                .underline()
+                .foregroundStyle(Palette.ink)
+                .opacity(configuration.isPressed ? Layout.Setup.pressedOpacity : 1)
+                .contentShape(Rectangle())
+        }
+    }
 }
 
 private struct PrimaryButtonBody: View {

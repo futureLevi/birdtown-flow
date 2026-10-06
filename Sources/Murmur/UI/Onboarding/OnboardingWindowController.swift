@@ -40,6 +40,8 @@ final class OnboardingWindowController: NSObject, NSWindowDelegate {
         window.titlebarAppearsTransparent = true
         window.isMovableByWindowBackground = true
         window.isReleasedWhenClosed = false
+        // Paint the canvas colour from the first frame, so nothing flashes before SwiftUI draws.
+        window.backgroundColor = NSColor(Palette.canvas)
         window.standardWindowButton(.miniaturizeButton)?.isHidden = true
         window.standardWindowButton(.zoomButton)?.isHidden = true
         window.contentView = hosting

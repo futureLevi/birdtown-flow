@@ -92,7 +92,9 @@ extension SnapshotCatalog {
     }
 
     private static var menuBarShots: [SnapshotRenderer.Shot] {
-        let size = CGSize(width: Layout.Setup.menuBarWidth, height: 420)
+        // Taller than the brief's 420 pt: with two-line recent dictations the real window
+        // sizes to about 470 pt, and a clipped snapshot would hide the bottom rows.
+        let size = CGSize(width: Layout.Setup.menuBarWidth, height: 480)
         let model = AppModel.setupPreview { $0.hasCompletedOnboarding = true }
         var listening = SetupPreview()
         listening.phase = .listening

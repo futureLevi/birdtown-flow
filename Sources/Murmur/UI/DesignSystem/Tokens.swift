@@ -185,53 +185,6 @@ enum Motion {
     }
 }
 
-// MARK: - Helpers
-
-extension Color {
-    init(hex: UInt32, alpha: Double = 1) {
-        self.init(
-            .sRGB,
-            red: Double((hex >> 16) & 0xFF) / 255,
-            green: Double((hex >> 8) & 0xFF) / 255,
-            blue: Double(hex & 0xFF) / 255,
-            opacity: alpha
-        )
-    }
-
-    /// A colour that resolves per appearance, so tokens follow light/dark automatically.
-    static func adaptive(
-        light: UInt32, lightAlpha: Double = 1,
-        dark: UInt32, darkAlpha: Double = 1
-    ) -> Color {
-        Color(nsColor: NSColor(name: nil) { appearance in
-            let isDark = appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
-            let hex = isDark ? dark : light
-            let alpha = isDark ? darkAlpha : lightAlpha
-            return NSColor(
-                srgbRed: CGFloat((hex >> 16) & 0xFF) / 255,
-                green: CGFloat((hex >> 8) & 0xFF) / 255,
-                blue: CGFloat(hex & 0xFF) / 255,
-                alpha: alpha
-            )
-        })
-    }
-}
-
-extension View {
-    /// Applies a token shadow.
-    func elevation(_ shadow: Elevation.Shadow) -> some View {
-        self.shadow(color: shadow.color, radius: shadow.radius, x: 0, y: shadow.y)
-    }
-
-    /// Section label style: small, uppercase, tracked.
-    func eyebrowStyle() -> some View {
-        self.font(Typography.eyebrow)
-            .tracking(Tracking.eyebrow)
-            .textCase(.uppercase)
-            .foregroundStyle(Palette.inkTertiary)
-    }
-}
-
 // MARK: - Setup surfaces: onboarding, Settings, menu bar
 
 extension Typography {
@@ -287,4 +240,51 @@ extension Motion {
     static let stepTravel: CGFloat = 36
     /// Press feedback for custom buttons.
     static let pressedScale: CGFloat = 0.97
+}
+
+// MARK: - Helpers
+
+extension Color {
+    init(hex: UInt32, alpha: Double = 1) {
+        self.init(
+            .sRGB,
+            red: Double((hex >> 16) & 0xFF) / 255,
+            green: Double((hex >> 8) & 0xFF) / 255,
+            blue: Double(hex & 0xFF) / 255,
+            opacity: alpha
+        )
+    }
+
+    /// A colour that resolves per appearance, so tokens follow light/dark automatically.
+    static func adaptive(
+        light: UInt32, lightAlpha: Double = 1,
+        dark: UInt32, darkAlpha: Double = 1
+    ) -> Color {
+        Color(nsColor: NSColor(name: nil) { appearance in
+            let isDark = appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+            let hex = isDark ? dark : light
+            let alpha = isDark ? darkAlpha : lightAlpha
+            return NSColor(
+                srgbRed: CGFloat((hex >> 16) & 0xFF) / 255,
+                green: CGFloat((hex >> 8) & 0xFF) / 255,
+                blue: CGFloat(hex & 0xFF) / 255,
+                alpha: alpha
+            )
+        })
+    }
+}
+
+extension View {
+    /// Applies a token shadow.
+    func elevation(_ shadow: Elevation.Shadow) -> some View {
+        self.shadow(color: shadow.color, radius: shadow.radius, x: 0, y: shadow.y)
+    }
+
+    /// Section label style: small, uppercase, tracked.
+    func eyebrowStyle() -> some View {
+        self.font(Typography.eyebrow)
+            .tracking(Tracking.eyebrow)
+            .textCase(.uppercase)
+            .foregroundStyle(Palette.inkTertiary)
+    }
 }
