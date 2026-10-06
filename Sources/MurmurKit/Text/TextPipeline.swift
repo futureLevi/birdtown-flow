@@ -47,7 +47,8 @@ public enum TextPipeline {
     /// Words whose immediate repetition ("the the", "I I") is collapsed by `prepare`.
     public static var stutterWords: [String] { Cleanup.stutterWords }
 
-    /// Casual style drops the final period only from a single sentence of at most this many words.
+    /// Casual style drops the final period from a one-paragraph message whose last sentence has
+    /// at most this many words: "…tonight? I can bring dessert".
     public static let casualPeriodWordLimit = 15
 
     /// Deterministic cleanup before any AI polish.
@@ -238,14 +239,13 @@ enum StyleRules {
     private static let dottedAbbreviation = makeRegex("^(?:\\p{L}\\.)+\\p{L}?\\.?$")
     private static let abbreviations: Set<String> = ["etc", "vs", "approx", "cf", "incl", "eg", "ie"]
     private static let listItem = makeRegex("^\\s*(?:\\d{1,3}[.)]|[-•*–])\\s")
-    private static let innerSentenceBreak = makeRegex("[.!?…]+[\"”’)]*\\s+\\S")
 
     static func apply(_ style: WritingStyle, to text: String, vocabulary: [String]) -> String {
         switch style {
-        case .formal: ensureTerminalPunctuation(capitalizeSentences(text))
-        case .casual: dropFinalPeriodIfShort(capitalizeSentences(text))
+        case .formal: ensureTerminalPunctuation(capitalizePronounI(capitalizeSentences(text)))
+        case .casual: dropFinalPeriodIfShort(capitalizePronounI(capitalizeSentences(text)))
         case .veryCasual: dropFinalPeriod(lowercase(text, vocabulary: vocabulary))
-        case .excited: exclaim(capitalizeSentences(text))
+        case .excited: exclaim(capitalizePronounI(capitalizeSentences(text)))
         }
     }
 
@@ -302,6 +302,80 @@ enum StyleRules {
         return String(chars)
     }
 
+    /// A lowercase "i" standing alone, or in i'm / i've / i'll / i'd. Never "i.e.", "iPhone",
+    /// a path ("/i/") or an email ("i@…").
+    private static let lowercasePronounI = makeRegex(
+        "(^|[\\s\"“‘(\\[])i(['’](?:m|ve|ll|d))?(?=$|[\\s,;:!?\"”’)\\]…]|\\.(?![\\p{L}\\p{N}]))")
+
+    /// Polish models and the odd engine output leave "i" lowercase; every style but very casual
+    /// writes the pronoun as "I".
+    static func capitalizePronounI(_ text: String) -> String {
+        lowercasePronounI.replacingMatches(in: text) { match, ns in
+            let lead = match.group(1, in: ns) ?? ""
+            let contraction = match.group(2, in: ns) ?? ""
+            if contraction.isEmpty {
+                let after = ns.substring(from: match.range.location + match.range.length)
+                // "(i)" and a line-initial "i." are list markers, not the pronoun.
+                if lead == "(", after.hasPrefix(")") { return nil }
+                if lead.isEmpty || lead == "\n", after.hasPrefix(".") || after.hasPrefix(")") { return nil }
+            }
+            return lead + "I" + contraction
+        }
+    }
+
+    private static let sentenceBoundary = makeRegex("[.!?…]+[\"”’)]*\\s+|\\n+")
+
+    /// The text after the last sentence boundary or line break.
+    static func lastSentence(of text: String) -> String {
+        let ns = NSString(string: text)
+        var start = 0
+        for match in sentenceBoundary.matches(in: text, range: NSRange(location: 0, length: ns.length))
+        where match.range.location + match.range.length < ns.length {
+            start = match.range.location + match.range.length
+        }
+        return ns.substring(from: start)
+    }
+
+    private static let questionWords: Set<String> = ["who", "whom", "whose", "what", "when", "where", "why", "how", "which"]
+    private static let auxiliaries: Set<String> = [
+        "is", "are", "was", "were", "am", "do", "does", "did", "can", "could", "would", "should", "will",
+        "shall", "may", "might", "must", "have", "has", "had", "isn't", "aren't", "wasn't", "weren't",
+        "don't", "doesn't", "didn't", "can't", "couldn't", "wouldn't", "shouldn't", "won't", "haven't",
+        "hasn't", "hadn't",
+    ]
+    private static let subjects: Set<String> = [
+        "i", "you", "u", "we", "they", "he", "she", "it", "this", "that", "these", "those", "there",
+        "anyone", "anybody", "someone", "somebody", "everyone", "everybody", "anything", "something",
+        "everything", "the", "a", "an", "my", "your", "our", "their", "his", "her", "its", "any", "all",
+    ]
+    /// After "how", these still ask ("How about 7", "How much is it"); anything else in a short
+    /// sentence exclaims ("How fun").
+    private static let howQuestionCues: Set<String> = ["about", "come", "much", "many", "long", "far", "often", "old", "soon"]
+
+    /// A question the engine didn't mark: it opens with a question word, or with an auxiliary
+    /// followed by its subject ("Can you…", "Is Sam…"). "Would love to", "Will do", "Do it" and
+    /// "Have a great weekend" leave the subject out or are commands, so they're statements; "What
+    /// a game" and "How fun" exclaim.
+    static func isUnmarkedQuestion(_ sentence: String) -> Bool {
+        let words = sentence
+            .split { !($0.isLetter || $0.isNumber || $0 == "'" || $0 == "’") }
+            .map { $0.replacingOccurrences(of: "’", with: "'") }
+        guard let first = words.first?.lowercased() else { return false }
+        let second = words.dropFirst().first
+        let next = second?.lowercased() ?? ""
+        if questionWords.contains(first) {
+            if first == "what", next == "a" || next == "an" { return false }
+            if first == "how", words.count <= 3, !next.isEmpty, !auxiliaries.contains(next), !howQuestionCues.contains(next) {
+                return false
+            }
+            return true
+        }
+        guard auxiliaries.contains(first), let second else { return false }
+        if first == "do", ["it", "this", "that"].contains(next) { return false }
+        if first == "have", next == "a" || next == "an" { return false }
+        return subjects.contains(next) || second.first?.isUppercase == true
+    }
+
     private static func endsAbbreviation(_ chars: [Character], at dot: Int) -> Bool {
         var start = dot
         while start > 0, chars[start - 1].isLetter || chars[start - 1] == "." { start -= 1 }
@@ -346,10 +420,11 @@ enum StyleRules {
         return String(text[...last]) + "."
     }
 
-    /// Casual: one short sentence reads like a chat message without its final period.
+    /// Casual: a chat-length message ends without its period — one paragraph whose closing
+    /// sentence is short. Multi-paragraph text and long closing sentences keep it.
     static func dropFinalPeriodIfShort(_ text: String) -> String {
-        guard !text.contains("\n"), !innerSentenceBreak.matches(text) else { return text }
-        let words = text.split { $0.isWhitespace }.count
+        guard !text.contains("\n") else { return text }
+        let words = lastSentence(of: text).split { $0.isWhitespace }.count
         guard words <= TextPipeline.casualPeriodWordLimit else { return text }
         return dropFinalPeriod(text)
     }
@@ -364,8 +439,10 @@ enum StyleRules {
     static func exclaim(_ text: String) -> String {
         guard let last = lastIndex(of: text) else { return text }
         let char = text[last]
+        if char == "?" || char == "!" || char == "…" { return text }
+        // "!" on a question the engine left unmarked would turn it into a statement.
+        if isUnmarkedQuestion(lastSentence(of: text)) { return text }
         switch char {
-        case "?", "!", "…": return text
         case ".":
             guard !text.hasSuffix(".."), !endsWithAbbreviation(text) else { return text }
             return text.replacingCharacters(in: last...last, with: "!")

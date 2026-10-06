@@ -170,7 +170,7 @@ struct FinalizeTests {
         ("sounds good.", "Sounds good"),
         ("Are you coming?", "Are you coming?"),
         ("That's amazing!", "That's amazing!"),
-        ("Sounds good. See you then.", "Sounds good. See you then."),
+        ("Sounds good. See you then.", "Sounds good. See you then"),
         ("Meet me at 9 a.m.", "Meet me at 9 a.m."),
         ("Wait for it...", "Wait for it..."),
         ("Line one.\nLine two.", "Line one.\nLine two."),
@@ -301,6 +301,96 @@ struct FinalizeTests {
         #expect(result.text == "So, book a call with Claude Code using https://calendly.com/levi/30min")
         #expect(result.snippets == ["my calendly link"])
         #expect(result.corrections.map(\.to) == ["Claude Code"])
+    }
+
+    // MARK: Round 2
+
+    @Test("Pronoun i is capitalised in every style but very casual", arguments: [
+        (WritingStyle.formal, "i think i'm late, but i’ll try", "I think I'm late, but I’ll try."),
+        (.casual, "so do i", "So do I"),
+        (.casual, "yes i've seen it and i'd agree", "Yes I've seen it and I'd agree"),
+        (.excited, "i did it", "I did it!"),
+        (.formal, "she said \"i know\" and left", "She said \"I know\" and left."),
+        (.veryCasual, "I think I'm late", "i think i'm late"),
+    ])
+    func pronounI(style: WritingStyle, input: String, expected: String) {
+        #expect(finalize(input, style).text == expected)
+    }
+
+    @Test("Lookalikes of i are left alone", arguments: [
+        "Use the iPhone, i.e. the new one, on iOS.",
+        "Mail i@example.com or see https://x.com/i/status.",
+        "Options: (i) red, (ii) blue.",
+        "Hi, Wi-Fi is down.",
+    ])
+    func pronounILookalikes(input: String) {
+        #expect(finalize(input, .formal).text == input)
+    }
+
+    @Test("Excited leaves unmarked questions alone", arguments: [
+        "What time is it",
+        "Where did you park.",
+        "How are you",
+        "How about 7",
+        "Can you send it.",
+        "Is Sam coming",
+        "Do you want pizza",
+        "Would that work for everyone",
+        "Great news. Are you coming",
+        "Don't you think so",
+    ])
+    func excitedUnmarkedQuestions(input: String) {
+        #expect(finalize(input, .excited).text == input)
+    }
+
+    @Test("Excited still exclaims statements that open like questions", arguments: [
+        ("What a game", "What a game!"),
+        ("How fun.", "How fun!"),
+        ("Would love to.", "Would love to!"),
+        ("Will do", "Will do!"),
+        ("Should be fun.", "Should be fun!"),
+        ("Can't wait.", "Can't wait!"),
+        ("Do it", "Do it!"),
+        ("Have a great weekend.", "Have a great weekend!"),
+        ("Don't forget the cake.", "Don't forget the cake!"),
+        ("Will is coming too.", "Will is coming too!"),
+    ])
+    func excitedStatements(input: String, expected: String) {
+        #expect(finalize(input, .excited).text == expected)
+    }
+
+    /// The Style screen shows realistic engine output (punctuated, capitalised) in each style.
+    @Test("Style screen samples read as a user expects", arguments: [
+        ("Hey, are you still up for dinner tonight? I can bring dessert.", [
+            WritingStyle.formal: "Hey, are you still up for dinner tonight? I can bring dessert.",
+            .casual: "Hey, are you still up for dinner tonight? I can bring dessert",
+            .veryCasual: "hey, are you still up for dinner tonight? i can bring dessert",
+            .excited: "Hey, are you still up for dinner tonight? I can bring dessert!",
+        ]),
+        ("Can you send me the latest deck before the 2 PM call? Thanks.", [
+            .formal: "Can you send me the latest deck before the 2 PM call? Thanks.",
+            .casual: "Can you send me the latest deck before the 2 PM call? Thanks",
+            .veryCasual: "can you send me the latest deck before the 2 PM call? thanks",
+            .excited: "Can you send me the latest deck before the 2 PM call? Thanks!",
+        ]),
+        ("I just landed in Portland. Let's grab coffee tomorrow morning, maybe around 9.", [
+            .formal: "I just landed in Portland. Let's grab coffee tomorrow morning, maybe around 9.",
+            .casual: "I just landed in Portland. Let's grab coffee tomorrow morning, maybe around 9",
+            .veryCasual: "i just landed in portland. let's grab coffee tomorrow morning, maybe around 9",
+            .excited: "I just landed in Portland. Let's grab coffee tomorrow morning, maybe around 9!",
+        ]),
+    ])
+    func styleScreenSamples(sample: String, expected: [WritingStyle: String]) {
+        for style in WritingStyle.allCases {
+            #expect(finalize(sample, style).text == expected[style], "\(style)")
+        }
+    }
+
+    @Test("Casual keeps the period after a long closing sentence or across paragraphs")
+    func casualLongClosing() {
+        let long = "Thanks. I think we should move the meeting to next week because half the team is out on holiday."
+        #expect(finalize(long, .casual).text == long)
+        #expect(finalize("Hi.\nSee you soon.", .casual).text == "Hi.\nSee you soon.")
     }
 
     @Test("Empty input stays empty")

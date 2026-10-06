@@ -82,7 +82,7 @@ public enum PolishPrompt {
         case .formal:
             "Formal. Complete sentences, standard capitalization and full punctuation, including the final period. Suits email and documents."
         case .casual:
-            "Casual. Normal capitalization, light punctuation, conversational. A one-sentence message needs no final period."
+            "Casual. Normal capitalization, light punctuation, conversational. No period after a short closing sentence."
         case .veryCasual:
             "Very casual. All lowercase apart from acronyms, links and vocabulary terms; light punctuation and no final period, but keep question and exclamation marks. Like texting a friend."
         case .excited:
