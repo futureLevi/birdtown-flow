@@ -274,8 +274,9 @@ private struct EngineRow: View {
     private var detail: String {
         // Apple Speech's size line ("Managed by macOS") just repeats its detail.
         guard choice.isParakeet else { return choice.detail }
-        if downloaded, let diskUse { return "\(choice.detail) Uses \(diskUse)." }
-        return "\(choice.detail) \(choice.downloadSize) download."
+        guard downloaded else { return "\(choice.detail) \(choice.downloadSize) download." }
+        if let diskUse { return "\(choice.detail) Uses \(diskUse)." }
+        return "\(choice.detail) Downloaded."
     }
 
     var body: some View {
