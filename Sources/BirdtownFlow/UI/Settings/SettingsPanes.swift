@@ -53,7 +53,7 @@ struct GeneralSettingsPane: View {
             }
 
             SettingsGroup(title: "Appearance") {
-                SettingsRow(title: "Appearance", detail: "Light, dark, or follow your Mac.") {
+                SettingsRow(title: "Light or dark", detail: "Follow your Mac, or always use one.") {
                     Picker("Appearance", selection: $settings.appearance) {
                         ForEach(AppearancePreference.allCases) { appearance in
                             Text(appearance.title).tag(appearance)
