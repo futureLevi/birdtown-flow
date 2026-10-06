@@ -1,0 +1,7 @@
+sha=d058768b98841f9effcef7790fe44fa701baefe7
+branch=review/core
+build=success
+test=success
+snapshots=success
+speech=success
+release=skipped
