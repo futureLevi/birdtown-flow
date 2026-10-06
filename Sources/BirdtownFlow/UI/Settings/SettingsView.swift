@@ -43,6 +43,9 @@ struct SettingsView: View {
             }
         }
         .frame(width: Layout.settingsWidth)
+        // Settings is its own window, outside the main window's tint: switches, pickers and
+        // steppers take Signal blue here too rather than the system accent.
+        .tint(Palette.accent)
     }
 
     @ViewBuilder
