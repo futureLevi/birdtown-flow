@@ -201,6 +201,7 @@ final class ModelManager {
                 throw PreparationError.needsAppleSilicon
                 #else
                 if !isDownloaded(choice) {
+                    try Self.ensureFreeSpace(for: choice, version: version)
                     update(.downloading(progress: nil), id: id)
                     try await download(version, id: id)
                 }
@@ -409,12 +410,33 @@ final class ModelManager {
 
     private enum PreparationError: LocalizedError {
         case needsAppleSilicon
+        case notEnoughSpace(engine: String, size: String)
 
         var errorDescription: String? {
             switch self {
             case .needsAppleSilicon:
                 "Parakeet needs a Mac with Apple silicon. Choose Apple Speech in Settings instead."
+            case .notEnoughSpace(let engine, let size):
+                "There isn't enough free disk space for \(engine). It needs \(size); free some space and try again."
             }
+        }
+    }
+
+    /// Bytes each model needs on disk, with headroom (Ultra's int8 encoder alone is 595 MB).
+    private static func requiredBytes(for choice: SpeechEngineChoice) -> Int64 {
+        choice == .parakeetUltra ? 680_000_000 : 540_000_000
+    }
+
+    /// Fails before a download that can't fit, rather than minutes into one. Bytes already on
+    /// disk from an interrupted attempt count toward the total.
+    private static func ensureFreeSpace(for choice: SpeechEngineChoice, version: AsrModelVersion) throws {
+        let support = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+        guard let values = try? support.resourceValues(forKeys: [.volumeAvailableCapacityForImportantUsageKey]),
+              let available = values.volumeAvailableCapacityForImportantUsage
+        else { return }
+        let present = allocatedSize(of: AsrModels.defaultCacheDirectory(for: version)) ?? 0
+        if available + present < requiredBytes(for: choice) {
+            throw PreparationError.notEnoughSpace(engine: choice.engineName, size: choice.downloadSize)
         }
     }
 
