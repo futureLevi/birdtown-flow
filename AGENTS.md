@@ -32,7 +32,8 @@ make snapshots      # every screen to ./snapshots, light and dark
   spec for correction behaviour (the upstream Windows app runs the same vectors); change the
   vectors first, then `cp shared/dictionary-test-vectors.json Tests/MurmurDictionaryTests/`.
 - **No literal design values in views.** Everything comes from `UI/DesignSystem/Tokens.swift`.
-  Ember means recording or the primary action, nothing else.
+  The spectrum (`SpectrumOrb`, `Spectrum`) means live and nothing else; primary actions are
+  navy pills; Signal blue is for selection, focus and links. See `docs/brand.md`.
 - **Every animation goes through `Motion`** so Reduce Motion is honoured.
 - **Settings live in `Support/Settings.swift`.** Our `Settings` class shadows SwiftUI's
   scene of the same name; write `SwiftUI.Settings` for the scene.

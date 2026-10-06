@@ -14,13 +14,3 @@ extension AppearancePreference {
         NSApp?.appearance = appearance
     }
 }
-
-/// Rebuilds its content when the title font changes. Font tokens are read as views are built
-/// and don't observe the setting themselves, so each window's root carries one of these.
-struct TypeTreatmentRoot<Content: View>: View {
-    @ViewBuilder let content: Content
-
-    var body: some View {
-        content.id(Settings.shared.typeTreatment)
-    }
-}

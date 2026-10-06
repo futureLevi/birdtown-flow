@@ -258,6 +258,14 @@ private struct FirstRunCard: View {
     @Environment(AppModel.self) private var model
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
+    private var handsFreeTip: String? {
+        switch model.settings.handsFreeShortcut {
+        case .doubleTap: "Tip: double-tap \(keyName) to keep talking without holding it."
+        case .controlOption: "Tip: press ⌃⌥ to keep talking without holding a key."
+        case .off: nil
+        }
+    }
+
     var body: some View {
         Card(padding: Spacing.xxxl) {
             VStack(alignment: .leading, spacing: Spacing.xxl) {
@@ -291,9 +299,11 @@ private struct FirstRunCard: View {
                 HStack(spacing: Spacing.m) {
                     tryButton
                         .buttonStyle(.flowSecondary)
-                    Text("Tip: double-tap \(keyName) to keep talking without holding it.")
-                        .font(Typography.callout)
-                        .foregroundStyle(Palette.inkTertiary)
+                    if let handsFreeTip {
+                        Text(handsFreeTip)
+                            .font(Typography.callout)
+                            .foregroundStyle(Palette.inkTertiary)
+                    }
                 }
             }
         }

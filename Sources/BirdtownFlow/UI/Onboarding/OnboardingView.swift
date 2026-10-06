@@ -793,12 +793,21 @@ private struct ShortcutStep: View {
         VStack(spacing: Spacing.s) {
             HStack(alignment: .top, spacing: 0) {
                 GestureHint(keys: [glyph], caption: "Hold to talk")
-                if settings.handsFreeEnabled {
+                switch settings.handsFreeShortcut {
+                case .doubleTap:
                     GestureHint(keys: [glyph, glyph], caption: "Double-tap for hands-free")
+                case .controlOption:
+                    GestureHint(keys: ["⌃", "⌥"], caption: "Together for hands-free")
+                case .off:
+                    EmptyView()
                 }
                 GestureHint(keys: ["esc"], caption: "Cancel")
             }
-            if settings.handsFreeEnabled {
+            if settings.handsFreeShortcut == .controlOption {
+                Text("Press ⌃⌥ again to finish.")
+                    .font(Typography.caption)
+                    .foregroundStyle(Palette.inkTertiary)
+            } else if settings.handsFreeShortcut == .doubleTap {
                 Text("Or hold \(SetupKit.name(for: key)) and press Space. Tap it again to finish.")
                     .font(Typography.caption)
                     .foregroundStyle(Palette.inkTertiary)

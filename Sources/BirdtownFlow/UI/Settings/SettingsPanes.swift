@@ -26,11 +26,14 @@ struct GeneralSettingsPane: View {
                     .fixedSize()
                 }
                 SettingsDivider()
-                SettingsRow(
-                    title: "Hands-free",
-                    detail: "Double-tap the key, or press Space while holding it, to keep listening. Tap again to finish."
-                ) {
-                    SettingsSwitch(label: "Hands-free", isOn: $settings.handsFreeEnabled)
+                SettingsRow(title: "Hands-free", detail: handsFreeDetail(settings.handsFreeShortcut)) {
+                    Picker("Hands-free", selection: $settings.handsFreeShortcut) {
+                        ForEach(HandsFreeShortcut.allCases) { shortcut in
+                            Text(shortcut.title(key: settings.pushToTalkKey)).tag(shortcut)
+                        }
+                    }
+                    .labelsHidden()
+                    .fixedSize()
                 }
                 SettingsDivider()
                 SettingsRow(title: "Paste last dictation", detail: "Pastes what you said last into any app, again.") {
@@ -60,19 +63,6 @@ struct GeneralSettingsPane: View {
                         }
                     }
                     .pickerStyle(.segmented)
-                    .labelsHidden()
-                    .fixedSize()
-                }
-                SettingsDivider()
-                SettingsRow(
-                    title: "Title font",
-                    detail: "Page titles, big numbers and the welcome screen. Everything you read stays SF Pro."
-                ) {
-                    Picker("Title font", selection: $settings.typeTreatment) {
-                        ForEach(TypeTreatment.allCases) { treatment in
-                            Text(treatment.displayName).tag(treatment)
-                        }
-                    }
                     .labelsHidden()
                     .fixedSize()
                 }
@@ -107,8 +97,19 @@ struct GeneralSettingsPane: View {
             refreshLaunchAtLogin()
         }
         .onChange(of: settings.pushToTalkKey) { reloadShortcuts() }
-        .onChange(of: settings.handsFreeEnabled) { reloadShortcuts() }
+        .onChange(of: settings.handsFreeShortcut) { reloadShortcuts() }
         .onChange(of: settings.pasteLastShortcutEnabled) { reloadShortcuts() }
+    }
+
+    private func handsFreeDetail(_ shortcut: HandsFreeShortcut) -> String {
+        switch shortcut {
+        case .doubleTap:
+            "Double-tap the key, or press Space while holding it, to keep listening. Tap again to finish."
+        case .controlOption:
+            "Press ⌃ and ⌥ together to keep listening without holding a key. Press them again to finish."
+        case .off:
+            "Only hold to talk."
+        }
     }
 
     private var launchDetail: String {

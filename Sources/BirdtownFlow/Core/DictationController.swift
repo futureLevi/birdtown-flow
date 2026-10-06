@@ -171,6 +171,7 @@ final class DictationController {
     /// it keeps retrying quietly and arms itself as soon as Accessibility is granted.
     @discardableResult
     func activate() -> Bool {
+        hotkey.watchesControlOption = settings.handsFreeShortcut == .controlOption
         if !hotkey.isArmed || hotkey.key != settings.pushToTalkKey {
             restartHotkey()
         }
@@ -198,8 +199,9 @@ final class DictationController {
         pasteLastShortcut.unregister()
     }
 
-    /// Re-reads shortcut settings (push-to-talk key, paste-last) and re-arms.
+    /// Re-reads shortcut settings (push-to-talk key, hands-free, paste-last) and re-arms.
     func reloadShortcuts() {
+        hotkey.watchesControlOption = settings.handsFreeShortcut == .controlOption
         if hotkey.key != settings.pushToTalkKey || !hotkey.isArmed {
             restartHotkey()
             isHotkeyActive = hotkey.isArmed
@@ -437,6 +439,9 @@ final class DictationController {
             return lockFromSpace()
         case .escape:
             return escapePressed()
+        case .controlOptionTap:
+            handsFreeShortcutTapped()
+            return false
         }
     }
 
@@ -480,7 +485,8 @@ final class DictationController {
                 stopRecording()
                 return
             }
-            guard settings.handsFreeEnabled else {
+            // Only a double-tap makes a quick press mean anything.
+            guard settings.handsFreeShortcut == .doubleTap else {
                 discardSession()
                 return
             }
@@ -515,6 +521,17 @@ final class DictationController {
         case .finishTap, .ignored:
             break
         }
+    }
+
+    /// ⌃⌥ tapped, when that's the hands-free shortcut: start a hands-free recording, or
+    /// finish the one in progress.
+    private func handsFreeShortcutTapped() {
+        guard settings.handsFreeShortcut == .controlOption else { return }
+        if session != nil {
+            if isHandsFree { stopRecording() }
+            return
+        }
+        startRecording(handsFree: true)
     }
 
     private func lockFromSpace() -> Bool {

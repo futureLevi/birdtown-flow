@@ -1,6 +1,7 @@
 import AppKit
 import Carbon.HIToolbox
 import Foundation
+import MurmurKit
 
 /// Which modifier key holds the mic open.
 enum PushToTalkKey: String, CaseIterable, Sendable {
@@ -85,6 +86,9 @@ final class HotkeyMonitor {
         case space
         /// Esc pressed. Return `true` to take it (only while dictating).
         case escape
+        /// Control and Option pressed together and let go, with nothing else pressed in
+        /// between: the hands-free shortcut, when `watchesControlOption` is on.
+        case controlOptionTap
     }
 
     /// Tags events the app posts itself (the ⌘V paste) so the tap never mistakes them for the user.
@@ -109,7 +113,14 @@ final class HotkeyMonitor {
     /// Consecutive polls that found the key up. Two in a row are needed before acting.
     private var missedReleaseReadings = 0
 
+    /// Recognises the ⌃⌥ tap; see `ModifierPairTap`.
+    private var controlOptionRecognizer = ModifierPairTap()
+
     var key: PushToTalkKey = .fn
+    /// Report ⌃⌥ taps as `.controlOptionTap`. Only on when that's the hands-free shortcut.
+    var watchesControlOption = false {
+        didSet { if watchesControlOption != oldValue { resetControlOption() } }
+    }
     /// Receives every gesture. The return value only matters for `.space` and `.escape`.
     var handler: ((Event) -> Bool)?
     /// Called when the system disabled the tap and it couldn't be re-enabled (Accessibility
@@ -182,6 +193,7 @@ final class HotkeyMonitor {
         isPressed = false
         knownModifiers = 0
         swallowed.removeAll()
+        resetControlOption()
     }
 
     // MARK: - Tap callback
@@ -210,7 +222,7 @@ final class HotkeyMonitor {
         case .flagsChanged:
             return modifiersChanged(keyCode: keyCode, flags: flags)
         case .keyDown:
-            return keyDown(keyCode: keyCode, isRepeat: isRepeat)
+            return keyDown(keyCode: keyCode, flags: flags, isRepeat: isRepeat)
         case .keyUp:
             return swallowed.remove(keyCode) != nil
         default:
@@ -219,6 +231,14 @@ final class HotkeyMonitor {
     }
 
     private func modifiersChanged(keyCode: Int64, flags: CGEventFlags) -> Bool {
+        let consume = pushToTalkModifiersChanged(keyCode: keyCode, flags: flags)
+        // After the push-to-talk key has had its say: when that key is ⌃ or ⌥ itself, its
+        // release has already dropped the short hold before a ⌃⌥ tap starts hands-free.
+        if watchesControlOption { trackControlOption(flags: flags) }
+        return consume
+    }
+
+    private func pushToTalkModifiersChanged(keyCode: Int64, flags: CGEventFlags) -> Bool {
         let held = flags.rawValue & Self.deviceModifierMask & ~key.flag.rawValue
 
         if keyCode == key.keyCode {
@@ -240,7 +260,11 @@ final class HotkeyMonitor {
         return false
     }
 
-    private func keyDown(keyCode: Int64, isRepeat: Bool) -> Bool {
+    private func keyDown(keyCode: Int64, flags: CGEventFlags, isRepeat: Bool) -> Bool {
+        if watchesControlOption {
+            controlOptionRecognizer.keyDown(pairHeld: flags.contains(.maskControl) || flags.contains(.maskAlternate))
+        }
+
         if swallowed.contains(keyCode) {
             if isRepeat { return true }
             // A fresh press of a key we swallowed earlier: its key-up was lost (tap off, secure
@@ -264,10 +288,37 @@ final class HotkeyMonitor {
         return false
     }
 
+    // MARK: - ⌃⌥ tap
+
+    private func trackControlOption(flags: CGEventFlags) {
+        let keys = ModifierPairTap.Modifiers(
+            first: flags.contains(.maskControl),
+            second: flags.contains(.maskAlternate),
+            others: flags.contains(.maskCommand) || flags.contains(.maskShift) || flags.contains(.maskSecondaryFn)
+        )
+        if controlOptionRecognizer.modifiersChanged(keys, at: ProcessInfo.processInfo.systemUptime, clicks: Self.clickCount()) {
+            _ = handler?(.controlOptionTap)
+        }
+    }
+
+    private func resetControlOption() {
+        let held = CGEventSource.flagsState(.combinedSessionState)
+        controlOptionRecognizer.reset(pairHeld: held.contains(.maskControl) || held.contains(.maskAlternate))
+    }
+
+    /// Mouse presses since login, from the window server's counters. Comparing two readings
+    /// tells whether a click happened in between without tapping mouse events.
+    private static func clickCount() -> UInt64 {
+        [CGEventType.leftMouseDown, .rightMouseDown, .otherMouseDown].reduce(0) { total, type in
+            total + UInt64(CGEventSource.counterForEventType(.combinedSessionState, eventType: type))
+        }
+    }
+
     /// After the tap was off, the key may have been released unseen. If even the union flag
     /// is clear now, report the release so nothing stays stuck "held".
     private func resyncAfterGap() {
         swallowed.removeAll()
+        resetControlOption()
         guard isPressed else { return }
         if !CGEventSource.flagsState(.combinedSessionState).contains(key.unionFlag) {
             isPressed = false

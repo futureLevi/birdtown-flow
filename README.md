@@ -23,7 +23,7 @@ rebuilt into a product meant to stand next to Wispr Flow.
 
 | | |
 |---|---|
-| **Dictation** | Hold the key to talk. Double-tap it, or press Space while holding it, for hands-free; tap again to finish. Esc cancels. Your hotkey never hijacks shortcuts like fn+← or ⌥+letter. |
+| **Dictation** | Hold the key to talk. Double-tap it, or press Space while holding it, for hands-free; tap again to finish. Or set hands-free to ⌃⌥ (Control + Option) in Settings. Esc cancels. Your hotkey never hijacks shortcuts like fn+← or ⌥+letter. |
 | **Recognition** | Parakeet Ultra (NVIDIA's Parakeet TDT v3, post-trained by moondream) via FluidAudio on the Neural Engine. Parakeet v3, v2 and Apple Speech are one click away in Settings. While the model downloads, Apple Speech fills in, so it works from the first minute. |
 | **History** | Every dictation with its audio. Search, copy, paste again, play it back, retry the transcription, and see exactly what the dictionary and polish changed. Audio is saved before transcription starts, so a failure never loses what you said. |
 | **Paste last** | ⌃⌥V types your most recent dictation again, anywhere. |

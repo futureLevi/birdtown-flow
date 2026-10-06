@@ -7,7 +7,7 @@ struct MurmurApp: App {
 
     var body: some Scene {
         Window("Birdtown Flow", id: "main") {
-            TypeTreatmentRoot { MainView() }
+            MainView()
                 .environment(AppModel.shared)
                 .frame(minWidth: Layout.windowMinWidth, minHeight: Layout.windowMinHeight)
         }
@@ -16,12 +16,12 @@ struct MurmurApp: App {
         .commands { MurmurCommands() }
 
         SwiftUI.Settings {
-            TypeTreatmentRoot { SettingsView() }
+            SettingsView()
                 .environment(AppModel.shared)
         }
 
         MenuBarExtra {
-            TypeTreatmentRoot { MenuBarContent() }
+            MenuBarContent()
                 .environment(AppModel.shared)
         } label: {
             MenuBarLabel()
@@ -54,10 +54,8 @@ struct MurmurCommands: Commands {
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationWillFinishLaunching(_ notification: Notification) {
-        // Before any window is built, so nothing draws first in the wrong appearance or face.
-        let settings = Settings.shared
-        settings.appearance.apply()
-        Typography.treatment = settings.typeTreatment
+        // Before any window is built, so nothing draws first in the wrong appearance.
+        Settings.shared.appearance.apply()
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {

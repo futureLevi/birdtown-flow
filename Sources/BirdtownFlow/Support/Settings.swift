@@ -47,6 +47,26 @@ enum SpeechEngineChoice: String, CaseIterable, Identifiable, Sendable {
     var isParakeet: Bool { self != .apple }
 }
 
+/// How to start a recording that keeps going without holding a key.
+enum HandsFreeShortcut: String, CaseIterable, Identifiable, Sendable {
+    /// Double-tap the push-to-talk key, or press Space while holding it.
+    case doubleTap
+    /// Press Control and Option together, and again to finish. For a 🌐 key that macOS also
+    /// answers (a quick tap opens the emoji picker), or to match Wispr Flow.
+    case controlOption
+    case off
+
+    var id: String { rawValue }
+
+    func title(key: PushToTalkKey) -> String {
+        switch self {
+        case .doubleTap: "Double-tap \(key.displayName)"
+        case .controlOption: "Control + Option"
+        case .off: "Off"
+        }
+    }
+}
+
 /// Light, dark, or whatever macOS is set to.
 enum AppearancePreference: String, CaseIterable, Identifiable, Sendable {
     case system
@@ -78,11 +98,12 @@ final class Settings {
     var pushToTalkKey: PushToTalkKey {
         didSet { defaults.set(pushToTalkKey.rawValue, forKey: Keys.pushToTalkKey) }
     }
-    /// Double-tap the push-to-talk key (or press Space while holding it) to keep recording
-    /// hands-free until it's tapped again.
-    var handsFreeEnabled: Bool {
-        didSet { defaults.set(handsFreeEnabled, forKey: Keys.handsFreeEnabled) }
+    /// Starts a recording that keeps going without holding the key, until the same gesture
+    /// (or a tap of the key) finishes it.
+    var handsFreeShortcut: HandsFreeShortcut {
+        didSet { defaults.set(handsFreeShortcut.rawValue, forKey: Keys.handsFreeShortcut) }
     }
+    var handsFreeEnabled: Bool { handsFreeShortcut != .off }
     /// ⌃⌥V pastes the most recent dictation again.
     var pasteLastShortcutEnabled: Bool {
         didSet { defaults.set(pasteLastShortcutEnabled, forKey: Keys.pasteLastShortcutEnabled) }
@@ -173,13 +194,6 @@ final class Settings {
             appearance.apply()
         }
     }
-    /// The face of the large text while the type is being chosen. See `TypeTreatment`.
-    var typeTreatment: TypeTreatment {
-        didSet {
-            defaults.set(typeTreatment.rawValue, forKey: Keys.typeTreatment)
-            Typography.treatment = typeTreatment
-        }
-    }
 
     // MARK: History
 
@@ -204,7 +218,9 @@ final class Settings {
 
     private enum Keys {
         static let pushToTalkKey = "pushToTalkKey"
+        /// Before the shortcut could be chosen: hands-free on (double-tap) or off.
         static let handsFreeEnabled = "handsFreeEnabled"
+        static let handsFreeShortcut = "handsFreeShortcut"
         static let pasteLastShortcutEnabled = "pasteLastShortcutEnabled"
         static let soundEnabled = "soundEnabled"
         static let showIdlePill = "showIdlePill"
@@ -225,13 +241,17 @@ final class Settings {
         static let audioRetentionDays = "audioRetentionDays"
         static let hasCompletedOnboarding = "hasCompletedOnboarding"
         static let appearance = "appearance"
-        static let typeTreatment = "typeTreatment"
     }
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
         pushToTalkKey = PushToTalkKey(rawValue: defaults.string(forKey: Keys.pushToTalkKey) ?? "") ?? .fn
-        handsFreeEnabled = defaults.object(forKey: Keys.handsFreeEnabled) as? Bool ?? true
+        if let saved = HandsFreeShortcut(rawValue: defaults.string(forKey: Keys.handsFreeShortcut) ?? "") {
+            handsFreeShortcut = saved
+        } else {
+            let wasOn = defaults.object(forKey: Keys.handsFreeEnabled) as? Bool ?? true
+            handsFreeShortcut = wasOn ? .doubleTap : .off
+        }
         pasteLastShortcutEnabled = defaults.object(forKey: Keys.pasteLastShortcutEnabled) as? Bool ?? true
         soundEnabled = defaults.object(forKey: Keys.soundEnabled) as? Bool ?? true
         showIdlePill = defaults.object(forKey: Keys.showIdlePill) as? Bool ?? true
@@ -257,6 +277,5 @@ final class Settings {
         audioRetentionDays = defaults.object(forKey: Keys.audioRetentionDays) as? Int ?? 7
         hasCompletedOnboarding = defaults.bool(forKey: Keys.hasCompletedOnboarding)
         appearance = AppearancePreference(rawValue: defaults.string(forKey: Keys.appearance) ?? "") ?? .system
-        typeTreatment = TypeTreatment(rawValue: defaults.string(forKey: Keys.typeTreatment) ?? "") ?? .default
     }
 }
