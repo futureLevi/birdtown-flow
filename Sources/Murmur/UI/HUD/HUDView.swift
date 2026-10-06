@@ -46,7 +46,9 @@ struct HUDView: View {
         ZStack {
             // At rest the whole pill is faded, so its edge needs more light to stay findable
             // on dark content.
-            HUDPillBody(stroke: kind == .idle || kind == .hidden ? Palette.HUD.idleStroke : Palette.HUD.stroke)
+            let resting = kind == .idle || kind == .hidden
+            HUDPillBody(stroke: resting ? Palette.HUD.idleStroke : Palette.HUD.stroke,
+                        shadowScale: resting ? Palette.HUD.idleShadowScale : 1)
             content(size: size, kind: kind)
                 .frame(width: size.width, height: size.height)
                 .clipShape(Capsule(style: .continuous))
@@ -119,19 +121,23 @@ struct HUDView: View {
 /// snapshots (where layer shadows render flipped), and it costs a dozen fills.
 struct HUDPillBody: View {
     var stroke = Palette.HUD.stroke
+    /// The resting pill is tiny; a full-size shadow around it would read as a smudge.
+    var shadowScale: CGFloat = 1
 
     var body: some View {
         let stroke = self.stroke
+        let shadowScale = self.shadowScale
         Canvas { context, canvasSize in
             let margin = Layout.HUD.shadowMargin
             let pill = CGRect(origin: .zero, size: canvasSize).insetBy(dx: margin, dy: margin)
-            let shadow = Elevation.hud
+            let radius = Elevation.hud.radius * shadowScale
+            let drop = Elevation.hud.y * shadowScale
             let layers = 14
             for layer in 1...layers {
                 let fraction = CGFloat(layer) / CGFloat(layers)
                 let rect = pill
-                    .insetBy(dx: -shadow.radius * fraction, dy: -shadow.radius * fraction)
-                    .offsetBy(dx: 0, dy: shadow.y * fraction)
+                    .insetBy(dx: -radius * fraction, dy: -radius * fraction)
+                    .offsetBy(dx: 0, dy: drop * fraction)
                 context.fill(Path(roundedRect: rect, cornerRadius: rect.height / 2, style: .continuous),
                              with: .color(Palette.HUD.shadow.opacity(Palette.HUD.shadowLayerOpacity)))
             }
