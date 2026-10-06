@@ -15,6 +15,9 @@ actor AppleSpeechEngine: TranscriptionEngine {
     private let locale: Locale
     /// The supported locale `locale` resolved to, once its assets are known to be installed.
     private var resolvedLocale: Locale?
+    /// The resolution in progress. Actor methods interleave at every `await`, so without this
+    /// a dictation arriving during `prepare()` would start a second asset installation.
+    private var resolving: Task<Locale, Error>?
 
     /// Speech has a natural ceiling of roughly realtime on the slowest Macs; anything well past
     /// that is a stuck analyzer, and the recording is kept for Retry either way.
@@ -102,14 +105,30 @@ actor AppleSpeechEngine: TranscriptionEngine {
 
     private func resolve() async throws -> Locale {
         if let resolvedLocale { return resolvedLocale }
+        if let resolving { return try await resolving.value }
 
+        let locale = self.locale
+        let task = Task { try await Self.resolveAndInstall(locale) }
+        resolving = task
+        do {
+            let supported = try await task.value
+            resolvedLocale = supported
+            resolving = nil
+            return supported
+        } catch {
+            // Not cached: the next dictation tries again (the network may be back).
+            resolving = nil
+            throw error
+        }
+    }
+
+    private static func resolveAndInstall(_ locale: Locale) async throws -> Locale {
         guard SpeechTranscriber.isAvailable,
               let supported = await SpeechTranscriber.supportedLocale(equivalentTo: locale)
         else {
             throw TranscriptionError.localeUnsupported(locale)
         }
-        try await Self.ensureAssetsInstalled(for: Self.makeTranscriber(locale: supported))
-        resolvedLocale = supported
+        try await ensureAssetsInstalled(for: makeTranscriber(locale: supported))
         Log.speech.info("Apple Speech ready for \(supported.identifier, privacy: .public)")
         return supported
     }
