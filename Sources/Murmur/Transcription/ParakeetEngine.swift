@@ -79,9 +79,18 @@ actor ParakeetEngine: TranscriptionEngine {
         let clock = ContinuousClock()
         let started = clock.now
         let audio = Self.padded(samples)
-        let layers = await manager.decoderLayerCount
-        var decoderState = try TdtDecoderState(decoderLayers: layers)
-        let result = try await manager.transcribe(audio, decoderState: &decoderState)
+        let result: ASRResult
+        do {
+            let layers = await manager.decoderLayerCount
+            var decoderState = try TdtDecoderState(decoderLayers: layers)
+            result = try await manager.transcribe(audio, decoderState: &decoderState)
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch {
+            // FluidAudio's own messages are written for developers; History shows this one.
+            Log.speech.error("\(self.name, privacy: .public) failed: \(error.localizedDescription, privacy: .public)")
+            throw ParakeetError.recognitionFailed(name)
+        }
         var text = result.text.trimmingCharacters(in: .whitespacesAndNewlines)
         let recognized = clock.now
 
@@ -181,5 +190,16 @@ actor ParakeetEngine: TranscriptionEngine {
     private static func seconds(_ duration: Duration) -> Double {
         let parts = duration.components
         return Double(parts.seconds) + Double(parts.attoseconds) / 1e18
+    }
+}
+
+enum ParakeetError: LocalizedError {
+    case recognitionFailed(String)
+
+    var errorDescription: String? {
+        switch self {
+        case .recognitionFailed(let engine):
+            "\(engine) couldn't transcribe this recording. It's saved in History, so you can retry it."
+        }
     }
 }

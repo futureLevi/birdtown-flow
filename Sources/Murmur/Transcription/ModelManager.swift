@@ -1,5 +1,6 @@
 import FluidAudio
 import Foundation
+import Network
 import Observation
 
 /// Owns the speech model: download, load, warm-up, and vending the engine.
@@ -45,6 +46,10 @@ final class ModelManager {
     @ObservationIgnored private var generation = 0
     @ObservationIgnored private var lastFailure: Error?
     @ObservationIgnored private var appleFallback: AppleSpeechEngine?
+    /// Watches for the network after a download failed for lack of it, to resume on its own.
+    @ObservationIgnored private var connectivity: NWPathMonitor?
+    @ObservationIgnored private var wentOffline = false
+    @ObservationIgnored private var retriedWhileOnline = false
     private let booster = VocabularyBooster()
     /// Snapshot and preview instances show a fixed state and never touch the disk or network.
     private let isPreview: Bool
@@ -60,9 +65,14 @@ final class ModelManager {
     init(settings: Settings) {
         self.settings = settings
         self.isPreview = false
-        // On disk means `prepare()` (called at launch) goes straight to loading.
-        state = isDownloaded(settings.engine) ? .loading : .notDownloaded
         observeEngineSetting()
+        // A model already on disk starts loading right away, so `.loading` is never a claim
+        // without a load behind it (onboarding can read `state` before the app has started).
+        // A missing one waits for `prepare()`: downloading is the user's call.
+        if isDownloaded(settings.engine) {
+            state = .loading
+            Task { await self.prepare() }
+        }
     }
 
     /// A manager frozen in `previewState`, for SwiftUI previews and snapshot rendering.
@@ -161,9 +171,9 @@ final class ModelManager {
                 Log.speech.notice("\(wanted.engineName, privacy: .public) is still loading; using a stand-in for this dictation")
             }
             if let loaded, loaded.choice == wanted { return loaded.engine }
-        } else if inflight == nil {
-            // A download isn't something to wait for mid-dictation. Start (or retry) it and
-            // carry on with what's available.
+        } else if inflight == nil, case .failed = state {
+            // A download isn't something to wait for mid-dictation. Retry the one that failed
+            // and carry on with what's available. (One never started stays the user's call.)
             Task { await self.prepare() }
         }
 
@@ -215,6 +225,8 @@ final class ModelManager {
 
             loaded = Loaded(choice: choice, engine: engine)
             lastFailure = nil
+            retriedWhileOnline = false
+            stopWatchingConnectivity()
             state = .ready
             Log.speech.info("\(choice.engineName, privacy: .public) is ready")
 
@@ -234,7 +246,83 @@ final class ModelManager {
                 """)
             lastFailure = PreparationError.failed(message)
             state = .failed(message)
+            if Self.isConnectivityFailure(error) { watchConnectivity() }
         }
+    }
+
+    // MARK: - Resuming after a network failure
+
+    /// A download that failed because the network dropped resumes by itself when it returns,
+    /// so onboarding on flaky Wi-Fi doesn't need babysitting. The Retry path (`prepare()`)
+    /// still works at any time; this only saves the click.
+    private func watchConnectivity() {
+        guard connectivity == nil else { return }
+        wentOffline = false
+        let monitor = NWPathMonitor()
+        monitor.pathUpdateHandler = Self.pathHandler { [weak self] online in
+            Task { @MainActor [weak self] in
+                self?.connectivityChanged(online: online)
+            }
+        }
+        monitor.start(queue: DispatchQueue(label: "io.github.futurelevi.murmur.connectivity", qos: .utility))
+        connectivity = monitor
+    }
+
+    /// Built outside the main actor on purpose. A closure written inline here would inherit
+    /// main-actor isolation, and Network calls it on its own queue, which Swift 6 traps as an
+    /// isolation violation at runtime.
+    private nonisolated static func pathHandler(
+        _ forward: @escaping @Sendable (Bool) -> Void
+    ) -> @Sendable (NWPath) -> Void {
+        { path in forward(path.status == .satisfied) }
+    }
+
+    private func connectivityChanged(online: Bool) {
+        guard connectivity != nil else { return }
+        guard case .failed = state else {
+            stopWatchingConnectivity()
+            return
+        }
+        guard online else {
+            wentOffline = true
+            return
+        }
+        // Back after an outage: resume promptly. Online all along means the server hiccuped:
+        // one unhurried retry, then wait for the network to actually change.
+        let delay: Duration
+        if wentOffline {
+            delay = .seconds(2)
+        } else if !retriedWhileOnline {
+            retriedWhileOnline = true
+            delay = .seconds(20)
+        } else {
+            return
+        }
+        stopWatchingConnectivity()
+        Task { [weak self] in
+            try? await Task.sleep(for: delay)
+            guard let self, case .failed = self.state else { return }
+            Log.speech.info("network is back; resuming the model download")
+            await self.prepare()
+        }
+    }
+
+    private func stopWatchingConnectivity() {
+        connectivity?.cancel()
+        connectivity = nil
+        wentOffline = false
+    }
+
+    private static func isConnectivityFailure(_ error: Error) -> Bool {
+        if let download = error as? DownloadError {
+            if case .downloadFailed(_, let underlying) = download { return isConnectivityFailure(underlying) }
+            if case .stalled = download { return true }
+            if case .invalidResponse = download { return true }
+            if case .htmlErrorResponse = download { return true }
+            if case .rateLimited = download { return true }
+            return false
+        }
+        return (error as NSError).domain == NSURLErrorDomain
     }
 
     /// Downloads with live, byte-weighted progress from FluidAudio's `ProgressHandler`.

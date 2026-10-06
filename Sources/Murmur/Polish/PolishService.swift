@@ -195,11 +195,9 @@ final class PolishService {
         if error is CancellationError { return "Cancelled" }
         if let failure = error as? AppleIntelligencePolisher.Failure { return failure.note }
         if let polishError = error as? PolishError {
-            switch polishError {
-            case .missingAPIKey: return "No API key"
-            case .timedOut: return "Timed out after \(format(limit)) s"
-            case .emptyResponse: return "The model returned nothing"
-            case .http(let status, _):
+            // `if case` rather than a switch: MurmurKit may grow new cases, and those should
+            // land on the generic note instead of breaking the build.
+            if case .http(let status, _) = polishError {
                 switch status {
                 case 401, 403: return "API key was rejected"
                 case 404: return "Model or endpoint not found"
@@ -207,8 +205,11 @@ final class PolishService {
                 case 500...599: return "Provider error (\(status))"
                 default: return "Request failed (\(status))"
                 }
-            default: return "Polish failed"
             }
+            if case .missingAPIKey = polishError { return "No API key" }
+            if case .timedOut = polishError { return "Timed out after \(format(limit)) s" }
+            if case .emptyResponse = polishError { return "The model returned nothing" }
+            return "Polish failed"
         }
         if let urlError = error as? URLError {
             switch urlError.code {
