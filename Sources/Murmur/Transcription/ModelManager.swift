@@ -43,6 +43,10 @@ final class ModelManager {
     /// Dropping the reference releases the model once any transcription still using it ends.
     @ObservationIgnored private var loaded: Loaded?
     @ObservationIgnored private var inflight: Inflight?
+    /// Loads cancelled by an engine switch, by choice. Cancellation is cooperative, so a
+    /// cancelled download can still be writing its `.partial` files for a moment; a new load
+    /// of the same model waits for it rather than streaming into the same files alongside it.
+    @ObservationIgnored private var windingDown: [SpeechEngineChoice: Task<Void, Never>] = [:]
     @ObservationIgnored private var generation = 0
     @ObservationIgnored private var appleFallback: AppleSpeechEngine?
     /// Watches for the network after a download failed for lack of it, to resume on its own.
@@ -147,7 +151,11 @@ final class ModelManager {
         cancelInflight()
         generation += 1
         let id = generation
-        let task = Task { await self.load(choice, id: id) }
+        let previous = windingDown.removeValue(forKey: choice)
+        let task = Task {
+            await previous?.value
+            await self.load(choice, id: id)
+        }
         inflight = Inflight(id: id, choice: choice, task: task)
         await task.value
     }
@@ -238,7 +246,11 @@ final class ModelManager {
                 Task { await booster.prefetch() }
             }
         } catch {
-            guard inflight?.id == id, !Task.isCancelled, !(error is CancellationError) else { return }
+            // Superseded or cancelled loads leave `state` to their replacement. A load that is
+            // still current must always land somewhere: a stray CancellationError from deep in
+            // the download stack would otherwise leave `.downloading` showing with nothing
+            // running, and nothing to retry it.
+            guard inflight?.id == id, !Task.isCancelled else { return }
             let message = Self.message(for: error, choice: choice)
             Log.speech.error("""
                 \(choice.engineName, privacy: .public) failed to prepare: \
@@ -366,8 +378,10 @@ final class ModelManager {
     }
 
     private func cancelInflight() {
-        inflight?.task.cancel()
-        inflight = nil
+        guard let inflight else { return }
+        inflight.task.cancel()
+        windingDown[inflight.choice] = inflight.task
+        self.inflight = nil
     }
 
     private func fallbackEngine() -> any TranscriptionEngine {
