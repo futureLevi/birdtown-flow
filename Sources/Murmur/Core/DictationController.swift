@@ -156,6 +156,13 @@ final class DictationController {
         hotkey.handler = { [weak self] event in
             self?.handleHotkey(event) ?? false
         }
+        hotkey.onTapLost = { [weak self] in
+            guard let self else { return }
+            // A hold in progress will never see its release now.
+            if self.session != nil, !self.isHandsFree { self.discardSession() }
+            self.isHotkeyActive = false
+            self.scheduleRearm()
+        }
     }
 
     // MARK: - Lifecycle
@@ -659,8 +666,9 @@ final class DictationController {
             record.errorMessage = output.polishNote
             record.timings.totalMs = Self.milliseconds(since: releasedAt)
             history.update(record)
-            lastRecord = record
             applyAudioRetention()
+            // Re-read: retention may just have dropped the audio file.
+            lastRecord = history.record(id: id) ?? record
 
             processing = nil
             Sounds.play(.done)

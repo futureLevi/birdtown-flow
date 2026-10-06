@@ -108,6 +108,9 @@ final class HotkeyMonitor {
     var key: PushToTalkKey = .fn
     /// Receives every gesture. The return value only matters for `.space` and `.escape`.
     var handler: ((Event) -> Bool)?
+    /// Called when the system disabled the tap and it couldn't be re-enabled (Accessibility
+    /// was revoked). The tap has been torn down; `start()` again once permission returns.
+    var onTapLost: (() -> Void)?
 
     /// Whether the tap exists.
     var isArmed: Bool { tap != nil }
@@ -184,9 +187,20 @@ final class HotkeyMonitor {
         case .tapDisabledByTimeout, .tapDisabledByUserInput:
             // The system disables a tap that runs too slowly or is interrupted; re-arm it,
             // and assume we may have missed a release while it was off.
-            if let tap { CGEvent.tapEnable(tap: tap, enable: true) }
-            Log.hotkey.notice("event tap re-enabled")
+            guard let tap else { return false }
+            CGEvent.tapEnable(tap: tap, enable: true)
             resyncAfterGap()
+            if CGEvent.tapIsEnabled(tap: tap) {
+                Log.hotkey.notice("event tap re-enabled")
+            } else {
+                Log.hotkey.error("event tap couldn't be re-enabled — Accessibility revoked?")
+                // Not from inside the tap's own callback: tear down on the next turn.
+                Task { @MainActor [weak self] in
+                    guard let self, self.tap === tap else { return }
+                    self.stop()
+                    self.onTapLost?()
+                }
+            }
             return false
         case .flagsChanged:
             return modifiersChanged(keyCode: keyCode, flags: flags)
