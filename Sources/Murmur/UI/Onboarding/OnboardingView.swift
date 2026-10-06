@@ -1,5 +1,6 @@
 import AVFoundation
 import AppKit
+import Combine
 import MurmurKit
 import SwiftUI
 
@@ -34,6 +35,8 @@ struct OnboardingView: View {
     @State private var relaunchFailed = false
     @State private var practiceBaseline: UUID?
     @State private var practiceDone = false
+    /// Bumped whenever Murmur becomes active again, e.g. back from System Settings.
+    @State private var activations = 0
 
     private let onFinish: () -> Void
 
@@ -58,6 +61,18 @@ struct OnboardingView: View {
     private var practiceSucceeded: Bool { preview?.practiceSucceeded ?? practiceDone }
     private var needsRelaunch: Bool { accessibilityGranted && !hotkeyActive }
 
+    // System facts nothing observable tells us about: re-read each time Murmur comes back to
+    // the front, since that's when the user has just changed them.
+    private var fnHasSystemAction: Bool {
+        _ = activations
+        return preview?.fnHasSystemAction ?? SetupKit.fnKeyHasSystemAction
+    }
+
+    private var wisprRunning: Bool {
+        _ = activations
+        return preview?.wisprRunning ?? SetupKit.isWisprFlowRunning
+    }
+
     // MARK: Body
 
     var body: some View {
@@ -81,6 +96,9 @@ struct OnboardingView: View {
         }
         .onChange(of: accessibilityGranted) { _, granted in accessibilityChanged(granted) }
         .onChange(of: model.controller.lastRecord?.id) { _, _ in checkPractice() }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            activations += 1
+        }
     }
 
     @ViewBuilder
@@ -105,8 +123,8 @@ struct OnboardingView: View {
         case .shortcut:
             ShortcutStep(
                 settings: model.settings,
-                fnHasSystemAction: preview?.fnHasSystemAction ?? SetupKit.fnKeyHasSystemAction,
-                wisprRunning: preview?.wisprRunning ?? SetupKit.isWisprFlowRunning,
+                fnHasSystemAction: fnHasSystemAction,
+                wisprRunning: wisprRunning,
                 onChange: { model.controller.reloadShortcuts() }
             )
             .padding(.bottom, Layout.Setup.footerHeight)

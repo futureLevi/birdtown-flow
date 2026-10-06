@@ -18,7 +18,8 @@ struct MenuBarContent: View {
     private var accessibilityGranted: Bool { preview?.accessibility ?? model.permissions.accessibility }
     private var hotkeyActive: Bool { preview?.hotkeyActive ?? model.controller.isHotkeyActive }
     private var keyName: String { SetupKit.name(for: model.settings.pushToTalkKey) }
-    private var recent: [HistoryRecord] { Array(model.history.records.filter(\.hasText).prefix(3)) }
+    /// Lazily, so a long history isn't scanned in full every time the menu draws.
+    private var recent: [HistoryRecord] { Array(model.history.records.lazy.filter(\.hasText).prefix(3)) }
 
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.m) {
