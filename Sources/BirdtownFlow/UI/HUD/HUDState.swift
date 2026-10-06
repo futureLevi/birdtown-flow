@@ -48,7 +48,7 @@ struct HUDState: Equatable, Sendable {
     /// The push-to-talk key, as the user sees it ("fn", "Right ⌥").
     var keyName = "fn"
     var appName: String?
-    /// Why a finished dictation went to the clipboard ("Copied — no text field was focused").
+    /// Why a finished dictation went to the clipboard ("Copied, since no text field was focused").
     /// Shown beside the check; `nil` when the text was typed.
     var notice: String?
 

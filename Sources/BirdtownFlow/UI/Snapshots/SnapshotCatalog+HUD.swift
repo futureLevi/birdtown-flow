@@ -79,7 +79,7 @@ struct HUDPreview {
             HUDPreview(name: "transcribing-reduce-motion", state: HUDState(phase: .transcribing), reduceMotion: true),
             HUDPreview(name: "done", state: HUDState(phase: .done)),
             HUDPreview(name: "done-copied", state: HUDState(phase: .done,
-                                                           notice: "Copied — no text field was focused. Press ⌘V to paste.")),
+                                                           notice: "Copied, since no text field was focused")),
             HUDPreview(name: "cancelled", state: HUDState(phase: .cancelled)),
             HUDPreview(name: "failed", state: HUDState(phase: .failed(
                 "Couldn't reach the speech model. Your recording is saved in History, so you can retry."))),
