@@ -34,9 +34,11 @@ final class AudioPlayback {
         // AVAudioPlayer has no progress callback; a light poll only while playing is the
         // simplest thing that can't leak — it ends itself when playback ends.
         ticker = Task { [weak self] in
-            while !Task.isCancelled {
+            while true {
                 try? await Task.sleep(for: .milliseconds(50))
-                guard let self, let player = self.player else { return }
+                // Checked after the sleep: a ticker cancelled mid-sleep must not read the
+                // *next* recording's player.
+                guard !Task.isCancelled, let self, let player = self.player else { return }
                 guard player.isPlaying else {
                     self.stop()
                     return

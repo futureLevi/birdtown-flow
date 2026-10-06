@@ -12,13 +12,13 @@ struct HomeView: View {
 
     var body: some View {
         let records = model.history.records
-        let stats = preview.stats ?? DictationStats.compute(from: records)
+        let stats = DictationStats.compute(from: records)
         ScrollView {
             VStack(alignment: .leading, spacing: Spacing.xxl) {
                 header(stats: stats, isFirstRun: records.isEmpty)
                 HomeBanners(status: status)
                 if records.isEmpty {
-                    FirstRunCard(keyName: status.pushToTalkKey)
+                    FirstRunCard(keyName: status.pushToTalkKey, isSetupComplete: model.settings.hasCompletedOnboarding)
                 } else {
                     tiles(stats: stats, records: records)
                     recent(Array(records.prefix(Layout.Main.recentCount)))
@@ -104,6 +104,7 @@ struct HomeView: View {
                         RowDivider(leadingInset: HistoryRow.textInset)
                     }
                     HistoryRow(record: record, player: player) {
+                        if player.isPlaying(record.id) { player.stop() }
                         model.history.delete(ids: [record.id])
                     }
                 }
@@ -140,9 +141,11 @@ private struct HomeBanners: View {
 
     var body: some View {
         VStack(spacing: Spacing.s) {
+            // Until setup is finished, its banner stands in for the permission banners below:
+            // setup walks through the same grants, in order, with explanations.
             if !model.settings.hasCompletedOnboarding {
                 Banner(
-                    symbol: "sparkles",
+                    symbol: "checklist",
                     title: "Finish setting up Murmur",
                     message: "Two minutes: permissions, your shortcut, and a first dictation.",
                     tone: .info
@@ -151,7 +154,16 @@ private struct HomeBanners: View {
                         .buttonStyle(.murmurPrimary)
                         .controlSize(.small)
                 }
+            } else {
+                permissionBanners
             }
+            modelBanner
+        }
+    }
+
+    @ViewBuilder
+    private var permissionBanners: some View {
+        Group {
             if !status.microphone {
                 Banner(
                     symbol: "mic.slash.fill",
@@ -183,7 +195,6 @@ private struct HomeBanners: View {
                         .controlSize(.small)
                 }
             }
-            modelBanner
         }
     }
 
@@ -244,6 +255,9 @@ private struct HomeBanners: View {
 /// Teaches the gesture before there's any history: hold the key, speak, release.
 private struct FirstRunCard: View {
     let keyName: String
+    /// Until setup is done the setup banner carries the one Ember button; trying dictation
+    /// before permissions are granted would only fail.
+    let isSetupComplete: Bool
 
     @State private var isKeyDown = false
     @Environment(AppModel.self) private var model
@@ -278,12 +292,11 @@ private struct FirstRunCard: View {
                 }
 
                 HStack(spacing: Spacing.m) {
-                    Button {
-                        model.controller.toggleRecording()
-                    } label: {
-                        Label("Try it hands-free", systemImage: "mic.fill")
+                    if isSetupComplete {
+                        tryButton.buttonStyle(.murmurPrimary)
+                    } else {
+                        tryButton.buttonStyle(.murmurSecondary)
                     }
-                    .buttonStyle(.murmurPrimary)
                     Text("Tip: double-tap \(keyName) to keep talking without holding it.")
                         .font(Typography.callout)
                         .foregroundStyle(Palette.inkTertiary)
@@ -298,6 +311,15 @@ private struct FirstRunCard: View {
                 isKeyDown.toggle()
             }
         }
+    }
+
+    private var tryButton: some View {
+        Button {
+            model.controller.toggleRecording()
+        } label: {
+            Label("Try it hands-free", systemImage: "mic.fill")
+        }
+        .help("Start dictating without holding a key. Click Stop, or press \(keyName), when you're done.")
     }
 
     private func step<Visual: View>(

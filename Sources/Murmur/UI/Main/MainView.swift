@@ -156,18 +156,11 @@ struct SidebarStatusView: View {
             Button {
                 Permissions.openAccessibilitySettings()
             } label: {
-                HStack(spacing: Spacing.s) {
-                    Image(systemName: "exclamationmark.triangle.fill")
-                        .foregroundStyle(Palette.warning)
-                    VStack(alignment: .leading, spacing: 0) {
-                        Text("Grant Accessibility")
-                            .font(Typography.bodyEmphasis)
-                            .foregroundStyle(Palette.ink)
-                        Text("Needed for your shortcut")
-                            .font(Typography.caption)
-                            .foregroundStyle(Palette.inkSecondary)
-                    }
-                    Spacer(minLength: 0)
+                statusLines(
+                    title: "Allow Accessibility",
+                    detail: "Needed for your shortcut",
+                    symbol: "exclamationmark.triangle.fill"
+                ) {
                     Image(systemName: "arrow.up.forward")
                         .font(Typography.caption)
                         .foregroundStyle(Palette.inkTertiary)
@@ -177,13 +170,11 @@ struct SidebarStatusView: View {
             .buttonStyle(.plain)
             .help("Open System Settings › Privacy & Security › Accessibility")
         } else if !status.hotkeyActive {
-            HStack(spacing: Spacing.s) {
-                Image(systemName: "exclamationmark.triangle.fill")
-                    .foregroundStyle(Palette.warning)
-                Text("Shortcut isn't active")
-                    .font(Typography.bodyEmphasis)
-                    .foregroundStyle(Palette.ink)
-                Spacer(minLength: 0)
+            statusLines(
+                title: "Shortcut paused",
+                detail: "Reconnecting automatically…",
+                symbol: "exclamationmark.triangle.fill"
+            ) {
                 Button("Retry") { model.controller.activate() }
                     .buttonStyle(.murmurGhost)
                     .controlSize(.small)
@@ -199,6 +190,34 @@ struct SidebarStatusView: View {
             .accessibilityElement(children: .ignore)
             .accessibilityLabel("Hold \(status.pushToTalkKey) to dictate")
         }
+    }
+
+    /// One title line (with a warning glyph and a trailing accessory) over one detail line.
+    /// Both stay on a single line at sidebar width.
+    private func statusLines<Accessory: View>(
+        title: String,
+        detail: String,
+        symbol: String,
+        @ViewBuilder accessory: () -> Accessory
+    ) -> some View {
+        VStack(alignment: .leading, spacing: Spacing.xxs) {
+            HStack(spacing: Spacing.xs) {
+                Image(systemName: symbol)
+                    .font(Typography.caption)
+                    .foregroundStyle(Palette.warning)
+                Text(title)
+                    .font(Typography.bodyEmphasis)
+                    .foregroundStyle(Palette.ink)
+                    .lineLimit(1)
+                Spacer(minLength: Spacing.xs)
+                accessory()
+            }
+            Text(detail)
+                .font(Typography.caption)
+                .foregroundStyle(Palette.inkSecondary)
+                .lineLimit(1)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     @ViewBuilder

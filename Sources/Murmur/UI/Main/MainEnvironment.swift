@@ -47,11 +47,10 @@ struct SystemStatus: Equatable, Sendable {
     }
 }
 
-/// Overrides used only by snapshots: fixed status, stats and starting state, so rendered
-/// screens are deterministic and don't depend on the CI machine or unfinished logic.
+/// Overrides used only by snapshots: fixed status, name and starting state, so rendered
+/// screens are deterministic and don't depend on the CI machine.
 struct MainPreview: Sendable {
     var status: SystemStatus?
-    var stats: DictationStats?
     var firstName: String?
     var historyQuery = ""
     var originalRecordID: UUID?
