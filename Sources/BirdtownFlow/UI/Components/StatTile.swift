@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// One headline number: a small eyebrow, a serif numeral that rolls up when it appears, and
+/// One headline number: a small eyebrow, a rounded numeral that rolls up when it appears, and
 /// an optional caption that gives the number meaning.
 struct StatTile: View {
     let label: String
@@ -29,7 +29,7 @@ struct StatTile: View {
                     .contentTransition(.numericText(value: Double(shown)))
                 if let unit {
                     Text(unit)
-                        .font(Typography.bodyEmphasis)
+                        .font(Typography.statUnit)
                         .foregroundStyle(Palette.inkSecondary)
                 }
             }

@@ -1,43 +1,45 @@
 import SwiftUI
 
-// Murmur's three button weights. Primary is Ember — the one thing on a screen you're meant
-// to press — so use it at most once per view. Secondary is a quiet bordered surface;
-// ghost is text that only shows its shape on hover.
+// Birdtown Flow's three button weights, all pill-shaped like the logo's bars.
+//
+// Primary is the navy pill (porcelain in dark mode), the logo's tile and ring: the one thing
+// on a screen you're meant to press, so use it at most once per view. Secondary is a quiet
+// bordered surface; ghost is text that only shows its shape on hover.
 //
 // Every style follows `controlSize` (.small, .regular, .large), dims when disabled, and
 // gives hover and press feedback that collapses to plain fades under Reduce Motion.
 
-struct MurmurPrimaryButtonStyle: ButtonStyle {
+struct FlowPrimaryButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
-        MurmurButtonBody(configuration: configuration, kind: .primary)
+        FlowButtonBody(configuration: configuration, kind: .primary)
     }
 }
 
-struct MurmurSecondaryButtonStyle: ButtonStyle {
+struct FlowSecondaryButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
-        MurmurButtonBody(configuration: configuration, kind: .secondary)
+        FlowButtonBody(configuration: configuration, kind: .secondary)
     }
 }
 
-struct MurmurGhostButtonStyle: ButtonStyle {
+struct FlowGhostButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
-        MurmurButtonBody(configuration: configuration, kind: .ghost)
+        FlowButtonBody(configuration: configuration, kind: .ghost)
     }
 }
 
-extension ButtonStyle where Self == MurmurPrimaryButtonStyle {
-    static var murmurPrimary: MurmurPrimaryButtonStyle { MurmurPrimaryButtonStyle() }
+extension ButtonStyle where Self == FlowPrimaryButtonStyle {
+    static var flowPrimary: FlowPrimaryButtonStyle { FlowPrimaryButtonStyle() }
 }
 
-extension ButtonStyle where Self == MurmurSecondaryButtonStyle {
-    static var murmurSecondary: MurmurSecondaryButtonStyle { MurmurSecondaryButtonStyle() }
+extension ButtonStyle where Self == FlowSecondaryButtonStyle {
+    static var flowSecondary: FlowSecondaryButtonStyle { FlowSecondaryButtonStyle() }
 }
 
-extension ButtonStyle where Self == MurmurGhostButtonStyle {
-    static var murmurGhost: MurmurGhostButtonStyle { MurmurGhostButtonStyle() }
+extension ButtonStyle where Self == FlowGhostButtonStyle {
+    static var flowGhost: FlowGhostButtonStyle { FlowGhostButtonStyle() }
 }
 
-private struct MurmurButtonBody: View {
+private struct FlowButtonBody: View {
     enum Kind { case primary, secondary, ghost }
 
     let configuration: ButtonStyleConfiguration
@@ -49,7 +51,7 @@ private struct MurmurButtonBody: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        let shape = RoundedRectangle(cornerRadius: Radius.s, style: .continuous)
+        let shape = Capsule()
         configuration.label
             .font(controlSize == .small ? Typography.caption : Typography.bodyEmphasis)
             .lineLimit(1)
@@ -78,16 +80,16 @@ private struct MurmurButtonBody: View {
 
     private var horizontalPadding: CGFloat {
         switch controlSize {
-        case .mini, .small: Spacing.s
+        case .mini, .small: Spacing.m
         case .large, .extraLarge: Spacing.xl
-        default: Spacing.m
+        default: Spacing.l
         }
     }
 
     private var fill: Color {
         switch kind {
         case .primary:
-            configuration.isPressed ? Palette.emberPressed : (isActive ? Palette.emberHover : Palette.ember)
+            configuration.isPressed ? Palette.primaryFillPressed : (isActive ? Palette.primaryFillHover : Palette.primaryFill)
         case .secondary:
             configuration.isPressed ? Palette.surfacePressed : (isActive ? Palette.surfaceHover : Palette.surface)
         case .ghost:
@@ -97,7 +99,7 @@ private struct MurmurButtonBody: View {
 
     private var foreground: Color {
         switch kind {
-        case .primary: Palette.onEmber
+        case .primary: Palette.onPrimary
         case .secondary: Palette.ink
         case .ghost: isActive ? Palette.ink : Palette.inkSecondary
         }

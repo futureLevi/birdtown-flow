@@ -47,7 +47,7 @@ struct StyleView: View {
             SettingsLink {
                 Text("Open Settings")
             }
-            .buttonStyle(.murmurSecondary)
+            .buttonStyle(.flowSecondary)
             .controlSize(.small)
         }
         .padding(Spacing.l)
@@ -122,7 +122,7 @@ private struct StyleBubble: View {
                     Spacer(minLength: Spacing.s)
                     Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
                         .font(Typography.bodyEmphasis)
-                        .foregroundStyle(isSelected ? Palette.ember : Palette.hairlineStrong)
+                        .foregroundStyle(isSelected ? Palette.accent : Palette.hairlineStrong)
                         .contentTransition(.symbolEffect(.replace))
                 }
                 Text(sample)
@@ -141,7 +141,7 @@ private struct StyleBubble: View {
                             topTrailingRadius: Radius.l,
                             style: .continuous
                         )
-                        .fill(Palette.sunken)
+                        .fill(isSelected ? Palette.bubbleOnSelection : Palette.bubble)
                     )
                 Text(style.summary)
                     .font(Typography.caption)
@@ -149,9 +149,15 @@ private struct StyleBubble: View {
             }
             .padding(Spacing.m)
             .frame(maxWidth: .infinity, minHeight: Layout.Main.styleBubbleMinHeight, alignment: .topLeading)
-            .background(frame.fill(isHovered && !isSelected ? Palette.surfaceHover : Palette.surface))
+            // Chosen: Signal blue ring over a soft blue wash, like every selected card.
+            .background {
+                ZStack {
+                    frame.fill(isHovered && !isSelected ? Palette.surfaceHover : Palette.surface)
+                    if isSelected { frame.fill(Palette.accentSoft) }
+                }
+            }
             .overlay(frame.strokeBorder(
-                isSelected ? Palette.ember : Palette.hairline,
+                isSelected ? Palette.accent : Palette.hairline,
                 lineWidth: isSelected ? Layout.Main.selectionRing : Layout.Main.hairline
             ))
             .contentShape(frame)

@@ -23,7 +23,8 @@ struct SnippetsView: View {
                     } label: {
                         Label("New Snippet", systemImage: "plus")
                     }
-                    .buttonStyle(.murmurPrimary)
+                    // Secondary: the toolbar's Dictate pill is the window's one primary action.
+                    .buttonStyle(.flowSecondary)
                     .keyboardShortcut("n", modifiers: .command)
                     .help("Add a snippet (⌘N)")
                 }
@@ -36,7 +37,7 @@ struct SnippetsView: View {
                             + "and say it whenever you need it."
                     ) {
                         Button("New Snippet") { isAdding = true }
-                            .buttonStyle(.murmurSecondary)
+                            .buttonStyle(.flowSecondary)
                     }
                     .cardSurface()
                 } else {
@@ -108,9 +109,10 @@ private struct SnippetCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.m) {
             HStack(alignment: .center, spacing: Spacing.s) {
-                Image(systemName: "waveform")
-                    .font(Typography.caption)
-                    .foregroundStyle(Palette.inkTertiary)
+                // The logo's bars mark what you say, as they do in the app's own mark.
+                LogoBars()
+                    .fill(Palette.inkTertiary)
+                    .frame(width: LogoBars.groupWidth(height: Layout.Main.triggerMark), height: Layout.Main.triggerMark)
                     .accessibilityHidden(true)
                 Text("“\(snippet.trigger)”")
                     .font(Typography.headline)
@@ -226,7 +228,7 @@ struct SnippetEditorSheet: View {
             }
 
             VStack(alignment: .leading, spacing: Spacing.xs) {
-                Text("Birdtown Flow types")
+                Text("It types")
                     .font(Typography.caption)
                     .foregroundStyle(Palette.inkSecondary)
                 TextEditor(text: $expansion)
@@ -243,13 +245,13 @@ struct SnippetEditorSheet: View {
             HStack(spacing: Spacing.s) {
                 Spacer()
                 Button("Cancel") { dismiss() }
-                    .buttonStyle(.murmurSecondary)
+                    .buttonStyle(.flowSecondary)
                     .keyboardShortcut(.cancelAction)
                 Button(original == nil ? "Add" : "Save") {
                     save()
                     dismiss()
                 }
-                .buttonStyle(.murmurPrimary)
+                .buttonStyle(.flowPrimary)
                 .keyboardShortcut(.defaultAction)
                 .disabled(!canSave)
             }

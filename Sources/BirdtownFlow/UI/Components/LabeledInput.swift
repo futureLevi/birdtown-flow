@@ -1,7 +1,7 @@
 import SwiftUI
 
-/// A caption above an inset text field. Used by the dictionary and snippet sheets;
-/// fits any form that wants Murmur's inset field.
+/// A caption above an inset text field, with a Signal blue ring while focused. Used by the
+/// dictionary and snippet sheets; fits any form that wants the app's inset field.
 struct LabeledInput: View {
     let label: String
     @Binding var text: String
@@ -23,8 +23,8 @@ struct LabeledInput: View {
                 .padding(.horizontal, Spacing.m)
                 .frame(height: Layout.Main.searchFieldHeight)
                 .background(shape.fill(Palette.sunken))
-                .overlay(shape.strokeBorder(isFocused ? Palette.hairlineStrong : Palette.hairline,
-                                            lineWidth: Layout.Main.hairline))
+                .overlay(shape.strokeBorder(isFocused ? Palette.accent : Palette.hairline,
+                                            lineWidth: isFocused ? Layout.Main.focusRing : Layout.Main.hairline))
         }
     }
 }

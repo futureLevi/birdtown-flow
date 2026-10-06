@@ -499,7 +499,21 @@ extension Layout {
         static let transcriptCharsPerLine = 86
         static let recentCount = 5
         static let pageHeaderBottom: CGFloat = 20
+        /// The logo's bars in the first-run "speak" step and in empty states.
+        static let brandMarkLarge: CGFloat = 40
+        static let brandMarkSmall: CGFloat = 22
+        /// Focused inputs: a Signal blue ring this wide.
+        static let focusRing: CGFloat = 1.5
+        /// Model download progress (`SpectrumProgressBar`).
+        static let progressBarHeight: CGFloat = 4
+        /// The logo's bars beside a snippet's trigger.
+        static let triggerMark: CGFloat = 10
     }
+}
+
+extension Typography {
+    /// The unit beside a stat numeral ("words", "wpm"): rounded, to sit with the numeral.
+    static let statUnit = Font.system(size: 13, weight: .semibold, design: .rounded)
 }
 
 /// Press and disabled feedback shared by every custom control.
@@ -512,16 +526,15 @@ enum Interaction {
 extension Palette {
     /// Pressed surfaces and ghost buttons.
     static let surfacePressed = Color.adaptive(light: 0xE4E8F2, dark: 0x232B4D)
-    /// Deprecated Ember-era names; they follow the primary fill now.
-    static let emberHover = primaryFillHover
-    static let emberPressed = primaryFillPressed
     /// Keycaps: a face a shade lighter than the surface and a darker lip below it.
     static let keyFace = Color.adaptive(light: 0xFFFFFF, dark: 0x2A3359)
     static let keyLip = Color.adaptive(light: 0x0E183C, lightAlpha: 0.20, dark: 0x000000, darkAlpha: 0.60)
     static let keyHighlight = Color.adaptive(light: 0xFFFFFF, lightAlpha: 1, dark: 0xFFFFFF, darkAlpha: 0.12)
-    /// Selected filter chips are inked in, like a pressed key.
-    static let chipSelected = Color.adaptive(light: 0x0E183C, dark: 0xEEF1FA)
-    static let onChipSelected = Color.adaptive(light: 0xFFFFFF, dark: 0x0E183C)
+    /// Style's sample message bubbles: a step darker than the card in light mode and a step
+    /// lighter in dark, like chat bubbles. `sunken` would read as a hole on navy.
+    static let bubble = Color.adaptive(light: 0xECEFF6, dark: 0x222A4B)
+    /// The bubble on a chosen card's Signal blue wash.
+    static let bubbleOnSelection = Color.adaptive(light: 0xFFFFFF, dark: 0x353F72)
 }
 
 extension Motion {
