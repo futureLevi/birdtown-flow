@@ -18,7 +18,7 @@ struct HomeView: View {
                 header(stats: stats, isFirstRun: records.isEmpty)
                 HomeBanners(status: status)
                 if records.isEmpty {
-                    FirstRunCard(keyName: status.pushToTalkKey, isSetupComplete: model.settings.hasCompletedOnboarding)
+                    FirstRunCard(keyName: status.pushToTalkKey)
                 } else {
                     tiles(stats: stats, records: records)
                     recent(Array(records.prefix(Layout.Main.recentCount)))
@@ -152,7 +152,7 @@ private struct HomeBanners: View {
                     tone: .info
                 ) {
                     Button("Continue Setup") { OnboardingWindowController.shared.show(model: model) }
-                        .buttonStyle(.flowPrimary)
+                        .buttonStyle(.flowSecondary)
                         .controlSize(.small)
                 }
             } else {
@@ -253,9 +253,6 @@ private struct HomeBanners: View {
 /// Teaches the gesture before there's any history: hold the key, speak, release.
 private struct FirstRunCard: View {
     let keyName: String
-    /// Until setup is done the setup banner carries the one primary button; trying dictation
-    /// before permissions are granted would only fail.
-    let isSetupComplete: Bool
 
     @State private var isKeyDown = false
     @Environment(AppModel.self) private var model
@@ -292,11 +289,8 @@ private struct FirstRunCard: View {
                 }
 
                 HStack(spacing: Spacing.m) {
-                    if isSetupComplete {
-                        tryButton.buttonStyle(.flowPrimary)
-                    } else {
-                        tryButton.buttonStyle(.flowSecondary)
-                    }
+                    tryButton
+                        .buttonStyle(.flowSecondary)
                     Text("Tip: double-tap \(keyName) to keep talking without holding it.")
                         .font(Typography.callout)
                         .foregroundStyle(Palette.inkTertiary)

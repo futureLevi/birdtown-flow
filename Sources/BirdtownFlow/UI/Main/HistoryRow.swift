@@ -123,15 +123,14 @@ struct HistoryRow: View {
                     } label: {
                         HStack(spacing: Spacing.xs) {
                             if isRetrying {
-                                // Sits on the navy pill, so it takes the pill's label colour.
-                                ProgressView().controlSize(.mini).tint(Palette.onPrimary)
+                                ProgressView().controlSize(.mini)
                             } else {
                                 Image(systemName: "arrow.clockwise")
                             }
                             Text(isRetrying ? "Retrying…" : "Retry")
                         }
                     }
-                    .buttonStyle(.flowPrimary)
+                    .buttonStyle(.flowSecondary)
                     .controlSize(.small)
                     .disabled(isRetrying || audioURL == nil)
                     .help(audioURL == nil ? "The audio for this dictation wasn't kept" : "Transcribe the saved audio again")

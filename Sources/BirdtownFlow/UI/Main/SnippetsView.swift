@@ -23,7 +23,8 @@ struct SnippetsView: View {
                     } label: {
                         Label("New Snippet", systemImage: "plus")
                     }
-                    .buttonStyle(.flowPrimary)
+                    // Secondary: the toolbar's Dictate pill is the window's one primary action.
+                    .buttonStyle(.flowSecondary)
                     .keyboardShortcut("n", modifiers: .command)
                     .help("Add a snippet (⌘N)")
                 }
