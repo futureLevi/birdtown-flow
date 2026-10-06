@@ -58,7 +58,7 @@ struct HomeView: View {
                 label: "This week",
                 value: stats.wordsThisWeek,
                 unit: "words",
-                caption: stats.dictationCount == 1 ? "From 1 dictation" : "From \(stats.dictationCount) dictations"
+                caption: "\(stats.totalWords.formatted()) all time"
             )
             StatTile(
                 label: "Pace",
@@ -78,7 +78,8 @@ struct HomeView: View {
                 label: "Time saved",
                 value: stats.minutesSaved,
                 unit: "min",
-                caption: "vs. typing at \(DictationStats.typingWPM) wpm"
+                // Saved time is all-time (unlike the weekly tile), so the caption says so.
+                caption: "All time, vs. typing"
             )
         }
     }
