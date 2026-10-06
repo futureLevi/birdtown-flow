@@ -44,7 +44,6 @@ final class ModelManager {
     @ObservationIgnored private var loaded: Loaded?
     @ObservationIgnored private var inflight: Inflight?
     @ObservationIgnored private var generation = 0
-    @ObservationIgnored private var lastFailure: Error?
     @ObservationIgnored private var appleFallback: AppleSpeechEngine?
     /// Watches for the network after a download failed for lack of it, to resume on its own.
     @ObservationIgnored private var connectivity: NWPathMonitor?
@@ -185,7 +184,8 @@ final class ModelManager {
             Log.speech.notice("using Apple Speech until \(wanted.engineName, privacy: .public) is ready")
             return fallbackEngine()
         }
-        throw lastFailure ?? TranscriptionError.modelNotReady
+        // `state` carries the reason (`.failed(message)`); callers word it for the HUD.
+        throw TranscriptionError.modelNotReady
     }
 
     // MARK: - Loading
@@ -224,7 +224,6 @@ final class ModelManager {
             guard inflight?.id == id else { return }
 
             loaded = Loaded(choice: choice, engine: engine)
-            lastFailure = nil
             retriedWhileOnline = false
             stopWatchingConnectivity()
             state = .ready
@@ -244,7 +243,6 @@ final class ModelManager {
                 \(choice.engineName, privacy: .public) failed to prepare: \
                 \(error.localizedDescription, privacy: .public)
                 """)
-            lastFailure = PreparationError.failed(message)
             state = .failed(message)
             if Self.isConnectivityFailure(error) { watchConnectivity() }
         }
@@ -411,14 +409,11 @@ final class ModelManager {
 
     private enum PreparationError: LocalizedError {
         case needsAppleSilicon
-        case failed(String)
 
         var errorDescription: String? {
             switch self {
             case .needsAppleSilicon:
                 "Parakeet needs a Mac with Apple silicon. Choose Apple Speech in Settings instead."
-            case .failed(let message):
-                message
             }
         }
     }
