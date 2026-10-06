@@ -1,6 +1,6 @@
 import AppKit
 import ApplicationServices
-import Carbon.HIToolbox
+import Carbon
 import Foundation
 
 /// Puts text into whatever field currently has keyboard focus.
@@ -350,7 +350,7 @@ enum TextInjector {
 
     private static func postCommandV() {
         guard let source = CGEventSource(stateID: .privateState) else { return }
-        let vKey = CGKeyCode(kVK_ANSI_V)
+        let vKey = keyCodeForCommandV()
 
         guard let down = CGEvent(keyboardEventSource: source, virtualKey: vKey, keyDown: true),
               let up = CGEvent(keyboardEventSource: source, virtualKey: vKey, keyDown: false)
@@ -366,5 +366,45 @@ enum TextInjector {
 
         down.post(tap: .cghidEventTap)
         up.post(tap: .cghidEventTap)
+    }
+
+    /// The key that types "v" with ⌘ held in the current layout. Shortcuts follow the layout,
+    /// so on Dvorak the ANSI "V" position would send ⌘. (Cancel in many apps). Translating
+    /// the ⌘ layer also covers "Dvorak – QWERTY ⌘", and layouts with no Latin "v" fall back
+    /// to the ANSI position, which is what macOS uses for their shortcuts.
+    private static func keyCodeForCommandV() -> CGKeyCode {
+        let fallback = CGKeyCode(kVK_ANSI_V)
+        guard let source = TISCopyCurrentKeyboardLayoutInputSource()?.takeRetainedValue(),
+              let property = TISGetInputSourceProperty(source, "TISPropertyUnicodeKeyLayoutData" as CFString)
+        else { return fallback }
+        let layoutData = Unmanaged<CFData>.fromOpaque(property).takeUnretainedValue() as Data
+
+        return layoutData.withUnsafeBytes { raw -> CGKeyCode in
+            guard let layout = raw.baseAddress?.assumingMemoryBound(to: UCKeyboardLayout.self) else { return fallback }
+            let keyboardType = UInt32(LMGetKbdType())
+            let commandState = UInt32((cmdKey >> 8) & 0xFF)
+            let lowercaseV: UniChar = 0x76
+            for code in 0..<128 {
+                var deadKeyState: UInt32 = 0
+                var length = 0
+                var characters = [UniChar](repeating: 0, count: 4)
+                let status = UCKeyTranslate(
+                    layout,
+                    UInt16(code),
+                    UInt16(kUCKeyActionDisplay),
+                    commandState,
+                    keyboardType,
+                    OptionBits(kUCKeyTranslateNoDeadKeysMask),
+                    &deadKeyState,
+                    characters.count,
+                    &length,
+                    &characters
+                )
+                if status == noErr, length == 1, characters[0] == lowercaseV {
+                    return CGKeyCode(code)
+                }
+            }
+            return fallback
+        }
     }
 }
