@@ -47,6 +47,23 @@ enum SpeechEngineChoice: String, CaseIterable, Identifiable, Sendable {
     var isParakeet: Bool { self != .apple }
 }
 
+/// Light, dark, or whatever macOS is set to.
+enum AppearancePreference: String, CaseIterable, Identifiable, Sendable {
+    case system
+    case light
+    case dark
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .system: "System"
+        case .light: "Light"
+        case .dark: "Dark"
+        }
+    }
+}
+
 /// Every user preference. One observable object so SwiftUI views bind straight to it.
 ///
 /// Add new preferences here — never read `UserDefaults` directly elsewhere.
@@ -147,6 +164,23 @@ final class Settings {
         didSet { defaults.set(polishTimeout, forKey: Keys.polishTimeout) }
     }
 
+    // MARK: Appearance
+
+    /// Applied to the whole app (`AppearancePreference.apply()`); the pill is navy either way.
+    var appearance: AppearancePreference {
+        didSet {
+            defaults.set(appearance.rawValue, forKey: Keys.appearance)
+            appearance.apply()
+        }
+    }
+    /// The face of the large text while the type is being chosen. See `TypeTreatment`.
+    var typeTreatment: TypeTreatment {
+        didSet {
+            defaults.set(typeTreatment.rawValue, forKey: Keys.typeTreatment)
+            Typography.treatment = typeTreatment
+        }
+    }
+
     // MARK: History
 
     /// Days of text history to keep. `0` keeps forever.
@@ -190,6 +224,8 @@ final class Settings {
         static let historyRetentionDays = "historyRetentionDays"
         static let audioRetentionDays = "audioRetentionDays"
         static let hasCompletedOnboarding = "hasCompletedOnboarding"
+        static let appearance = "appearance"
+        static let typeTreatment = "typeTreatment"
     }
 
     init(defaults: UserDefaults = .standard) {
@@ -220,5 +256,7 @@ final class Settings {
         historyRetentionDays = defaults.object(forKey: Keys.historyRetentionDays) as? Int ?? 0
         audioRetentionDays = defaults.object(forKey: Keys.audioRetentionDays) as? Int ?? 7
         hasCompletedOnboarding = defaults.bool(forKey: Keys.hasCompletedOnboarding)
+        appearance = AppearancePreference(rawValue: defaults.string(forKey: Keys.appearance) ?? "") ?? .system
+        typeTreatment = TypeTreatment(rawValue: defaults.string(forKey: Keys.typeTreatment) ?? "") ?? .default
     }
 }

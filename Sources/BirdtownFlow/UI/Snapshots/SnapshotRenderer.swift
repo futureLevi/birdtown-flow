@@ -12,17 +12,32 @@ enum SnapshotRenderer {
         let name: String
         let size: CGSize
         let view: AnyView
+        /// The title font it renders with: the default, unless the shot compares treatments.
+        let treatment: TypeTreatment
 
-        init<V: View>(_ name: String, size: CGSize, @ViewBuilder view: () -> V) {
+        init<V: View>(_ name: String, size: CGSize, treatment: TypeTreatment = .default,
+                      @ViewBuilder view: () -> V) {
+            self.init(name: name, size: size, view: AnyView(view()), treatment: treatment)
+        }
+
+        private init(name: String, size: CGSize, view: AnyView, treatment: TypeTreatment) {
             self.name = name
             self.size = size
-            self.view = AnyView(view())
+            self.view = view
+            self.treatment = treatment
+        }
+
+        /// The same screen under another name and title font. Views read fonts when they're
+        /// rendered, so one view value serves every treatment.
+        func with(name: String, treatment: TypeTreatment) -> Shot {
+            Shot(name: name, size: size, view: view, treatment: treatment)
         }
     }
 
     static func run(to directory: URL) async {
         try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        let shots = SnapshotCatalog.main + SnapshotCatalog.hud + SnapshotCatalog.setup
+        let screens = SnapshotCatalog.main + SnapshotCatalog.hud + SnapshotCatalog.setup
+        let shots = screens + SnapshotCatalog.typeTreatments(from: screens)
         print("[snapshots] rendering \(shots.count) screens into \(directory.path)")
         for shot in shots {
             for (suffix, appearance) in [("light", NSAppearance.Name.aqua), ("dark", .darkAqua)] {
@@ -58,6 +73,8 @@ enum SnapshotRenderer {
         transparent: Bool = false,
         to url: URL
     ) async {
+        Typography.treatment = shot.treatment
+        defer { Typography.treatment = .default }
         let rect = NSRect(origin: .zero, size: shot.size)
         let hosting = NSHostingView(
             rootView: shot.view

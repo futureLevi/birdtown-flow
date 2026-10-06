@@ -52,6 +52,32 @@ struct GeneralSettingsPane: View {
                 }
             }
 
+            SettingsGroup(title: "Appearance") {
+                SettingsRow(title: "Appearance", detail: "Light, dark, or follow your Mac.") {
+                    Picker("Appearance", selection: $settings.appearance) {
+                        ForEach(AppearancePreference.allCases) { appearance in
+                            Text(appearance.title).tag(appearance)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    .labelsHidden()
+                    .fixedSize()
+                }
+                SettingsDivider()
+                SettingsRow(
+                    title: "Title font",
+                    detail: "Page titles, big numbers and the welcome screen. Everything you read stays SF Pro."
+                ) {
+                    Picker("Title font", selection: $settings.typeTreatment) {
+                        ForEach(TypeTreatment.allCases) { treatment in
+                            Text(treatment.displayName).tag(treatment)
+                        }
+                    }
+                    .labelsHidden()
+                    .fixedSize()
+                }
+            }
+
             SettingsGroup(title: "System") {
                 SettingsRow(title: "Open at login", detail: launchDetail) {
                     HStack(spacing: Spacing.m) {

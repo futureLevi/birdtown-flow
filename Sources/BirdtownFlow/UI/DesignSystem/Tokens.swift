@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import Synchronization
 
 // MARK: - Birdtown Flow design language
 //
@@ -8,9 +9,9 @@ import SwiftUI
 // focus and links. Primary actions are navy pills (porcelain in dark mode), like the logo's
 // tile and ring. The spectrum, the logo's disc, means "your voice is live" and nothing else:
 // the recording orb, the thinking ring, download progress and the onboarding hero. Never
-// static chrome, text or backgrounds. SF Pro Rounded for titles and numbers echoes the
-// logo's pill bars; SF Pro for everything you read, including your own words. Motion is
-// springy but brief, and collapses to fades under Reduce Motion.
+// static chrome, text or backgrounds. Titles and big numbers take the face of the chosen
+// `TypeTreatment` (SF Pro by default); SF Pro for everything you read, including your own
+// words. Motion is springy but brief, and collapses to fades under Reduce Motion.
 //
 // Rules:
 //  - Views never contain literal colours, sizes, radii or durations. Use these tokens; if a
@@ -128,12 +129,12 @@ extension Motion {
 }
 
 enum Typography {
-    /// Page titles: "History", "Good evening, Levi". Rounded, like the logo's bars.
-    static let display = Font.system(size: 28, weight: .semibold, design: .rounded)
+    /// Page titles: "History", "Good evening, Levi". Face from the `TypeTreatment`.
+    static var display: Font { faces.display }
     /// Section titles inside a page, sheet titles.
-    static let title = Font.system(size: 19, weight: .semibold, design: .rounded)
+    static var title: Font { faces.title }
     /// Big numbers in stat tiles.
-    static let numeral = Font.system(size: 30, weight: .semibold, design: .rounded).monospacedDigit()
+    static var numeral: Font { faces.numeral }
     /// Card and row headings.
     static let headline = Font.system(size: 13, weight: .semibold)
     static let body = Font.system(size: 13)
@@ -146,17 +147,135 @@ enum Typography {
     /// Small uppercase labels above sections. Use with `.textCase(.uppercase)` and `Tracking.eyebrow`.
     static let eyebrow = Font.system(size: 10.5, weight: .semibold)
     /// Keycaps and shortcuts.
-    static let keycap = Font.system(size: 12, weight: .medium, design: .rounded)
+    static var keycap: Font { faces.keycap }
     static let mono = Font.system(size: 12, design: .monospaced)
     /// HUD labels.
-    static let hud = Font.system(size: 12, weight: .medium, design: .rounded)
-    static let hudNumeral = Font.system(size: 12, weight: .medium, design: .rounded).monospacedDigit()
+    static var hud: Font { faces.hud }
+    static var hudNumeral: Font { faces.hud.monospacedDigit() }
+    /// A monogram standing in for an app icon that couldn't be loaded.
+    static func monogram(size: CGFloat) -> Font {
+        .system(size: size, weight: .semibold, design: faces.smallDesign)
+    }
 }
 
 enum Tracking {
     static let eyebrow: CGFloat = 0.8
-    static let display: CGFloat = -0.4
-    static let title: CGFloat = -0.2
+    static var display: CGFloat { Typography.faces.displayTracking }
+    static var title: CGFloat { Typography.faces.titleTracking }
+}
+
+// MARK: - Type treatments
+
+/// The face of the large text: page titles, section titles, big numbers and the product name.
+/// Everything you read (labels, body, your transcripts) is SF Pro in every treatment.
+///
+/// Switchable while the type is being chosen (Settings → General → Title font). Views read
+/// the tokens above when they're built, so window roots rebuild on a change
+/// (`TypeTreatmentRoot`).
+enum TypeTreatment: String, CaseIterable, Identifiable, Sendable {
+    /// Apple's own sans: crisp, quiet, native.
+    case sfPro
+    /// SF Pro Expanded: wide and confident, the most like a brand.
+    case expanded
+    /// New York, Apple's serif: editorial and warm, for an app about your words.
+    case newYork
+    /// SF Pro Rounded: soft, like the logo's pill bars.
+    case rounded
+
+    static let `default`: TypeTreatment = .sfPro
+
+    var id: String { rawValue }
+
+    var displayName: String {
+        switch self {
+        case .sfPro: "SF Pro"
+        case .expanded: "SF Pro Expanded"
+        case .newYork: "New York"
+        case .rounded: "SF Pro Rounded"
+        }
+    }
+
+    /// The faces at `scale` times their size (specimens draw them larger).
+    func faces(scale s: CGFloat = 1) -> TypeFaces {
+        switch self {
+        case .sfPro:
+            TypeFaces(
+                display: .system(size: 28 * s, weight: .bold),
+                title: .system(size: 19 * s, weight: .semibold),
+                numeral: .system(size: 30 * s, weight: .semibold).monospacedDigit(),
+                hero: .system(size: 40 * s, weight: .bold),
+                statUnit: .system(size: 13 * s, weight: .semibold),
+                displayTracking: -0.5 * s, titleTracking: -0.25 * s,
+                smallDesign: .default, scale: s)
+        case .expanded:
+            // Expanded is about a fifth wider, so the sizes come down to keep line lengths.
+            TypeFaces(
+                display: .system(size: 25 * s, weight: .semibold).width(.expanded),
+                title: .system(size: 17 * s, weight: .semibold).width(.expanded),
+                numeral: .system(size: 28 * s, weight: .semibold).width(.expanded).monospacedDigit(),
+                hero: .system(size: 35 * s, weight: .bold).width(.expanded),
+                statUnit: .system(size: 12 * s, weight: .semibold).width(.expanded),
+                displayTracking: -0.3 * s, titleTracking: -0.1 * s,
+                smallDesign: .default, scale: s)
+        case .newYork:
+            // New York's lower x-height reads small beside SF Pro, so it sets a step larger.
+            TypeFaces(
+                display: .system(size: 31 * s, weight: .semibold, design: .serif),
+                title: .system(size: 21 * s, weight: .semibold, design: .serif),
+                numeral: .system(size: 33 * s, weight: .medium, design: .serif).monospacedDigit(),
+                hero: .system(size: 46 * s, weight: .semibold, design: .serif),
+                statUnit: .system(size: 15 * s, weight: .regular, design: .serif).italic(),
+                displayTracking: -0.3 * s, titleTracking: -0.1 * s,
+                smallDesign: .default, scale: s)
+        case .rounded:
+            TypeFaces(
+                display: .system(size: 28 * s, weight: .semibold, design: .rounded),
+                title: .system(size: 19 * s, weight: .semibold, design: .rounded),
+                numeral: .system(size: 30 * s, weight: .semibold, design: .rounded).monospacedDigit(),
+                hero: .system(size: 40 * s, weight: .bold, design: .rounded),
+                statUnit: .system(size: 13 * s, weight: .semibold, design: .rounded),
+                displayTracking: -0.4 * s, titleTracking: -0.2 * s,
+                smallDesign: .rounded, scale: s)
+        }
+    }
+}
+
+/// One treatment's faces.
+struct TypeFaces: Sendable {
+    let display: Font
+    let title: Font
+    let numeral: Font
+    let hero: Font
+    let statUnit: Font
+    let displayTracking: CGFloat
+    let titleTracking: CGFloat
+    /// Keycaps and the pill's labels: rounded only in the rounded treatment.
+    let smallDesign: Font.Design
+    let scale: CGFloat
+
+    var keycap: Font { .system(size: 12 * scale, weight: .medium, design: smallDesign) }
+    var keycapLarge: Font { .system(size: 19 * scale, weight: .medium, design: smallDesign) }
+    var hud: Font { .system(size: 12 * scale, weight: .medium, design: smallDesign) }
+    var hudKeycap: Font { .system(size: 10.5 * scale, weight: .semibold, design: smallDesign) }
+}
+
+extension Typography {
+    private struct Current: Sendable {
+        var treatment: TypeTreatment
+        var faces: TypeFaces
+    }
+
+    // A lock rather than actor isolation: fonts are read from view bodies and from drawing
+    // code that isn't on the main actor. Set at launch and when the setting changes.
+    private static let current = Mutex(Current(treatment: .default, faces: TypeTreatment.default.faces()))
+
+    /// The large-text treatment in use.
+    static var treatment: TypeTreatment {
+        get { current.withLock { $0.treatment } }
+        set { current.withLock { $0 = Current(treatment: newValue, faces: newValue.faces()) } }
+    }
+
+    static var faces: TypeFaces { current.withLock { $0.faces } }
 }
 
 enum Spacing {
@@ -289,7 +408,7 @@ extension Layout.HUD {
 }
 
 extension Typography {
-    static let hudKeycap = Font.system(size: 10.5, weight: .semibold, design: .rounded)
+    static var hudKeycap: Font { faces.hudKeycap }
     static let hudGlyph = Font.system(size: 10, weight: .bold)
 }
 
@@ -334,7 +453,7 @@ enum Motion {
 
 extension Typography {
     /// The product name on the welcome and About screens.
-    static let hero = Font.system(size: 40, weight: .bold, design: .rounded)
+    static var hero: Font { faces.hero }
     /// The paragraph under an onboarding title: a step larger than body, for calm reading.
     static let lead = Font.system(size: 14)
     /// Recent dictations in the menu bar window: the user's words, at menu scale.
@@ -342,7 +461,7 @@ extension Typography {
     /// The symbol inside an onboarding step's glyph.
     static let stepGlyph = Font.system(size: 22, weight: .regular)
     /// Big keycaps in the shortcut picker.
-    static let keycapLarge = Font.system(size: 19, weight: .medium, design: .rounded)
+    static var keycapLarge: Font { faces.keycapLarge }
 }
 
 extension Layout {
@@ -512,8 +631,8 @@ extension Layout {
 }
 
 extension Typography {
-    /// The unit beside a stat numeral ("words", "wpm"): rounded, to sit with the numeral.
-    static let statUnit = Font.system(size: 13, weight: .semibold, design: .rounded)
+    /// The unit beside a stat numeral ("words", "wpm"), in the numeral's face.
+    static var statUnit: Font { faces.statUnit }
 }
 
 /// Press and disabled feedback shared by every custom control.

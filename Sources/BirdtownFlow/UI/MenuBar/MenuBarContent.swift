@@ -174,11 +174,12 @@ struct MenuBarContent: View {
                 model.controller.pasteLast()
             }
             .disabled(model.history.latestWithText == nil)
-            MenuRow(title: "Open Birdtown Flow") {
+            MenuRow(title: "Open Birdtown Flow", shortcut: "⌘O") {
                 guard preview == nil else { return }
                 openWindow(id: "main")
                 model.show(.home)
             }
+            .keyboardShortcut("o", modifiers: .command)
             MenuRow(title: "Settings…", shortcut: "⌘,") {
                 guard preview == nil else { return }
                 NSApp.activate()

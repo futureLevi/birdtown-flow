@@ -25,7 +25,7 @@ struct AppIcon: View {
                     )
                     .overlay {
                         Text(monogram)
-                            .font(.system(size: size * 0.46, weight: .semibold, design: .rounded))
+                            .font(Typography.monogram(size: size * 0.46))
                             .foregroundStyle(Palette.inkSecondary)
                     }
                     .padding(size * 0.06)

@@ -7,7 +7,7 @@ struct MurmurApp: App {
 
     var body: some Scene {
         Window("Birdtown Flow", id: "main") {
-            MainView()
+            TypeTreatmentRoot { MainView() }
                 .environment(AppModel.shared)
                 .frame(minWidth: Layout.windowMinWidth, minHeight: Layout.windowMinHeight)
         }
@@ -16,12 +16,12 @@ struct MurmurApp: App {
         .commands { MurmurCommands() }
 
         SwiftUI.Settings {
-            SettingsView()
+            TypeTreatmentRoot { SettingsView() }
                 .environment(AppModel.shared)
         }
 
         MenuBarExtra {
-            MenuBarContent()
+            TypeTreatmentRoot { MenuBarContent() }
                 .environment(AppModel.shared)
         } label: {
             MenuBarLabel()
@@ -33,7 +33,17 @@ struct MurmurApp: App {
 
 /// App-menu additions.
 struct MurmurCommands: Commands {
+    @Environment(\.openWindow) private var openWindow
+
     var body: some Commands {
+        // ⌘O brings up the main window from any of the app's windows, even after it was closed.
+        CommandGroup(replacing: .newItem) {
+            Button("Open Birdtown Flow") {
+                openWindow(id: "main")
+                NSApp.activate()
+            }
+            .keyboardShortcut("o", modifiers: .command)
+        }
         CommandGroup(after: .pasteboard) {
             Button("Paste Last Dictation") { AppModel.shared.controller.pasteLast() }
                 .keyboardShortcut("v", modifiers: [.control, .option])
@@ -43,6 +53,13 @@ struct MurmurCommands: Commands {
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
+    func applicationWillFinishLaunching(_ notification: Notification) {
+        // Before any window is built, so nothing draws first in the wrong appearance or face.
+        let settings = Settings.shared
+        settings.appearance.apply()
+        Typography.treatment = settings.typeTreatment
+    }
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         do {
             // `BirdtownFlow --render-snapshots <dir>` renders every registered screen to PNGs and

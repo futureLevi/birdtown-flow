@@ -60,7 +60,9 @@ Tile: Apple's macOS grid (824 px tile on a 1024 px canvas), continuous corners a
   and toggles.
 - The spectrum only for live states: the orb, the thinking ring, model download progress.
   Never for static chrome, text or backgrounds.
-- SF Pro Rounded for titles and numbers, echoing the pill-shaped bars; SF Pro for reading.
+- Titles and big numbers take the chosen title font (`TypeTreatment`): SF Pro by default, with
+  SF Pro Expanded, New York and SF Pro Rounded to compare under Settings → General → Title font.
+  Everything you read is SF Pro.
 
 ## Later
 
