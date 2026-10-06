@@ -45,7 +45,7 @@ extension SnapshotCatalog {
         VStack(alignment: .leading, spacing: Spacing.xl) {
             HStack(spacing: Spacing.m) {
                 DictateButton(isRecording: false) {}
-                DictateButton(isRecording: true, orbPhase: orbPhase) {}
+                DictateButton(isRecording: true, orbPhase: Self.orbPhase) {}
                 Button("Continue Setup") {}.buttonStyle(.flowPrimary).controlSize(.small)
                 Button("Open Settings") {}.buttonStyle(.flowSecondary)
                 Button("All history") {}.buttonStyle(.flowGhost)
@@ -102,7 +102,7 @@ extension SnapshotCatalog {
             ForEach(Array([ready, noAccess, recording, failed].enumerated()), id: \.offset) { index, status in
                 MainSidebar(status: status)
                     .environment(previewModel(records: records, section: index == 0 ? .home : .history))
-                    .environment(\.mainPreview, MainPreview(orbPhase: orbPhase))
+                    .environment(\.mainPreview, MainPreview(orbPhase: Self.orbPhase))
                     .frame(width: Layout.sidebarWidth)
                     .background(Palette.sunken)
             }
