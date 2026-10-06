@@ -87,7 +87,7 @@ final class HotkeyMonitor {
         case escape
     }
 
-    /// Tags events Murmur posts itself (the ⌘V paste) so the tap never mistakes them for the user.
+    /// Tags events the app posts itself (the ⌘V paste) so the tap never mistakes them for the user.
     nonisolated static let syntheticEventTag: Int64 = 0x4D52_4D52
 
     private static let escapeKeyCode = Int64(kVK_Escape)

@@ -162,7 +162,7 @@ struct HUDFilmFrame: View {
                             shadowScale: shadowScale)
                 ZStack {
                     ZStack {
-                        HUDFilmOrb(look: frame.orb, diameter: Layout.HUD.orb)
+                        SpectrumOrbFrame(look: frame.orb, diameter: Layout.HUD.orb, showsHalo: true)
                             .position(x: HUDMetrics.capCentre, y: pill.size.height / 2)
                         HUDBars(heights: frame.heights, opacities: frame.opacities)
                             .position(x: pill.size.width / 2, y: pill.size.height / 2)
@@ -183,35 +183,5 @@ struct HUDFilmFrame: View {
         }
         .frame(width: HUDFilm.size.width, height: HUDFilm.size.height)
         .clipped()
-    }
-}
-
-/// `SpectrumOrb`'s drawing, fed a precomputed look so the film can show the ring opening
-/// frame by frame (a snapshot `SpectrumOrb` only draws a mode's settled look).
-struct HUDFilmOrb: View {
-    let look: OrbDynamics.Look
-    let diameter: CGFloat
-
-    @Environment(\.displayScale) private var displayScale
-
-    var body: some View {
-        let comet = AngularGradient(colors: [.white.opacity(1 - 0.85 * look.tail), .white], center: .center)
-        let radius = diameter / 2
-        ZStack {
-            SpectrumHalo(diameter: diameter, scale: displayScale)
-                .mask {
-                    RadialGradient(colors: [.clear, .white], center: .center,
-                                   startRadius: look.hole * radius * 0.9, endRadius: radius)
-                }
-                .mask { Circle().fill(comet) }
-                .opacity(look.glow)
-                .blendMode(.plusLighter)
-            SpectrumDisc(diameter: diameter, scale: displayScale)
-                .mask { OrbAperture(hole: look.hole).fill(comet, style: FillStyle(eoFill: true)) }
-        }
-        .rotationEffect(.radians(look.angle))
-        .scaleEffect(look.swell)
-        .frame(width: diameter, height: diameter)
-        .accessibilityHidden(true)
     }
 }

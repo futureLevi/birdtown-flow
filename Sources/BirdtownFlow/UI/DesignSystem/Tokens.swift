@@ -54,12 +54,6 @@ enum Palette {
     /// Text drawn on a Signal blue fill.
     static let onAccent = Color.white
 
-    /// Deprecated names from the Ember era. They point at Signal blue so nothing breaks while
-    /// views migrate to `accent`, `primaryFill` or the spectrum.
-    static let ember = accent
-    static let emberSoft = accentSoft
-    static let onEmber = onAccent
-
     static let success = Color.adaptive(light: 0x1E8F63, dark: 0x4FD39A)
     static let successSoft = Color.adaptive(light: 0x1E8F63, lightAlpha: 0.10, dark: 0x4FD39A, darkAlpha: 0.16)
     static let warning = Color.adaptive(light: 0xB7791F, dark: 0xF0B04A)
@@ -77,8 +71,6 @@ enum Palette {
         /// The logo's warm-white bars.
         static let bar = Color(hex: 0xFEFCF8, alpha: 0.95)
         static let barIdle = Color.white.opacity(0.30)
-        /// Deprecated: the spectrum orb replaces the Ember record light.
-        static let ember = Color(hex: 0x8291FF)
         static let success = Color(hex: 0x4FD39A)
         static let danger = Color(hex: 0xFF6B7A)
     }

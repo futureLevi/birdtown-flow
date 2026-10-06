@@ -32,7 +32,6 @@ struct SpectrumOrb: View {
     var reduceMotionOverride: Bool?
 
     @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
-    @Environment(\.displayScale) private var displayScale
     @State private var dynamics = OrbDynamics()
 
     private var reduceMotion: Bool { reduceMotionOverride ?? systemReduceMotion }
@@ -55,11 +54,25 @@ struct SpectrumOrb: View {
     }
 
     private func orb(_ look: OrbDynamics.Look) -> some View {
+        SpectrumOrbFrame(look: look, diameter: diameter, showsHalo: showsHalo)
+    }
+}
+
+/// One frame of the orb, drawn from an explicit look. `SpectrumOrb` animates it; code that
+/// steps `OrbDynamics` itself (the README film) draws through this directly.
+struct SpectrumOrbFrame: View {
+    let look: OrbDynamics.Look
+    let diameter: CGFloat
+    var showsHalo = false
+
+    @Environment(\.displayScale) private var displayScale
+
+    var body: some View {
         // The comet tail: faint behind, full at the head, which leads clockwise.
         let comet = AngularGradient(colors: [.white.opacity(1 - 0.85 * look.tail), .white], center: .center)
         let radius = diameter / 2
 
-        return ZStack {
+        ZStack {
             if showsHalo {
                 // The light the orb casts: its own hues fading out to twice its radius, added
                 // to whatever is behind it so it blooms on the pill's navy. Painted rather than
@@ -79,6 +92,9 @@ struct SpectrumOrb: View {
         }
         .rotationEffect(.radians(look.angle))
         .scaleEffect(look.swell)
+        .frame(width: diameter, height: diameter)
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
     }
 }
 

@@ -37,6 +37,7 @@ Sources/BirdtownFlow             the macOS app
   Stores/                  DictionaryStore
   Support/                 Settings, AppPaths, Log, Permissions
   UI/DesignSystem          Tokens.swift, the only place literal design values live
+  UI/Brand                 the logo drawn in code (LogoPainter), icon export, SpectrumOrb
   UI/Components            shared controls
   UI/HUD                   floating pill
   UI/Main                  main window (Home, History, Dictionary, Snippets, Style)

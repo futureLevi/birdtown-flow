@@ -34,15 +34,15 @@ enum TextInjector {
         case noTextField
         /// Secure input is on (a password field, or a terminal's Secure Keyboard Entry).
         case secureInput
-        /// Accessibility isn't granted, so Murmur can't type.
+        /// Accessibility isn't granted, so the app can't type.
         case noAccessibility
 
         /// Short, human message for the HUD.
         var message: String {
             switch self {
-            case .noTextField: "Copied — no text field was focused"
-            case .secureInput: "Copied — secure input is on, so Birdtown Flow won't type"
-            case .noAccessibility: "Copied — allow Accessibility so Birdtown Flow can type"
+            case .noTextField: "Copied, since no text field was focused"
+            case .secureInput: "Copied, since secure input is on"
+            case .noAccessibility: "Copied. Allow Accessibility so Birdtown Flow can type"
             }
         }
     }

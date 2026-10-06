@@ -1,7 +1,7 @@
 import Foundation
 import os
 
-/// Bounds how long Murmur waits for work it doesn't control: a cloud request, the on-device
+/// Bounds how long the app waits for work it doesn't control: a cloud request, the on-device
 /// language model, a CoreML pass.
 ///
 /// Deliberately not a task group. A group can't return until every child has finished, so a

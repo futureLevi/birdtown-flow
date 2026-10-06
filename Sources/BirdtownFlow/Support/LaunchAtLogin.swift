@@ -1,7 +1,7 @@
 import Foundation
 import ServiceManagement
 
-/// Registers Murmur as a login item through `SMAppService`.
+/// Registers Birdtown Flow as a login item through `SMAppService`.
 ///
 /// The system owns this state — people can also flip it in System Settings → General →
 /// Login Items — so it is always read back from `SMAppService` rather than mirrored in
@@ -17,7 +17,7 @@ enum LaunchAtLogin {
         SMAppService.mainApp.status == .requiresApproval
     }
 
-    /// - Throws: the `SMAppService` error, e.g. when Murmur isn't running from an app bundle.
+    /// - Throws: the `SMAppService` error, e.g. when the app isn't running from an app bundle.
     static func setEnabled(_ enabled: Bool) throws {
         let status = SMAppService.mainApp.status
         if enabled {

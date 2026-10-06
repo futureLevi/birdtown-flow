@@ -1,8 +1,8 @@
 import Foundation
 
-/// Where Murmur keeps its files.
+/// Where Birdtown Flow keeps its files.
 ///
-///     ~/Library/Application Support/Murmur/
+///     ~/Library/Application Support/Birdtown Flow/
 ///         dictionary.txt     the dictionary, plain text, hand-editable
 ///         snippets.json
 ///         history/history.json

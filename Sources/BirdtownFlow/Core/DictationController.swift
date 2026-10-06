@@ -80,8 +80,8 @@ final class DictationController {
     private(set) var lastRecord: HistoryRecord?
     /// Whether the global hotkey is armed (false usually means Accessibility is missing).
     private(set) var isHotkeyActive = false
-    /// Why the last dictation went to the clipboard instead of being typed ("Copied — no text
-    /// field was focused"). Set alongside `.done`, cleared at idle. `nil` when it was typed.
+    /// Why the last dictation went to the clipboard instead of being typed ("Copied, since no
+    /// text field was focused"). Set alongside `.done`, cleared at idle. `nil` when it was typed.
     private(set) var notice: String?
 
     let settings: Settings
@@ -961,7 +961,7 @@ final class DictationController {
         return Int(seconds) * 1000 + Int(attoseconds / 1_000_000_000_000_000)
     }
 
-    /// When Murmur itself is frontmost (a History button was clicked), step aside so the
+    /// When the app itself is frontmost (a History button was clicked), step aside so the
     /// paste lands in the app the user was working in.
     private static func yieldFocusIfNeeded() async {
         guard NSApp.isActive else { return }
