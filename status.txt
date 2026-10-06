@@ -1,0 +1,7 @@
+sha=7b564826f974dadfb6f4e3ed3a581844e8904964
+branch=feat/sfpro-handsfree
+build=success
+test=success
+snapshots=success
+speech=success
+release=skipped
