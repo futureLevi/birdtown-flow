@@ -1,0 +1,6 @@
+sha=62641caf5f77437bae7977634ca9f20b938c108c
+branch=feat/core
+build=success
+test=success
+snapshots=success
+release=skipped
