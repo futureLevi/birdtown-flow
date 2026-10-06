@@ -1,0 +1,185 @@
+import FluidAudio
+import Foundation
+
+/// NVIDIA Parakeet TDT 0.6B (Ultra, v3 or v2), compiled to CoreML and run on the Neural
+/// Engine through FluidAudio's `AsrManager`.
+///
+/// Batch on purpose: at ~100× realtime a 30-second utterance resolves in a few hundred
+/// milliseconds after the key is released, and the recording on disk stays the single source
+/// of truth for Retry.
+actor ParakeetEngine: TranscriptionEngine {
+    nonisolated var displayName: String { name }
+
+    private let name: String
+    private let manager: AsrManager
+    private let booster: VocabularyBooster
+    private let boostingEnabled: @Sendable () async -> Bool
+
+    /// One transcription at a time. An actor alone doesn't guarantee that: `transcribe`
+    /// suspends while `AsrManager` works, and a second call could start in that gap. The
+    /// manager's progress session and shared buffers aren't reentrant, so callers queue here.
+    private var busy = false
+    private var waiters: [CheckedContinuation<Void, Never>] = []
+
+    /// FluidAudio rejects anything under 0.3 s (`ASRConstants.minimumAudioDurationSeconds`).
+    /// A quick "yes" can be shorter than that, so short clips are padded with silence to a
+    /// full second rather than failing; the encoder pads to its 15 s window regardless.
+    private static let minimumSamples = 16_000
+    private static let sampleRate = 16_000.0
+    /// Dictionaries are capped well below this upstream; it only bounds a pathological list.
+    private static let maximumBoostTerms = 100
+
+    private init(
+        name: String,
+        manager: AsrManager,
+        booster: VocabularyBooster,
+        boostingEnabled: @escaping @Sendable () async -> Bool
+    ) {
+        self.name = name
+        self.manager = manager
+        self.booster = booster
+        self.boostingEnabled = boostingEnabled
+    }
+
+    /// Loads an already-downloaded model and warms it up.
+    ///
+    /// The warm-up pass matters more than it looks: the first prediction on a freshly loaded
+    /// CoreML model pays for ANE program setup and buffer allocation. Paying it here, behind
+    /// the "Loading" state, keeps it off the user's first real dictation.
+    static func load(
+        _ version: AsrModelVersion,
+        name: String,
+        booster: VocabularyBooster,
+        boostingEnabled: @escaping @Sendable () async -> Bool
+    ) async throws -> ParakeetEngine {
+        let clock = ContinuousClock()
+        let started = clock.now
+        let models = try await AsrModels.load(from: AsrModels.defaultCacheDirectory(for: version), version: version)
+        let manager = AsrManager(config: .default, models: models)
+        let engine = ParakeetEngine(name: name, manager: manager, booster: booster, boostingEnabled: boostingEnabled)
+        let loaded = clock.now
+        try await engine.warmUp()
+        // Computed up front: os.Logger wants plain values in its interpolations.
+        let loadSeconds = Self.seconds(loaded - started)
+        let warmSeconds = Self.seconds(clock.now - loaded)
+        Log.speech.info("""
+            \(name, privacy: .public) loaded in \(loadSeconds, format: .fixed(precision: 2))s, \
+            warmed up in \(warmSeconds, format: .fixed(precision: 2))s
+            """)
+        return engine
+    }
+
+    func transcribe(_ samples: [Float], vocabulary: [String]) async throws -> String {
+        guard !samples.isEmpty else { return "" }
+
+        await acquire()
+        defer { release() }
+        try Task.checkCancellation()
+
+        let clock = ContinuousClock()
+        let started = clock.now
+        let audio = Self.padded(samples)
+        let layers = await manager.decoderLayerCount
+        var decoderState = try TdtDecoderState(decoderLayers: layers)
+        let result = try await manager.transcribe(audio, decoderState: &decoderState)
+        var text = result.text.trimmingCharacters(in: .whitespacesAndNewlines)
+        let recognized = clock.now
+
+        let terms = Self.boostTerms(from: vocabulary)
+        var boosted = false
+        if !text.isEmpty, !terms.isEmpty, let timings = result.tokenTimings, !timings.isEmpty,
+           await boostingEnabled(),
+           let rescored = await boost(text: text, timings: timings, audio: audio, terms: terms) {
+            text = rescored
+            boosted = true
+        }
+
+        let engineName = name
+        let audioSeconds = Double(samples.count) / Self.sampleRate
+        let totalSeconds = Self.seconds(clock.now - started)
+        let recognitionSeconds = Self.seconds(recognized - started)
+        let boostNote = boosted ? ", boosted" : ""
+        Log.speech.info("""
+            \(engineName, privacy: .public): \(audioSeconds, format: .fixed(precision: 1))s audio in \
+            \(totalSeconds, format: .fixed(precision: 2))s (recognition \(recognitionSeconds, format: .fixed(precision: 2))s\
+            \(boostNote, privacy: .public))
+            """)
+        return text
+    }
+
+    // MARK: - Boosting
+
+    /// Rescoring runs a second, smaller encoder over the audio. It's bounded so a wedged
+    /// CoreML pass can only ever cost the boost, never the dictation.
+    private func boost(text: String, timings: [TokenTiming], audio: [Float], terms: [String]) async -> String? {
+        let booster = self.booster
+        let audioSeconds = Double(audio.count) / Self.sampleRate
+        let budget = Duration.milliseconds(Int(1_000 + audioSeconds * 60))
+        do {
+            return try await HardDeadline.run(within: budget) {
+                await booster.rescore(text: text, tokenTimings: timings, samples: audio, terms: terms)
+            }
+        } catch {
+            Log.speech.info("vocabulary boosting skipped for this dictation (over its time budget)")
+            return nil
+        }
+    }
+
+    /// Trimmed, at least three characters (FluidAudio's own minimum: shorter terms collide with
+    /// ordinary words), deduplicated case-insensitively, and sorted so that the same dictionary
+    /// always yields the same list and the configured session is reused.
+    static func boostTerms(from vocabulary: [String]) -> [String] {
+        var seen = Set<String>()
+        var terms: [String] = []
+        for raw in vocabulary {
+            let term = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard term.count >= 3, seen.insert(term.lowercased()).inserted else { continue }
+            terms.append(term)
+            if terms.count == maximumBoostTerms { break }
+        }
+        return terms.sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
+    }
+
+    // MARK: - Helpers
+
+    private func warmUp() async throws {
+        // Near-silence rather than exact zeros: a log-mel front end can take log(0) on
+        // digital silence, and the point is to exercise the real path, not an edge case.
+        var noise = [Float](repeating: 0, count: Self.minimumSamples)
+        var seed: UInt32 = 0x9E37_79B9
+        for index in noise.indices {
+            seed = seed &* 1_664_525 &+ 1_013_904_223
+            noise[index] = (Float(seed >> 8) / Float(1 << 24) - 0.5) * 2e-4
+        }
+        let layers = await manager.decoderLayerCount
+        var decoderState = try TdtDecoderState(decoderLayers: layers)
+        _ = try await manager.transcribe(noise, decoderState: &decoderState)
+    }
+
+    private static func padded(_ samples: [Float]) -> [Float] {
+        guard samples.count < minimumSamples else { return samples }
+        return samples + [Float](repeating: 0, count: minimumSamples - samples.count)
+    }
+
+    private func acquire() async {
+        guard busy else {
+            busy = true
+            return
+        }
+        await withCheckedContinuation { waiters.append($0) }
+    }
+
+    private func release() {
+        if waiters.isEmpty {
+            busy = false
+        } else {
+            // Ownership passes straight to the next caller; `busy` stays true.
+            waiters.removeFirst().resume()
+        }
+    }
+
+    private static func seconds(_ duration: Duration) -> Double {
+        let parts = duration.components
+        return Double(parts.seconds) + Double(parts.attoseconds) / 1e18
+    }
+}
