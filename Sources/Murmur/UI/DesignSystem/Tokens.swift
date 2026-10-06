@@ -231,3 +231,60 @@ extension View {
             .foregroundStyle(Palette.inkTertiary)
     }
 }
+
+// MARK: - Setup surfaces: onboarding, Settings, menu bar
+
+extension Typography {
+    /// The product name on the welcome and About screens.
+    static let hero = Font.system(size: 40, weight: .semibold, design: .serif)
+    /// The paragraph under an onboarding title: a step larger than body, for calm reading.
+    static let lead = Font.system(size: 14)
+    /// Recent dictations in the menu bar window: the user's words, at menu scale.
+    static let transcriptSmall = Font.system(size: 13, design: .serif)
+    /// The symbol inside an onboarding step's glyph.
+    static let stepGlyph = Font.system(size: 22, weight: .regular)
+    /// Big keycaps in the shortcut picker.
+    static let keycapLarge = Font.system(size: 19, weight: .medium, design: .rounded)
+}
+
+extension Layout {
+    enum Setup {
+        static let appIcon: CGFloat = 96
+        static let aboutIcon: CGFloat = 64
+        static let stepGlyph: CGFloat = 52
+        /// Reading measure for onboarding copy.
+        static let measure: CGFloat = 420
+        /// Width of the controls under onboarding copy.
+        static let controlsWidth: CGFloat = 452
+        static let buttonMinWidth: CGFloat = 104
+        static let buttonHeight: CGFloat = 32
+        static let menuButtonHeight: CGFloat = 36
+        static let keyCap: CGFloat = 22
+        static let keyCapLarge: CGFloat = 48
+        /// The darker edge under a keycap that makes it read as a physical key.
+        static let keyLip: CGFloat = 1
+        static let progressDot: CGFloat = 6
+        static let progressDotActive: CGFloat = 20
+        static let progressBarHeight: CGFloat = 4
+        static let statusDot: CGFloat = 7
+        static let practiceFieldMinHeight: CGFloat = 76
+        static let menuBarWidth: CGFloat = 320
+        static let selectionStroke: CGFloat = 1.5
+        static let footerHeight: CGFloat = 72
+        static let pressedOpacity: Double = 0.84
+        static let disabledOpacity: Double = 0.4
+    }
+}
+
+extension Motion {
+    /// A confirmation landing: the check that pops in when a permission is granted.
+    static let confirm = Animation.spring(response: 0.36, dampingFraction: 0.62)
+    /// Pause on a just-granted permission before onboarding moves on by itself.
+    static let autoAdvanceDelay: Duration = .milliseconds(900)
+    /// How long a "Copied" confirmation stays visible.
+    static let confirmationHold: Duration = .milliseconds(1400)
+    /// How far onboarding content travels as it slides between steps.
+    static let stepTravel: CGFloat = 36
+    /// Press feedback for custom buttons.
+    static let pressedScale: CGFloat = 0.97
+}
