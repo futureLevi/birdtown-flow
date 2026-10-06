@@ -1,0 +1,7 @@
+sha=e4ab2cd054eaf66697960ba05e25cfb67d736146
+branch=feat/type-appearance
+build=success
+test=success
+snapshots=success
+speech=success
+release=skipped
