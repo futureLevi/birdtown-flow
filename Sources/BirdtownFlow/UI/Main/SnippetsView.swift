@@ -108,9 +108,10 @@ private struct SnippetCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.m) {
             HStack(alignment: .center, spacing: Spacing.s) {
-                Image(systemName: "waveform")
-                    .font(Typography.caption)
-                    .foregroundStyle(Palette.inkTertiary)
+                // The logo's bars mark what you say, as they do in the app's own mark.
+                LogoBars()
+                    .fill(Palette.inkTertiary)
+                    .frame(width: LogoBars.groupWidth(height: Layout.Main.triggerMark), height: Layout.Main.triggerMark)
                     .accessibilityHidden(true)
                 Text("“\(snippet.trigger)”")
                     .font(Typography.headline)

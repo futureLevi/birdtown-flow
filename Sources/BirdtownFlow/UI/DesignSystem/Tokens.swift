@@ -506,6 +506,8 @@ extension Layout {
         static let focusRing: CGFloat = 1.5
         /// Model download progress (`SpectrumProgressBar`).
         static let progressBarHeight: CGFloat = 4
+        /// The logo's bars beside a snippet's trigger.
+        static let triggerMark: CGFloat = 10
     }
 }
 

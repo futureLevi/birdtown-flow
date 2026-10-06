@@ -275,8 +275,8 @@ struct HistoryView: View {
             .padding(.leading, Spacing.l)
             .padding(.trailing, Spacing.s)
             .padding(.vertical, Spacing.s)
-            .background(Capsule(style: .continuous).fill(Palette.surface))
-            .overlay(Capsule(style: .continuous).strokeBorder(Palette.hairline, lineWidth: Layout.Main.hairline))
+            .background(Capsule().fill(Palette.surface))
+            .overlay(Capsule().strokeBorder(Palette.hairline, lineWidth: Layout.Main.hairline))
             .elevation(Elevation.raised)
             .padding(.bottom, Spacing.xl)
             .transition(reduceMotion ? AnyTransition.opacity

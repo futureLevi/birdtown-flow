@@ -12,9 +12,9 @@ struct SpectrumProgressBar: View {
         GeometryReader { proxy in
             let fraction = min(max(progress ?? 0, 0), 1)
             ZStack(alignment: .leading) {
-                Capsule(style: .continuous).fill(Palette.sunken)
+                Capsule().fill(Palette.sunken)
                 if fraction > 0 {
-                    Capsule(style: .continuous)
+                    Capsule()
                         .fill(Spectrum.progress)
                         .frame(width: max(proxy.size.height, proxy.size.width * fraction))
                 }

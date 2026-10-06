@@ -22,7 +22,7 @@ struct Badge: View {
         .foregroundStyle(foreground)
         .padding(.horizontal, Spacing.s)
         .padding(.vertical, Spacing.xxs)
-        .background(Capsule(style: .continuous).fill(background))
+        .background(Capsule().fill(background))
         .fixedSize()
     }
 

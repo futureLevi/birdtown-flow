@@ -278,9 +278,10 @@ struct SidebarStatusView: View {
         case .notDownloaded:
             HStack(spacing: Spacing.s) {
                 StatusDot(color: Palette.inkTertiary)
-                Text("Model not downloaded")
+                Text("No model yet")
                     .font(Typography.caption)
                     .foregroundStyle(Palette.inkSecondary)
+                    .lineLimit(1)
                 Spacer(minLength: 0)
                 Button("Get") { Task { await model.models.prepare() } }
                     .buttonStyle(.flowGhost)
@@ -290,9 +291,10 @@ struct SidebarStatusView: View {
         case .failed(let message):
             HStack(spacing: Spacing.s) {
                 StatusDot(color: Palette.danger)
-                Text("Model didn't load")
+                Text("Model failed")
                     .font(Typography.caption)
                     .foregroundStyle(Palette.inkSecondary)
+                    .lineLimit(1)
                     .help(message)
                 Spacer(minLength: 0)
                 Button("Retry") { Task { await model.models.prepare() } }

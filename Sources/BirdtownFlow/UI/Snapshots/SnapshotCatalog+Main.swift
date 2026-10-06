@@ -79,6 +79,7 @@ extension SnapshotCatalog {
                 }
                 StatTile(label: "Pace", value: 152, unit: "wpm", caption: "3.4× faster than typing")
             }
+            .fixedSize(horizontal: false, vertical: true)
             SearchField(text: .constant("migration"), prompt: "Search words or apps")
                 .frame(width: Layout.Main.searchFieldWidth)
         }

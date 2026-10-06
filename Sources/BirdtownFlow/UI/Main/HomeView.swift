@@ -270,7 +270,7 @@ private struct FirstRunCard: View {
                         .font(Typography.display)
                         .tracking(Tracking.display)
                         .foregroundStyle(Palette.ink)
-                    Text("Click into any text field — a message, an email, a doc — then:")
+                    Text("Click into any text field, like a message, an email or a doc, then:")
                         .font(Typography.body)
                         .foregroundStyle(Palette.inkSecondary)
                 }

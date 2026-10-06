@@ -51,7 +51,7 @@ private struct FlowButtonBody: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        let shape = Capsule(style: .continuous)
+        let shape = Capsule()
         configuration.label
             .font(controlSize == .small ? Typography.caption : Typography.bodyEmphasis)
             .lineLimit(1)

@@ -49,10 +49,10 @@ private struct FilterChipBody: View {
             .foregroundStyle(isSelected ? Palette.accent : (isHovered ? Palette.ink : Palette.inkSecondary))
             .padding(.horizontal, Spacing.m)
             .frame(height: Layout.Main.chipHeight)
-            .background(Capsule(style: .continuous).fill(fill))
-            .overlay(Capsule(style: .continuous).strokeBorder(isSelected ? Palette.accent : Palette.hairline,
+            .background(Capsule().fill(fill))
+            .overlay(Capsule().strokeBorder(isSelected ? Palette.accent : Palette.hairline,
                                                               lineWidth: Layout.Main.hairline))
-            .contentShape(Capsule(style: .continuous))
+            .contentShape(Capsule())
             .scaleEffect(configuration.isPressed && !reduceMotion ? Interaction.pressedScale : 1)
             .onHover { isHovered = $0 }
             .animation(Motion.resolve(Motion.snappy, reduceMotion: reduceMotion), value: isSelected)

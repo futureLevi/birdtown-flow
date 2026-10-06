@@ -141,7 +141,8 @@ private struct StyleBubble: View {
                             topTrailingRadius: Radius.l,
                             style: .continuous
                         )
-                        .fill(Palette.sunken)
+                        // On the blue wash of a chosen card, a white bubble stays crisp.
+                        .fill(isSelected ? Palette.surface : Palette.sunken)
                     )
                 Text(style.summary)
                     .font(Typography.caption)
