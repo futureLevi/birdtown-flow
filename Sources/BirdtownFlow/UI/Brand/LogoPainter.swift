@@ -130,6 +130,13 @@ enum LogoPainter {
         cg.restoreGState()
     }
 
+    /// The disc's hues alone, at full strength to the edge, without the deeper rim or the
+    /// muted centre. For the light the orb casts around itself.
+    static func drawHues(in cg: CGContext, centre: CGPoint, radius: CGFloat, rotation: CGFloat = 0) {
+        guard radius > 0 else { return }
+        drawWedges(in: cg, centre: centre, radius: radius, stops: Colors.hueMid, rotation: rotation)
+    }
+
     private static func drawTile(in cg: CGContext, tile: CGRect) {
         let side = tile.width
         // Light from the top-left: a vertical fall-off, tilted slightly so the left is lighter.

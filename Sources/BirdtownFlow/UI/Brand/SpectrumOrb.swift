@@ -55,28 +55,29 @@ struct SpectrumOrb: View {
     }
 
     private func orb(_ look: OrbDynamics.Look) -> some View {
-        let disc = SpectrumDisc(diameter: diameter, scale: displayScale)
-            .mask {
-                // The comet tail: faint behind, full at the head, which leads clockwise.
-                OrbAperture(hole: look.hole).fill(
-                    AngularGradient(colors: [.white.opacity(1 - 0.85 * look.tail), .white], center: .center),
-                    style: FillStyle(eoFill: true)
-                )
-            }
-            .rotationEffect(.radians(look.angle))
+        // The comet tail: faint behind, full at the head, which leads clockwise.
+        let comet = AngularGradient(colors: [.white.opacity(1 - 0.85 * look.tail), .white], center: .center)
+        let radius = diameter / 2
 
         return ZStack {
             if showsHalo {
-                // Added light, not paint: on the pill's navy the glow brightens what's behind
-                // it, so it blooms instead of reading as a dark rim.
-                disc
-                    .blur(radius: diameter * 0.45)
-                    .scaleEffect(1.45)
+                // The light the orb casts: its own hues fading out to twice its radius, added
+                // to whatever is behind it so it blooms on the pill's navy. Painted rather than
+                // blurred, so it costs nothing per frame and looks the same in snapshots.
+                SpectrumHalo(diameter: diameter, scale: displayScale)
+                    // No light from inside the ring's hole while thinking.
+                    .mask {
+                        RadialGradient(colors: [.clear, .white], center: .center,
+                                       startRadius: look.hole * radius * 0.9, endRadius: radius)
+                    }
+                    .mask { Circle().fill(comet) }
                     .opacity(look.glow)
                     .blendMode(.plusLighter)
             }
-            disc
+            SpectrumDisc(diameter: diameter, scale: displayScale)
+                .mask { OrbAperture(hole: look.hole).fill(comet, style: FillStyle(eoFill: true)) }
         }
+        .rotationEffect(.radians(look.angle))
         .scaleEffect(look.swell)
     }
 }
@@ -208,9 +209,26 @@ struct SpectrumDisc: View {
     }
 }
 
+/// The orb's glow: its hues, full under the orb and fading out to twice its radius. The view
+/// is twice the orb's diameter, centred on it.
+struct SpectrumHalo: View {
+    let diameter: CGFloat
+    let scale: CGFloat
+
+    var body: some View {
+        if let image = SpectrumDiscCache.halo(pixels: Int((diameter * 2 * max(scale, 1)).rounded(.up))) {
+            Image(decorative: image, scale: 1)
+                .resizable()
+                .interpolation(.high)
+                .frame(width: diameter * 2, height: diameter * 2)
+        }
+    }
+}
+
 @MainActor
 enum SpectrumDiscCache {
-    private static var images: [Int: CGImage] = [:]
+    private static var discs: [Int: CGImage] = [:]
+    private static var halos: [Int: CGImage] = [:]
 
     /// Painted at twice the device size: the orb swells and turns, and downsampling keeps its
     /// edge clean at every angle.
@@ -219,7 +237,42 @@ enum SpectrumDiscCache {
     }
 
     static func image(pixels: Int) -> CGImage? {
-        if let cached = images[pixels] { return cached }
+        cached(pixels, in: &discs) { cg, side in
+            LogoPainter.drawDisc(in: cg, centre: CGPoint(x: side / 2, y: side / 2), radius: side / 2)
+        }
+    }
+
+    /// `pixels` is the halo's full width: twice the orb's diameter.
+    static func halo(pixels: Int) -> CGImage? {
+        cached(max(8, pixels), in: &halos) { cg, side in
+            let centre = CGPoint(x: side / 2, y: side / 2)
+            let outer = side / 2
+            cg.beginTransparencyLayer(auxiliaryInfo: nil)
+            LogoPainter.drawHues(in: cg, centre: centre, radius: outer)
+            // Keep the hues in proportion to a soft falloff: steady under the orb (radius
+            // `outer / 2`), then a Gaussian out to the edge.
+            cg.setBlendMode(.destinationIn)
+            let stops: [(CGFloat, CGFloat)] = stride(from: 0.0, through: 1.0, by: 0.05).map { s in
+                let r = CGFloat(s)
+                let t = max(0, (r - 0.5) / 0.5)
+                return (r, 0.85 * CGFloat(exp(-Double(t * t) * 6)))
+            }
+            if let falloff = CGGradient(
+                colorsSpace: CGColorSpace(name: CGColorSpace.sRGB),
+                colors: stops.map { CGColor(gray: 0, alpha: $0.1) } as CFArray,
+                locations: stops.map(\.0)
+            ) {
+                cg.drawRadialGradient(falloff, startCenter: centre, startRadius: 0, endCenter: centre, endRadius: outer,
+                                      options: [])
+            }
+            cg.endTransparencyLayer()
+        }
+    }
+
+    private static func cached(
+        _ pixels: Int, in store: inout [Int: CGImage], paint: (CGContext, CGFloat) -> Void
+    ) -> CGImage? {
+        if let hit = store[pixels] { return hit }
         guard
             let space = CGColorSpace(name: CGColorSpace.sRGB),
             let cg = CGContext(
@@ -232,10 +285,10 @@ enum SpectrumDiscCache {
         // LogoPainter draws y-down; bitmap contexts are y-up.
         cg.translateBy(x: 0, y: side)
         cg.scaleBy(x: 1, y: -1)
-        LogoPainter.drawDisc(in: cg, centre: CGPoint(x: side / 2, y: side / 2), radius: side / 2)
+        paint(cg, side)
         let image = cg.makeImage()
-        if images.count > 24 { images.removeAll() }
-        images[pixels] = image
+        if store.count > 24 { store.removeAll() }
+        store[pixels] = image
         return image
     }
 }
