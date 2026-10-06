@@ -57,6 +57,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 return
             }
 
+            // `Murmur --transcribe <file.wav> [engine]` is the speech smoke test CI runs.
+            if let index = args.firstIndex(of: "--transcribe") {
+                let path = index + 1 < args.count ? args[index + 1] : ""
+                let engine = index + 2 < args.count ? args[index + 2] : nil
+                Task { @MainActor in
+                    let code = await SpeechSmokeTest.run(file: URL(fileURLWithPath: path), engine: engine)
+                    exit(code)
+                }
+                return
+            }
+
             let model = AppModel.shared
             model.start()
             HUDController.shared.attach(to: model)

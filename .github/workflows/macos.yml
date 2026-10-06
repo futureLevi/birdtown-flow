@@ -72,6 +72,25 @@ jobs:
           kill $pid 2>/dev/null || true
           ls -la snapshots | head -80
 
+      - name: Cache speech models
+        if: steps.build.outcome == 'success'
+        uses: actions/cache@v4
+        with:
+          path: ~/Library/Application Support/FluidAudio/Models
+          key: fluidaudio-models-ultra-v1
+
+      - name: Speech smoke test
+        id: speech
+        if: steps.build.outcome == 'success'
+        continue-on-error: true
+        timeout-minutes: 15
+        run: |
+          say -o speech.aiff "Hello Murmur. This is a quick test of the dictation pipeline, um, running entirely on this Mac."
+          afconvert -f WAVE -d LEI16@16000 -c 1 speech.aiff speech.wav
+          set -o pipefail
+          .build/debug/Murmur --transcribe "$PWD/speech.wav" parakeetUltra 2>&1 | tee speech.log
+          grep -qi "dictation" speech.log
+
       - name: Build release app
         id: release
         if: github.ref == 'refs/heads/main' && steps.build.outcome == 'success'
@@ -91,7 +110,7 @@ jobs:
           BR="snapshots/${GITHUB_REF_NAME}"
           rm -rf out && mkdir -p out
           [ -d snapshots ] && cp -R snapshots out/ || true
-          for f in build.log test.log snapshots.log release.log icon.log; do [ -f "$f" ] && cp "$f" out/ || true; done
+          for f in build.log test.log snapshots.log release.log icon.log speech.log; do [ -f "$f" ] && cp "$f" out/ || true; done
           grep -E "error:" build.log | sort -u | head -200 > out/errors.txt 2>/dev/null || true
           {
             echo "sha=${GITHUB_SHA}"
@@ -99,6 +118,7 @@ jobs:
             echo "build=${{ steps.build.outcome }}"
             echo "test=${{ steps.test.outcome }}"
             echo "snapshots=${{ steps.snapshots.outcome }}"
+            echo "speech=${{ steps.speech.outcome }}"
             echo "release=${{ steps.release.outcome }}"
           } > out/status.txt
           if [ -f dist/Murmur.zip ]; then cp dist/Murmur.zip out/; fi
