@@ -424,6 +424,10 @@ private final class CaptureSink: @unchecked Sendable {
         let inputFormat = buffer.format
         if converter == nil || converter?.inputFormat != inputFormat {
             converter = AVAudioConverter(from: inputFormat, to: outputFormat)
+            // Mix every input channel into the mono output. At its default the converter keeps
+            // only the first channel, so a mic on input 2 of an audio interface would record
+            // silence and every dictation would be dropped as silent.
+            converter?.downmix = true
         }
         guard let converter else { return nil }
 
