@@ -865,12 +865,13 @@ private struct PracticeStep: View {
                 TextField(
                     "Practice",
                     text: $text,
-                    prompt: Text("Your words will appear here.").foregroundStyle(Palette.inkTertiary),
+                    prompt: Text("Your words will appear here."),
                     axis: .vertical
                 )
+                    // No foreground style here: on macOS it would also paint the prompt, which
+                    // must keep the system placeholder colour to read as empty.
                     .textFieldStyle(.plain)
                     .font(Typography.transcript)
-                    .foregroundStyle(Palette.ink)
                     .lineSpacing(Spacing.transcriptLine)
                     .lineLimit(3, reservesSpace: true)
                     .focused($focused)
