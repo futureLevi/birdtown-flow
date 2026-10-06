@@ -1,40 +1,74 @@
 // swift-tools-version: 6.2
 import PackageDescription
 
+// Murmur — push-to-talk dictation for macOS.
+//
+// Three layers:
+//   MurmurDictionary  correction rules (platform-neutral, shared contract with windows/)
+//   MurmurKit         everything that is pure logic: text pipeline, styles, snippets,
+//                     history persistence, stats, AI-polish prompts and HTTP clients.
+//                     Foundation-only, so it builds and tests on Linux as well as macOS.
+//   Murmur            the macOS app: audio, hotkeys, speech engines, injection, UI.
+//
+// The app target only exists on macOS. On Linux the manifest drops it (and the FluidAudio
+// dependency it needs) so `swift test` exercises the logic layers anywhere.
+
+#if os(macOS)
+let platformDependencies: [Package.Dependency] = [
+    // Parakeet (TDT v3 / Ultra) as CoreML on the Neural Engine, plus CTC vocabulary boosting.
+    // `traits: []` opts out of FluidAudio's prebuilt NeMo text-normalization engine, which
+    // only TTS and ITN use — it would otherwise need embedding as a binary framework.
+    .package(url: "https://github.com/FluidInference/FluidAudio.git", from: "0.17.5", traits: []),
+]
+#else
+let platformDependencies: [Package.Dependency] = []
+#endif
+
+var targets: [Target] = [
+    .target(
+        name: "MurmurDictionary",
+        path: "Sources/MurmurDictionary",
+        swiftSettings: [.swiftLanguageMode(.v6)]
+    ),
+    .target(
+        name: "MurmurKit",
+        dependencies: ["MurmurDictionary"],
+        path: "Sources/MurmurKit",
+        swiftSettings: [.swiftLanguageMode(.v6)]
+    ),
+    .testTarget(
+        name: "MurmurDictionaryTests",
+        dependencies: ["MurmurDictionary"],
+        path: "Tests/MurmurDictionaryTests",
+        resources: [.copy("dictionary-test-vectors.json")],
+        swiftSettings: [.swiftLanguageMode(.v6)]
+    ),
+    .testTarget(
+        name: "MurmurKitTests",
+        dependencies: ["MurmurKit", "MurmurDictionary"],
+        path: "Tests/MurmurKitTests",
+        swiftSettings: [.swiftLanguageMode(.v6)]
+    ),
+]
+
+#if os(macOS)
+targets.append(
+    .executableTarget(
+        name: "Murmur",
+        dependencies: [
+            "MurmurDictionary",
+            "MurmurKit",
+            .product(name: "FluidAudio", package: "FluidAudio"),
+        ],
+        path: "Sources/Murmur",
+        swiftSettings: [.swiftLanguageMode(.v6)]
+    )
+)
+#endif
+
 let package = Package(
-    name: "MurmurYouTube",
+    name: "Murmur",
     platforms: [.macOS(.v26)],
-    dependencies: [
-        // Parakeet TDT as CoreML on the Neural Engine. Optional at runtime — Apple's
-        // SpeechTranscriber remains the default and needs no dependency at all.
-        .package(url: "https://github.com/FluidInference/FluidAudio.git", from: "0.15.6")
-    ],
-    targets: [
-        // The dictionary is its own target so it can be tested directly, and because its
-        // behaviour is a cross-platform contract: the Windows app reimplements this logic in
-        // C#, and both sides run the same vectors in shared/dictionary-test-vectors.json.
-        .target(
-            name: "MurmurDictionary",
-            path: "Sources/MurmurDictionary",
-            swiftSettings: [.swiftLanguageMode(.v6)]
-        ),
-        .executableTarget(
-            name: "MurmurYouTube",
-            dependencies: [
-                "MurmurDictionary",
-                .product(name: "FluidAudio", package: "FluidAudio"),
-            ],
-            path: "Sources/MurmurYouTube",
-            swiftSettings: [
-                .swiftLanguageMode(.v6)
-            ]
-        ),
-        .testTarget(
-            name: "MurmurDictionaryTests",
-            dependencies: ["MurmurDictionary"],
-            path: "Tests/MurmurDictionaryTests",
-            resources: [.copy("dictionary-test-vectors.json")],
-            swiftSettings: [.swiftLanguageMode(.v6)]
-        ),
-    ]
+    dependencies: platformDependencies,
+    targets: targets
 )

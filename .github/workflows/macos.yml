@@ -1,52 +1,133 @@
 name: macOS
 
-# Runs the shared dictionary contract against the Swift implementation. The Windows
-# workflow runs the identical vectors against the C# one. Both must be green for the two
-# implementations to be considered in agreement — that pairing is the whole point.
+# Builds and tests the app on every push, renders every screen to PNG, and publishes the
+# results (logs + snapshots, and on main the zipped .app) to the `snapshots/<branch>` branch
+# so they can be reviewed without a Mac. On main it also refreshes the `nightly` release.
 
 on:
   push:
-    branches: [main]
-    paths: ['Sources/**', 'Tests/**', 'shared/**', 'Package.swift', '.github/workflows/macos.yml']
+    branches-ignore: ['snapshots/**']
   pull_request:
-    paths: ['Sources/**', 'Tests/**', 'shared/**', 'Package.swift', '.github/workflows/macos.yml']
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
+
+concurrency:
+  group: macos-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  dictionary-contract:
-    name: Dictionary contract
-    runs-on: macos-15
-    timeout-minutes: 20
+  build:
+    name: Build, test, snapshot
+    runs-on: macos-26
+    timeout-minutes: 45
 
     steps:
       - uses: actions/checkout@v4
 
-      # Package.swift declares swift-tools-version 6.2, but the runner defaults to an
-      # older Xcode (Swift 6.1) and fails to even parse the manifest. Select the newest
-      # Xcode present rather than pinning a version that will age out of the image.
-      - name: Select the newest Xcode
+      - name: Select Xcode
         run: |
-          latest=$(ls -d /Applications/Xcode*.app | sort -V | tail -1)
+          latest=$(ls -d /Applications/Xcode_26*.app | sort -V | tail -1)
           echo "Using $latest"
           sudo xcode-select -s "$latest/Contents/Developer"
+          swift --version
 
-      - name: Swift version
-        run: swift --version
+      - name: Cache SwiftPM
+        uses: actions/cache@v4
+        with:
+          path: |
+            .build
+            ~/Library/Caches/org.swift.swiftpm
+          key: spm-${{ runner.os }}-${{ hashFiles('Package.swift') }}-v2
+          restore-keys: spm-${{ runner.os }}-
 
-      # The app target needs macOS 26 and the Speech framework, which the runner image
-      # does not have. The dictionary target is deliberately platform-neutral, so it — and
-      # the contract that matters here — builds and tests anywhere.
-      - name: Test the dictionary target
-        run: swift test --filter VectorTests
-
-      - name: Confirm the vectors on both sides are identical
+      - name: Build
+        id: build
         run: |
-          if ! diff -q shared/dictionary-test-vectors.json Tests/MurmurDictionaryTests/dictionary-test-vectors.json; then
-            echo "::error::The Swift test copy of the vectors has drifted from shared/."
-            echo "Run: cp shared/dictionary-test-vectors.json Tests/MurmurDictionaryTests/"
-            exit 1
-          fi
-          echo "Vectors match."
+          echo "::add-matcher::.github/swift-problem-matcher.json"
+          set -o pipefail
+          swift build 2>&1 | tee build.log
+          echo "::remove-matcher owner=swift-compiler::"
+
+      - name: Test
+        id: test
+        if: steps.build.outcome == 'success'
+        run: |
+          set -o pipefail
+          swift test 2>&1 | tee test.log
+
+      - name: Render snapshots
+        id: snapshots
+        if: steps.build.outcome == 'success'
+        continue-on-error: true
+        run: |
+          mkdir -p snapshots
+          ( .build/debug/Murmur --render-snapshots "$PWD/snapshots" 2>&1 | tee snapshots.log ) &
+          pid=$!
+          for i in $(seq 1 180); do
+            kill -0 $pid 2>/dev/null || break
+            sleep 1
+          done
+          kill $pid 2>/dev/null || true
+          ls -la snapshots | head -80
+
+      - name: Build release app
+        id: release
+        if: github.ref == 'refs/heads/main' && steps.build.outcome == 'success'
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          make app CONFIG=release STAGE="$PWD/dist" 2>&1 | tee release.log
+          cd dist && ditto -c -k --sequesterRsrc --keepParent Murmur.app Murmur.zip
+          ls -la
+
+      - name: Publish results branch
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          BR="snapshots/${GITHUB_REF_NAME}"
+          rm -rf out && mkdir -p out
+          [ -d snapshots ] && cp -R snapshots out/ || true
+          for f in build.log test.log snapshots.log release.log; do [ -f "$f" ] && cp "$f" out/ || true; done
+          grep -E "error:" build.log | sort -u | head -200 > out/errors.txt 2>/dev/null || true
+          {
+            echo "sha=${GITHUB_SHA}"
+            echo "branch=${GITHUB_REF_NAME}"
+            echo "build=${{ steps.build.outcome }}"
+            echo "test=${{ steps.test.outcome }}"
+            echo "snapshots=${{ steps.snapshots.outcome }}"
+            echo "release=${{ steps.release.outcome }}"
+          } > out/status.txt
+          if [ -f dist/Murmur.zip ]; then cp dist/Murmur.zip out/; fi
+          cat out/status.txt
+          cd out
+          git init -q
+          git checkout -q -b "$BR"
+          git add -A
+          git -c user.name="murmur-ci" -c user.email="ci@murmur.invalid" commit -q -m "CI ${GITHUB_SHA::8} on ${GITHUB_REF_NAME}"
+          git push -q -f "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "$BR"
+
+      - name: Update nightly release
+        if: github.ref == 'refs/heads/main' && steps.release.outcome == 'success'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete nightly --yes --cleanup-tag 2>/dev/null || true
+          gh release create nightly dist/Murmur.zip \
+            --title "Murmur nightly" \
+            --notes "Built from ${GITHUB_SHA::8}. Unzip, move Murmur.app to Applications, then right-click → Open the first time (it is not notarized)." \
+            --prerelease --target "${GITHUB_SHA}"
+
+      - name: Fail if build or tests failed
+        if: steps.build.outcome != 'success' || steps.test.outcome != 'success'
+        run: exit 1
+
+  dictionary-contract:
+    name: Dictionary contract (vectors in sync)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Confirm the vectors on both sides are identical
+        run: diff -q shared/dictionary-test-vectors.json Tests/MurmurDictionaryTests/dictionary-test-vectors.json

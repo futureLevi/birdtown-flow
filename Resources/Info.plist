@@ -3,49 +3,47 @@
 <plist version="1.0">
 <dict>
 	<key>CFBundleName</key>
-	<string>Murmur YouTube</string>
+	<string>Murmur</string>
 	<key>CFBundleDisplayName</key>
-	<string>Murmur YouTube</string>
-	<!-- Deliberately space-free and distinct from the existing app's `murmur`, so that
-	     `pkill`/`killall` on either app can never match the other. -->
+	<string>Murmur</string>
 	<key>CFBundleExecutable</key>
-	<string>MurmurYouTube</string>
-	<!-- Separate from the existing Murmur's com.murmur.client: distinct TCC identity,
-	     distinct preferences domain, no shared state of any kind. -->
+	<string>Murmur</string>
 	<key>CFBundleIdentifier</key>
-	<string>ai.pivotstudio.murmur-youtube</string>
+	<string>io.github.futurelevi.murmur</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
-	<string>0.1.0</string>
+	<string>1.0.0</string>
 	<key>CFBundleVersion</key>
 	<string>1</string>
 	<key>CFBundleIconFile</key>
 	<string>AppIcon</string>
-	<!-- Lets the dashboard's Clear button call back into the app. A file:// page can't
-	     write files or talk to a process, but it can follow a custom-scheme link. -->
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>
 			<key>CFBundleURLName</key>
-			<string>ai.pivotstudio.murmur-youtube</string>
+			<string>io.github.futurelevi.murmur</string>
 			<key>CFBundleURLSchemes</key>
 			<array>
-				<string>murmuryt</string>
+				<string>murmur</string>
 			</array>
 		</dict>
 	</array>
+	<key>LSApplicationCategoryType</key>
+	<string>public.app-category.productivity</string>
 	<key>LSMinimumSystemVersion</key>
 	<string>26.0</string>
-	<!-- A regular app: dock icon, app menu, standard windows. The menu bar item remains
-	     for status and the hotkey while you're working elsewhere, but it is secondary. -->
 	<key>LSUIElement</key>
 	<false/>
 	<key>NSHighResolutionCapable</key>
 	<true/>
+	<key>NSHumanReadableCopyright</key>
+	<string>Murmur. Speech stays on your Mac.</string>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>Murmur YouTube listens while you hold the push-to-talk key so it can turn your speech into text.</string>
+	<string>Murmur listens only while you hold your dictation key, and turns what you say into text.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
-	<string>Murmur YouTube transcribes your speech on-device to insert text where you're typing.</string>
+	<string>Murmur can use Apple's on-device speech recognition to transcribe what you say.</string>
+	<key>NSAppleEventsUsageDescription</key>
+	<string>Murmur uses this to paste your dictation into the app you're working in.</string>
 </dict>
 </plist>
