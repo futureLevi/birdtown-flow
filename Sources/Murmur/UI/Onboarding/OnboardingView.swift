@@ -862,19 +862,25 @@ private struct PracticeStep: View {
                         .multilineTextAlignment(.center)
                         .padding(.bottom, Spacing.xs)
                 }
-                TextField(
-                    "Practice",
-                    text: $text,
-                    prompt: Text("Your words will appear here."),
-                    axis: .vertical
-                )
-                    // No foreground style here: on macOS it would also paint the prompt, which
-                    // must keep the system placeholder colour to read as empty.
+                // The placeholder is drawn here rather than as the field's prompt: a vertical
+                // macOS text field ignores the prompt's colour, and in full ink it reads as if
+                // something had already been typed.
+                TextField("Practice", text: $text, prompt: Text(""), axis: .vertical)
                     .textFieldStyle(.plain)
                     .font(Typography.transcript)
+                    .foregroundStyle(Palette.ink)
                     .lineSpacing(Spacing.transcriptLine)
                     .lineLimit(3, reservesSpace: true)
                     .focused($focused)
+                    .overlay(alignment: .topLeading) {
+                        if text.isEmpty {
+                            Text("Your words will appear here.")
+                                .font(Typography.transcript)
+                                .foregroundStyle(Palette.inkTertiary)
+                                .allowsHitTesting(false)
+                                .accessibilityHidden(true)
+                        }
+                    }
                     .padding(Spacing.m)
                     .background(RoundedRectangle(cornerRadius: Radius.m, style: .continuous).fill(Palette.sunken))
                     .overlay(
