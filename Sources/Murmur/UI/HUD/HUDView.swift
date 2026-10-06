@@ -80,8 +80,13 @@ struct HUDView: View {
                            actions: actions)
                 .transition(contentTransition)
         case .done:
-            HUDDrawnCheck(animated: frozenTime == nil && !reduceMotion)
-                .transition(contentTransition)
+            if let notice = state.notice {
+                HUDMessage(message: notice, tone: .success, animated: frozenTime == nil && !reduceMotion)
+                    .transition(contentTransition)
+            } else {
+                HUDDrawnCheck(animated: frozenTime == nil && !reduceMotion)
+                    .transition(contentTransition)
+            }
         case .cancelled:
             Image(systemName: "xmark")
                 .font(Typography.hudGlyph)
@@ -89,7 +94,7 @@ struct HUDView: View {
                 .transition(contentTransition)
                 .accessibilityHidden(true)
         case .failed:
-            HUDFailure(message: state.failureMessage ?? "")
+            HUDMessage(message: state.failureMessage ?? "", tone: .failure, animated: false)
                 .transition(contentTransition)
         }
     }
@@ -210,36 +215,50 @@ struct HUDKeycap: View {
 /// Done: a check that draws itself. A nod, not a celebration.
 struct HUDDrawnCheck: View {
     let animated: Bool
+    var side: CGFloat = Layout.HUD.checkSize
+    /// Film frames pass the stroke's progress explicitly instead of animating it.
+    var fixedProgress: CGFloat?
     @State private var progress: CGFloat = 0
 
     var body: some View {
-        let side = Layout.HUD.checkSize
+        let side = self.side
         Path { path in
             path.move(to: CGPoint(x: side * 0.16, y: side * 0.54))
             path.addLine(to: CGPoint(x: side * 0.41, y: side * 0.78))
             path.addLine(to: CGPoint(x: side * 0.86, y: side * 0.24))
         }
-        .trim(from: 0, to: animated ? progress : 1)
+        .trim(from: 0, to: fixedProgress ?? (animated ? progress : 1))
         .stroke(Palette.HUD.success, style: StrokeStyle(lineWidth: Layout.HUD.checkStroke, lineCap: .round, lineJoin: .round))
         .frame(width: side, height: side)
         .onAppear {
-            guard animated else { return }
+            guard animated, fixedProgress == nil else { return }
             withAnimation(Motion.checkDraw) { progress = 1 }
         }
         .accessibilityHidden(true)
     }
 }
 
-struct HUDFailure: View {
+/// One line of text beside a glyph: the failure message, or the "copied" notice beside a
+/// drawn check.
+struct HUDMessage: View {
+    enum Tone { case success, failure }
+
     let message: String
+    let tone: Tone
+    let animated: Bool
 
     var body: some View {
         HStack(spacing: Spacing.s) {
             ZStack {
-                Circle().fill(Palette.HUD.dangerSoft)
-                Image(systemName: "exclamationmark")
-                    .font(Typography.hudGlyph)
-                    .foregroundStyle(Palette.HUD.danger)
+                Circle().fill(tone == .success ? Palette.HUD.successSoft : Palette.HUD.dangerSoft)
+                switch tone {
+                case .success:
+                    HUDDrawnCheck(animated: animated, side: Layout.HUD.noticeCheckSize)
+                case .failure:
+                    Image(systemName: "exclamationmark")
+                        .font(Typography.hudGlyph)
+                        .foregroundStyle(Palette.HUD.danger)
+                }
             }
             .frame(width: Layout.HUD.failureGlyph, height: Layout.HUD.failureGlyph)
             .accessibilityHidden(true)

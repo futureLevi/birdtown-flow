@@ -30,10 +30,34 @@ enum SnapshotRenderer {
                 await render(shot, appearance: appearance, to: url)
             }
         }
+        await renderSequence(SnapshotCatalog.frames, into: directory.appendingPathComponent("frames"),
+                             settle: .milliseconds(40), transparent: false)
+        await renderSequence(SnapshotCatalog.media, into: directory.appendingPathComponent("media"),
+                             settle: .milliseconds(300), transparent: true)
         print("[snapshots] done")
     }
 
-    private static func render(_ shot: Shot, appearance: NSAppearance.Name, to url: URL) async {
+    /// Frame sequences (the README animation) and exported stills: one appearance (dark), a
+    /// short settle because the views are fully determined by their inputs, and file names
+    /// taken verbatim from the shot.
+    private static func renderSequence(_ shots: [Shot], into directory: URL, settle: Duration,
+                                       transparent: Bool) async {
+        guard !shots.isEmpty else { return }
+        try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        print("[snapshots] rendering \(shots.count) into \(directory.lastPathComponent)/")
+        for shot in shots {
+            await render(shot, appearance: .darkAqua, settle: settle, transparent: transparent,
+                         to: directory.appendingPathComponent("\(shot.name).png"))
+        }
+    }
+
+    private static func render(
+        _ shot: Shot,
+        appearance: NSAppearance.Name,
+        settle: Duration = .milliseconds(700),
+        transparent: Bool = false,
+        to url: URL
+    ) async {
         let rect = NSRect(origin: .zero, size: shot.size)
         let hosting = NSHostingView(
             rootView: shot.view
@@ -47,14 +71,14 @@ enum SnapshotRenderer {
         window.isReleasedWhenClosed = false
         // Opaque, like a real window: a clear backdrop shows through translucent sidebars and
         // leaves dark strips at the edges of full-window shots.
-        window.backgroundColor = NSColor(Palette.canvas)
+        window.backgroundColor = transparent ? .clear : NSColor(Palette.canvas)
         window.contentView = hosting
         window.setFrameOrigin(NSPoint(x: 40, y: 40))
         window.orderFrontRegardless()
 
         // Let SwiftUI lay out, load images and settle any appear animations.
         hosting.layoutSubtreeIfNeeded()
-        try? await Task.sleep(for: .milliseconds(700))
+        try? await Task.sleep(for: settle)
         hosting.layoutSubtreeIfNeeded()
         hosting.display()
 

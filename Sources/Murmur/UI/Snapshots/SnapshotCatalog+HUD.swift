@@ -28,6 +28,23 @@ extension SnapshotCatalog {
     }
 }
 
+// The README animation (rendered into `frames/`) and exported stills (`media/`).
+extension SnapshotCatalog {
+    static var frames: [SnapshotRenderer.Shot] {
+        (0..<HUDFilm.frameCount).map { index in
+            SnapshotRenderer.Shot(String(format: "hud-frame-%03d", index), size: HUDFilm.size) {
+                HUDFilmFrame(index: index)
+            }
+        }
+    }
+
+    static var media: [SnapshotRenderer.Shot] {
+        [SnapshotRenderer.Shot("icon", size: CGSize(width: 512, height: 512)) {
+            AppIconArtwork(size: 512, showsShadow: false)
+        }]
+    }
+}
+
 /// A named, frozen HUD state for review.
 @MainActor
 struct HUDPreview {
@@ -58,6 +75,8 @@ struct HUDPreview {
             HUDPreview(name: "polishing", state: HUDState(phase: .polishing)),
             HUDPreview(name: "transcribing-reduce-motion", state: HUDState(phase: .transcribing), reduceMotion: true),
             HUDPreview(name: "done", state: HUDState(phase: .done)),
+            HUDPreview(name: "done-copied", state: HUDState(phase: .done,
+                                                           notice: "Copied — no text field was focused. Press ⌘V to paste.")),
             HUDPreview(name: "cancelled", state: HUDState(phase: .cancelled)),
             HUDPreview(name: "failed", state: HUDState(phase: .failed(
                 "Couldn't reach the speech model. Your recording is saved in History, so you can retry."))),
