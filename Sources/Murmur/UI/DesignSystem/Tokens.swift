@@ -180,6 +180,11 @@ extension Palette.HUD {
     static let emberGlow = Color(hex: 0xFF6A3D, alpha: 0.55)
     static let dangerSoft = Color(hex: 0xFF6B5E, alpha: 0.18)
     static let onEmber = Color.white
+    /// The pill's shadow is built from stacked layers (see `HUDPillBody`), shaped by
+    /// `Elevation.hud`'s radius and offset.
+    static let shadow = Color.black
+    static let shadowLayerOpacity: Double = 0.018
+    static let contactShadowOpacity: Double = 0.18
 }
 
 extension Layout.HUD {

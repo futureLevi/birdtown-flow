@@ -21,7 +21,7 @@ final class HUDController {
     func attach(to app: AppModel) {
         guard panel == nil else { return }
         let model = HUDModel(controller: app.controller, settings: app.settings)
-        let panel = HUDPanel()
+        let panel = HUDPanel(size: Layout.HUD.panelSize)
         let hosting = HUDHostingView(rootView: HUDRootView(model: model))
         // The panel's size is fixed; never let SwiftUI's ideal size resize it.
         hosting.sizingOptions = []
@@ -225,9 +225,9 @@ struct HUDRootView: View {
 
 /// Borderless, transparent, non-activating, and unable to become key or main.
 final class HUDPanel: NSPanel {
-    init() {
+    init(size: CGSize) {
         super.init(
-            contentRect: NSRect(origin: .zero, size: Layout.HUD.panelSize),
+            contentRect: NSRect(origin: .zero, size: size),
             styleMask: [.borderless, .nonactivatingPanel],
             backing: .buffered,
             defer: false

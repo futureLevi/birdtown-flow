@@ -180,9 +180,9 @@ struct HUDLiveContent: View {
     let state: HUDState
     let size: CGSize
     let frozenTime: Double?
+    let reduceMotion: Bool
     let actions: HUDActions
 
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var springs = BarSprings()
 
     var body: some View {

@@ -17,10 +17,14 @@ struct HUDView: View {
     let state: HUDState
     /// Snapshots pass a fixed time so animated states render deterministically.
     var frozenTime: Double?
+    /// Snapshots pin this so both motion variants can be reviewed whatever the host's setting.
+    var reduceMotionOverride: Bool?
     var actions = HUDActions()
 
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
     @State private var failureCount = 0
+
+    private var reduceMotion: Bool { reduceMotionOverride ?? systemReduceMotion }
 
     var body: some View {
         let size = HUDMetrics.pillSize(for: state)
@@ -40,15 +44,12 @@ struct HUDView: View {
 
     private func pill(size: CGSize, kind: HUDState.Kind) -> some View {
         ZStack {
-            Capsule(style: .continuous)
-                .fill(Palette.HUD.fill)
+            HUDPillBody()
             content(size: size, kind: kind)
-            Capsule(style: .continuous)
-                .strokeBorder(Palette.HUD.stroke, lineWidth: 1)
+                .frame(width: size.width, height: size.height)
+                .clipShape(Capsule(style: .continuous))
         }
         .frame(width: size.width, height: size.height)
-        .clipShape(Capsule(style: .continuous))
-        .elevation(Elevation.hud)
         .opacity(opacity(for: kind))
         .scaleEffect(scale(for: kind), anchor: .bottom)
         .phaseAnimator(Motion.shakeOffsets, trigger: failureCount) { content, offset in
@@ -71,7 +72,8 @@ struct HUDView: View {
             HUDIdleHint(keyName: state.keyName, action: actions.activate)
                 .transition(contentTransition)
         case .listening, .handsFree, .transcribing, .polishing:
-            HUDLiveContent(state: state, size: size, frozenTime: frozenTime, actions: actions)
+            HUDLiveContent(state: state, size: size, frozenTime: frozenTime, reduceMotion: reduceMotion,
+                           actions: actions)
                 .transition(contentTransition)
         case .done:
             HUDDrawnCheck(animated: frozenTime == nil && !reduceMotion)
@@ -107,6 +109,41 @@ struct HUDView: View {
         case .cancelled: 0.92
         default: 1
         }
+    }
+}
+
+/// The capsule and its shadow, drawn in one `Canvas`. The shadow is stacked translucent
+/// capsules rather than a layer shadow, so it is identical on screen and in offscreen
+/// snapshots (where layer shadows render flipped), and it costs a dozen fills.
+struct HUDPillBody: View {
+    var body: some View {
+        Canvas { context, canvasSize in
+            let margin = Layout.HUD.shadowMargin
+            let pill = CGRect(origin: .zero, size: canvasSize).insetBy(dx: margin, dy: margin)
+            let shadow = Elevation.hud
+            let layers = 14
+            for layer in 1...layers {
+                let fraction = CGFloat(layer) / CGFloat(layers)
+                let rect = pill
+                    .insetBy(dx: -shadow.radius * fraction, dy: -shadow.radius * fraction)
+                    .offsetBy(dx: 0, dy: shadow.y * fraction)
+                context.fill(Path(roundedRect: rect, cornerRadius: rect.height / 2, style: .continuous),
+                             with: .color(Palette.HUD.shadow.opacity(Palette.HUD.shadowLayerOpacity)))
+            }
+            // A tight contact shadow so the pill sits on the screen rather than floating in fog.
+            let contact = pill.insetBy(dx: -1, dy: -1).offsetBy(dx: 0, dy: 1)
+            context.fill(Path(roundedRect: contact, cornerRadius: contact.height / 2, style: .continuous),
+                         with: .color(Palette.HUD.shadow.opacity(Palette.HUD.contactShadowOpacity)))
+
+            let capsule = Path(roundedRect: pill, cornerRadius: pill.height / 2, style: .continuous)
+            context.fill(capsule, with: .color(Palette.HUD.fill))
+            let edge = pill.insetBy(dx: 0.5, dy: 0.5)
+            context.stroke(Path(roundedRect: edge, cornerRadius: edge.height / 2, style: .continuous),
+                           with: .color(Palette.HUD.stroke), lineWidth: 1)
+        }
+        .padding(-Layout.HUD.shadowMargin)
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
     }
 }
 

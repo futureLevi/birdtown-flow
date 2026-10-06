@@ -33,9 +33,11 @@ extension SnapshotCatalog {
 struct HUDPreview {
     let name: String
     let state: HUDState
+    /// CI runners may have Reduce Motion on; previews pin it so the full design is reviewed.
+    var reduceMotion = false
 
     static let sceneSize = CGSize(width: 480, height: 160)
-    static let sheetSize = CGSize(width: 960, height: 960)
+    static let sheetSize = CGSize(width: 960, height: 1120)
     /// Any fixed instant: animated states render deterministically at it.
     static let time: Double = 812_345_678.4
 
@@ -54,6 +56,7 @@ struct HUDPreview {
                                                                     hover: .stop)),
             HUDPreview(name: "transcribing", state: HUDState(phase: .transcribing)),
             HUDPreview(name: "polishing", state: HUDState(phase: .polishing)),
+            HUDPreview(name: "transcribing-reduce-motion", state: HUDState(phase: .transcribing), reduceMotion: true),
             HUDPreview(name: "done", state: HUDState(phase: .done)),
             HUDPreview(name: "cancelled", state: HUDState(phase: .cancelled)),
             HUDPreview(name: "failed", state: HUDState(phase: .failed(
@@ -61,12 +64,14 @@ struct HUDPreview {
         ]
     }
 
-    /// Speech-like level history: syllables under a slower phrase envelope.
+    /// Speech-like level history: syllables under a slower phrase envelope, with the newest
+    /// samples (drawn in the centre) near the phrase's peak.
     static func levels(peak: Float) -> [Float] {
-        (0..<DictationController.levelHistoryCount).map { index in
-            let x = Double(index)
-            let phrase = 0.55 + 0.45 * sin(x * 0.23 + 0.8)
-            let syllable = abs(sin(x * 0.83 + 1.3))
+        let count = DictationController.levelHistoryCount
+        return (0..<count).map { index in
+            let age = Double(count - 1 - index)
+            let phrase = 0.62 + 0.38 * cos(age * 0.21)
+            let syllable = abs(sin(age * 0.83 + 1.1))
             return Float(min(1, Double(peak) * phrase * (0.3 + 0.7 * syllable)))
         }
     }
@@ -79,7 +84,7 @@ struct HUDPreviewScene: View {
     var body: some View {
         ZStack(alignment: .bottom) {
             HUDBackdrop()
-            HUDView(state: preview.state, frozenTime: HUDPreview.time)
+            HUDView(state: preview.state, frozenTime: HUDPreview.time, reduceMotionOverride: preview.reduceMotion)
                 .padding(.bottom, HUDBackdrop.dockVisible + Layout.HUD.bottomInset - Layout.HUD.shadowMargin)
         }
         .frame(width: HUDPreview.sceneSize.width, height: HUDPreview.sceneSize.height)
