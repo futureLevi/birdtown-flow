@@ -9,9 +9,14 @@ public final class SnippetStore {
 
     private let fileURL: URL?
 
+    /// Set when `snippets.json` couldn't be read and was copied aside before being replaced.
+    public private(set) var quarantinedFile: URL?
+
     public init(fileURL: URL) {
         self.fileURL = fileURL
-        snippets = Self.load(from: fileURL)
+        let loaded = Self.load(from: fileURL)
+        snippets = loaded.snippets
+        quarantinedFile = loaded.quarantined
     }
 
     /// In-memory only — for previews, snapshots and tests.
@@ -56,10 +61,17 @@ public final class SnippetStore {
         try? data.write(to: fileURL, options: .atomic)
     }
 
-    private static func load(from url: URL) -> [Snippet] {
-        guard let data = try? Data(contentsOf: url) else { return [] }
+    /// A file that exists but won't decode is copied aside first, so the next save can never
+    /// silently overwrite snippets the user spent time writing.
+    private static func load(from url: URL) -> (snippets: [Snippet], quarantined: URL?) {
+        guard FileManager.default.fileExists(atPath: url.path) else { return ([], nil) }
+        guard let data = try? Data(contentsOf: url) else { return ([], HistoryStore.quarantine(url)) }
+        if data.isEmpty { return ([], nil) }
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
-        return (try? decoder.decode([Snippet].self, from: data)) ?? []
+        guard let snippets = try? decoder.decode([Snippet].self, from: data) else {
+            return ([], HistoryStore.quarantine(url))
+        }
+        return (snippets, nil)
     }
 }

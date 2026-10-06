@@ -1,4 +1,5 @@
 import Foundation
+import MurmurDictionary
 import Observation
 
 /// Every dictation, newest first, persisted as JSON with its audio alongside.
@@ -21,10 +22,16 @@ public final class HistoryStore {
 
     @ObservationIgnored private var saveTask: Task<Void, Never>?
 
+    /// Set when `history.json` couldn't be read in full and was copied aside, so the UI can
+    /// say so. The copy's name is `history.corrupt-<date>.json`, next to the original.
+    public private(set) var quarantinedFile: URL?
+
     public init(directory: URL) {
         self.directory = directory
         try? FileManager.default.createDirectory(at: recordingsDirectory, withIntermediateDirectories: true)
-        records = Self.load(from: fileURL)
+        let loaded = Self.load(from: fileURL)
+        records = loaded.records
+        quarantinedFile = loaded.quarantined
     }
 
     /// An empty, unsaved store — for previews, snapshots and tests.
@@ -53,6 +60,23 @@ public final class HistoryStore {
                 || record.rawText.range(of: needle, options: [.caseInsensitive, .diacriticInsensitive]) != nil
                 || (record.context?.appName?.range(of: needle, options: [.caseInsensitive]) != nil)
         }
+    }
+
+    /// Records grouped by calendar day, newest day first, newest record first within a day.
+    public nonisolated static func groupedByDay(
+        _ records: [HistoryRecord], calendar: Calendar = .current
+    ) -> [(day: Date, records: [HistoryRecord])] {
+        let byDay = Dictionary(grouping: records) { calendar.startOfDay(for: $0.createdAt) }
+        return byDay.keys.sorted(by: >).map { day in
+            (day: day, records: byDay[day, default: []].sorted { $0.createdAt > $1.createdAt })
+        }
+    }
+
+    /// Instance spelling of `HistoryStore.groupedByDay(_:calendar:)`, for views holding a store.
+    public nonisolated func groupedByDay(
+        _ records: [HistoryRecord], calendar: Calendar = .current
+    ) -> [(day: Date, records: [HistoryRecord])] {
+        Self.groupedByDay(records, calendar: calendar)
     }
 
     /// Where a record's audio lives, if it still exists on disk.
@@ -159,11 +183,91 @@ public final class HistoryStore {
         try? data.write(to: url, options: .atomic)
     }
 
-    nonisolated private static func load(from url: URL) -> [HistoryRecord] {
-        guard let data = try? Data(contentsOf: url) else { return [] }
+    /// Reads `history.json` without ever losing it.
+    ///
+    /// Records are decoded one at a time, each first with the current schema and then with a
+    /// lenient one that defaults fields older versions didn't write — so one bad record, or an
+    /// old file, doesn't cost the rest. If anything still can't be read, the original file is
+    /// copied aside before the next save replaces it.
+    nonisolated static func load(from url: URL) -> (records: [HistoryRecord], quarantined: URL?) {
+        guard FileManager.default.fileExists(atPath: url.path) else { return ([], nil) }
+        guard let data = try? Data(contentsOf: url) else {
+            // Unreadable (permissions, I/O): keep a copy if possible and start fresh.
+            return ([], quarantine(url))
+        }
+        if data.isEmpty { return ([], nil) }
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
-        let records = (try? decoder.decode([HistoryRecord].self, from: data)) ?? []
-        return records.sorted { $0.createdAt > $1.createdAt }
+        guard let entries = try? decoder.decode([LossyRecord].self, from: data) else {
+            return ([], quarantine(url))
+        }
+        let records = entries.compactMap(\.record)
+        let quarantined = records.count < entries.count ? quarantine(url) : nil
+        return (records.sorted { $0.createdAt > $1.createdAt }, quarantined)
+    }
+
+    /// Copies a damaged file to `<name>.corrupt-<timestamp>.json` beside it.
+    nonisolated static func quarantine(_ url: URL, now: Date = Date()) -> URL? {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = TimeZone(identifier: "UTC")
+        formatter.dateFormat = "yyyyMMdd-HHmmss"
+        let base = url.deletingPathExtension().lastPathComponent
+        var destination = url.deletingLastPathComponent()
+            .appendingPathComponent("\(base).corrupt-\(formatter.string(from: now)).json")
+        var suffix = 2
+        while FileManager.default.fileExists(atPath: destination.path) {
+            destination = url.deletingLastPathComponent()
+                .appendingPathComponent("\(base).corrupt-\(formatter.string(from: now))-\(suffix).json")
+            suffix += 1
+        }
+        do {
+            try FileManager.default.copyItem(at: url, to: destination)
+            return destination
+        } catch {
+            return nil
+        }
+    }
+}
+
+/// One array element of `history.json`, decoded as forgivingly as possible.
+private struct LossyRecord: Decodable {
+    var record: HistoryRecord?
+
+    init(from decoder: Decoder) throws {
+        if let current = try? HistoryRecord(from: decoder) {
+            record = current
+        } else {
+            record = try? LegacyRecord(from: decoder).record
+        }
+    }
+}
+
+/// Every field optional except the ones a record is meaningless without, for files written
+/// before a field existed.
+private struct LegacyRecord: Decodable {
+    var id: UUID
+    var createdAt: Date
+    var context: AppContext?
+    var style: WritingStyle?
+    var engine: String?
+    var rawText: String?
+    var finalText: String?
+    var polishedBy: PolishProvider?
+    var corrections: [AppliedCorrection]?
+    var snippets: [String]?
+    var audioFileName: String?
+    var audioDuration: Double?
+    var timings: DictationTimings?
+    var outcome: DictationOutcome?
+    var errorMessage: String?
+
+    var record: HistoryRecord {
+        HistoryRecord(
+            id: id, createdAt: createdAt, context: context, style: style, engine: engine ?? "",
+            rawText: rawText ?? "", finalText: finalText ?? "", polishedBy: polishedBy,
+            corrections: corrections ?? [], snippets: snippets ?? [], audioFileName: audioFileName,
+            audioDuration: audioDuration ?? 0, timings: timings ?? DictationTimings(),
+            outcome: outcome ?? .inserted, errorMessage: errorMessage)
     }
 }
