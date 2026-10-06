@@ -77,6 +77,7 @@ struct SettingsPane<Content: View>: View {
         .scrollBounceBehavior(.basedOnSize)
         .frame(width: Layout.settingsWidth, height: Layout.Setup.settingsHeight)
         .background(Palette.canvas)
+        .tint(Palette.accent)
     }
 }
 

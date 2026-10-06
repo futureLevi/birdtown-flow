@@ -384,12 +384,13 @@ extension Layout {
         static let pressedOpacity: Double = 0.84
         static let disabledOpacity: Double = 0.4
         static let hairline: CGFloat = 1
-        /// The spectrum's light behind the welcome icon: wider than the icon and blurred to a
-        /// glow, faint enough that the icon stays the hero.
-        static let heroOrb: CGFloat = 200
-        static let heroOrbBlur: CGFloat = 34
-        static let heroOrbOpacityLight: Double = 0.42
-        static let heroOrbOpacityDark: Double = 0.55
+        /// The spectrum's light behind the welcome icon: an orb wider than the icon, faded out
+        /// from the tile's edge (`heroGlowInner`) to its rim, faint enough that the icon stays
+        /// the hero. Painted, not blurred, so snapshots show what people see.
+        static let heroOrb: CGFloat = 216
+        static let heroGlowInner: CGFloat = 46
+        static let heroOrbOpacityLight: Double = 0.5
+        static let heroOrbOpacityDark: Double = 0.62
     }
 }
 

@@ -281,7 +281,7 @@ private struct SecondaryButtonBody: View {
         configuration.label
             .font(Typography.bodyEmphasis)
             .foregroundStyle(Palette.ink)
-            .padding(.horizontal, Spacing.m + Spacing.xxs)
+            .padding(.horizontal, Spacing.l)
             .frame(minHeight: Layout.Setup.buttonHeight - Spacing.xs)
             .background(shape.fill(hovering && isEnabled ? Palette.surfaceHover : Palette.surface))
             .overlay(shape.strokeBorder(Palette.hairlineStrong))

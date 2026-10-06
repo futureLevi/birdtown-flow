@@ -789,7 +789,7 @@ struct AboutSettingsPane: View {
                         if let url = URL(string: credit.link) {
                             Link(destination: url) {
                                 Image(systemName: "arrow.up.right.square")
-                                    .foregroundStyle(Palette.inkSecondary)
+                                    .foregroundStyle(Palette.accent)
                             }
                             .help(credit.link)
                             .accessibilityLabel("Open \(credit.title) website")

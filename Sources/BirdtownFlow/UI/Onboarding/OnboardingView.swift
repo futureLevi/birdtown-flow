@@ -464,15 +464,22 @@ private struct WelcomeStep: View {
     }
 
     /// Faint and soft, so the icon stays the hero: it should read as the icon's colours
-    /// lighting the page, not as a second object.
+    /// lighting the page, not as a second object. The orb fades out from the tile's edge to
+    /// its rim; the tile hides its centre. No halo: it blooms on navy but smudges porcelain.
     private var heroLight: some View {
         SpectrumOrb(
             mode: .live,
             diameter: Layout.Setup.heroOrb,
-            showsHalo: true,
             phase: preview == nil ? nil : Motion.snapshotOrbPhase
         )
-        .blur(radius: Layout.Setup.heroOrbBlur)
+        .mask {
+            RadialGradient(
+                colors: [.white, .clear],
+                center: .center,
+                startRadius: Layout.Setup.heroGlowInner,
+                endRadius: Layout.Setup.heroOrb / 2
+            )
+        }
         .opacity(colorScheme == .dark ? Layout.Setup.heroOrbOpacityDark : Layout.Setup.heroOrbOpacityLight)
     }
 }
