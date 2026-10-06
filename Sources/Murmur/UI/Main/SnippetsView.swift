@@ -1,0 +1,258 @@
+import MurmurKit
+import SwiftUI
+
+/// Snippets: say a trigger phrase, get the expansion typed.
+struct SnippetsView: View {
+    @Environment(AppModel.self) private var model
+    @State private var query = ""
+    @State private var isAdding = false
+    @State private var editing: Snippet?
+
+    var body: some View {
+        let store = model.snippets
+        let uses = Self.useCounts(in: model.history.records)
+        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        let visible = store.snippets.filter {
+            trimmed.isEmpty || $0.trigger.localizedStandardContains(trimmed) || $0.expansion.localizedStandardContains(trimmed)
+        }
+        ScrollView {
+            VStack(alignment: .leading, spacing: Spacing.xxl) {
+                PageHeader(title: "Snippets", subtitle: "Say the trigger and Murmur types the expansion.") {
+                    Button {
+                        isAdding = true
+                    } label: {
+                        Label("New Snippet", systemImage: "plus")
+                    }
+                    .buttonStyle(.murmurPrimary)
+                    .keyboardShortcut("n", modifiers: .command)
+                    .help("Add a snippet (⌘N)")
+                }
+
+                if store.snippets.isEmpty {
+                    EmptyState(
+                        symbol: "text.badge.plus",
+                        title: "Stop typing the same things",
+                        message: "Your scheduling link, your address, a sign-off. Give each a short phrase "
+                            + "and say it whenever you need it."
+                    ) {
+                        Button("New Snippet") { isAdding = true }
+                            .buttonStyle(.murmurSecondary)
+                    }
+                    .cardSurface()
+                } else {
+                    SearchField(text: $query, prompt: "Search snippets")
+                        .frame(maxWidth: Layout.Main.searchFieldWidth)
+                    if visible.isEmpty {
+                        EmptyState(
+                            symbol: "magnifyingglass",
+                            title: "No snippets match “\(trimmed)”",
+                            message: "Search looks at triggers and expansions."
+                        )
+                    } else {
+                        LazyVGrid(
+                            columns: [GridItem(.adaptive(minimum: Layout.Main.snippetCardMinWidth), spacing: Spacing.m)],
+                            alignment: .leading,
+                            spacing: Spacing.m
+                        ) {
+                            ForEach(visible) { snippet in
+                                SnippetCard(
+                                    snippet: snippet,
+                                    uses: uses[snippet.trigger.lowercased()] ?? 0,
+                                    onToggle: { isOn in
+                                        var updated = snippet
+                                        updated.isEnabled = isOn
+                                        model.snippets.update(updated)
+                                    },
+                                    onEdit: { editing = snippet },
+                                    onDelete: { model.snippets.delete(ids: [snippet.id]) }
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+            .pageLayout()
+        }
+        .sheet(isPresented: $isAdding) {
+            SnippetEditorSheet(original: nil) { model.snippets.add($0) }
+        }
+        .sheet(item: $editing) { snippet in
+            SnippetEditorSheet(original: snippet) { model.snippets.update($0) }
+        }
+    }
+
+    /// How often each trigger has expanded, from history.
+    static func useCounts(in records: [HistoryRecord]) -> [String: Int] {
+        var counts: [String: Int] = [:]
+        for record in records {
+            for trigger in record.snippets {
+                counts[trigger.lowercased(), default: 0] += 1
+            }
+        }
+        return counts
+    }
+}
+
+private struct SnippetCard: View {
+    let snippet: Snippet
+    let uses: Int
+    let onToggle: (Bool) -> Void
+    let onEdit: () -> Void
+    let onDelete: () -> Void
+
+    @State private var isHovered = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Spacing.m) {
+            HStack(alignment: .center, spacing: Spacing.s) {
+                Image(systemName: "waveform")
+                    .font(Typography.caption)
+                    .foregroundStyle(Palette.inkTertiary)
+                    .accessibilityHidden(true)
+                Text("“\(snippet.trigger)”")
+                    .font(Typography.headline)
+                    .foregroundStyle(Palette.ink)
+                    .lineLimit(1)
+                Spacer(minLength: Spacing.s)
+                Toggle("Enabled", isOn: Binding(get: { snippet.isEnabled }, set: { onToggle($0) }))
+                    .toggleStyle(.switch)
+                    .controlSize(.mini)
+                    .labelsHidden()
+                    .help(snippet.isEnabled ? "Turn off without deleting" : "Turn back on")
+            }
+            Text(snippet.expansion)
+                .font(Typography.transcript)
+                .foregroundStyle(Palette.inkSecondary)
+                .lineSpacing(Spacing.transcriptLine)
+                .lineLimit(Layout.Main.transcriptLines)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .opacity(snippet.isEnabled ? 1 : Interaction.dimmedOpacity)
+            Spacer(minLength: 0)
+            HStack(spacing: Spacing.xxs) {
+                Text(uses == 0 ? "Not used yet" : (uses == 1 ? "Used once" : "Used \(uses) times"))
+                    .font(Typography.caption)
+                    .foregroundStyle(Palette.inkTertiary)
+                Spacer(minLength: Spacing.s)
+                HStack(spacing: Spacing.xxs) {
+                    IconButton(symbol: "pencil", label: "Edit") { onEdit() }
+                    IconButton(symbol: "trash", label: "Delete") { onDelete() }
+                }
+                .opacity(isHovered ? 1 : 0)
+                .allowsHitTesting(isHovered)
+            }
+        }
+        .padding(Spacing.l)
+        .frame(maxWidth: .infinity, minHeight: Layout.Main.snippetCardMinHeight, alignment: .topLeading)
+        .cardSurface(isHovered: isHovered)
+        .contentShape(Rectangle())
+        .onHover { isHovered = $0 }
+        .onTapGesture(count: 2) { onEdit() }
+        .animation(Motion.resolve(Motion.fadeFast, reduceMotion: reduceMotion), value: isHovered)
+        .contextMenu {
+            Button("Edit…", systemImage: "pencil") { onEdit() }
+            Button(snippet.isEnabled ? "Turn Off" : "Turn On", systemImage: "power") { onToggle(!snippet.isEnabled) }
+            Divider()
+            Button("Delete", systemImage: "trash", role: .destructive) { onDelete() }
+        }
+    }
+}
+
+/// Add or edit a snippet. Warns when another snippet already uses the trigger.
+struct SnippetEditorSheet: View {
+    let original: Snippet?
+    let onSave: (Snippet) -> Void
+
+    @State private var trigger: String
+    @State private var expansion: String
+    @Environment(AppModel.self) private var model
+    @Environment(\.dismiss) private var dismiss
+
+    init(original: Snippet?, onSave: @escaping (Snippet) -> Void) {
+        self.original = original
+        self.onSave = onSave
+        _trigger = State(initialValue: original?.trigger ?? "")
+        _expansion = State(initialValue: original?.expansion ?? "")
+    }
+
+    private var trimmedTrigger: String { trigger.trimmingCharacters(in: .whitespacesAndNewlines) }
+
+    private var hasConflict: Bool {
+        model.snippets.hasConflict(trigger: trimmedTrigger, excluding: original?.id)
+    }
+
+    private var canSave: Bool {
+        !trimmedTrigger.isEmpty && !expansion.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !hasConflict
+    }
+
+    var body: some View {
+        let shape = RoundedRectangle(cornerRadius: Radius.s, style: .continuous)
+        VStack(alignment: .leading, spacing: Spacing.l) {
+            Text(original == nil ? "New Snippet" : "Edit Snippet")
+                .font(Typography.title)
+                .tracking(Tracking.title)
+                .foregroundStyle(Palette.ink)
+
+            VStack(alignment: .leading, spacing: Spacing.xs) {
+                LabeledInput(label: "When you say", text: $trigger, prompt: "my calendly link")
+                if hasConflict {
+                    HStack(alignment: .firstTextBaseline, spacing: Spacing.xs) {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .foregroundStyle(Palette.warning)
+                        Text("Another snippet already uses “\(trimmedTrigger)”. Pick a different phrase.")
+                            .foregroundStyle(Palette.inkSecondary)
+                    }
+                    .font(Typography.caption)
+                } else {
+                    Text("A short phrase you wouldn't say by accident works best.")
+                        .font(Typography.caption)
+                        .foregroundStyle(Palette.inkTertiary)
+                }
+            }
+
+            VStack(alignment: .leading, spacing: Spacing.xs) {
+                Text("Murmur types")
+                    .font(Typography.caption)
+                    .foregroundStyle(Palette.inkSecondary)
+                TextEditor(text: $expansion)
+                    .font(Typography.transcript)
+                    .foregroundStyle(Palette.ink)
+                    .scrollContentBackground(.hidden)
+                    .padding(Spacing.s)
+                    .frame(height: Layout.Main.expansionEditorHeight)
+                    .background(shape.fill(Palette.sunken))
+                    .overlay(shape.strokeBorder(Palette.hairline, lineWidth: Layout.Main.hairline))
+                    .accessibilityLabel("Expansion")
+            }
+
+            HStack(spacing: Spacing.s) {
+                Spacer()
+                Button("Cancel") { dismiss() }
+                    .buttonStyle(.murmurSecondary)
+                    .keyboardShortcut(.cancelAction)
+                Button(original == nil ? "Add" : "Save") {
+                    save()
+                    dismiss()
+                }
+                .buttonStyle(.murmurPrimary)
+                .keyboardShortcut(.defaultAction)
+                .disabled(!canSave)
+            }
+            .padding(.top, Spacing.xs)
+        }
+        .padding(Spacing.xxl)
+        .frame(width: Layout.Main.sheetWidth)
+        .background(Palette.canvas)
+    }
+
+    private func save() {
+        if let original {
+            var updated = original
+            updated.trigger = trimmedTrigger
+            updated.expansion = expansion
+            onSave(updated)
+        } else {
+            onSave(Snippet(trigger: trimmedTrigger, expansion: expansion))
+        }
+    }
+}

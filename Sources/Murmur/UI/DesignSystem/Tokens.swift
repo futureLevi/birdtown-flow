@@ -231,3 +231,85 @@ extension View {
             .foregroundStyle(Palette.inkTertiary)
     }
 }
+
+// MARK: - Main window and shared components
+//
+// Namespaced so tokens added by other areas can't collide with these on merge.
+
+extension Layout {
+    enum Main {
+        /// Line widths: resting card edge, selected ring.
+        static let hairline: CGFloat = 1
+        static let selectionRing: CGFloat = 1.5
+        static let buttonHeight: CGFloat = 30
+        static let buttonHeightSmall: CGFloat = 24
+        static let buttonHeightLarge: CGFloat = 38
+        static let iconButton: CGFloat = 28
+        static let chipHeight: CGFloat = 28
+        static let searchFieldHeight: CGFloat = 32
+        static let searchFieldWidth: CGFloat = 260
+        static let keyCapHeight: CGFloat = 22
+        static let keyCapMinWidth: CGFloat = 26
+        static let keyCapHeightLarge: CGFloat = 44
+        static let keyCapMinWidthLarge: CGFloat = 56
+        /// The darker lip along a keycap's bottom edge — it's what makes it read as a key.
+        static let keyCapLip: CGFloat = 1.5
+        static let keyCapLipLarge: CGFloat = 3
+        static let statusDot: CGFloat = 7
+        static let rowIcon: CGFloat = 28
+        static let progressRing: CGFloat = 14
+        static let progressRingLine: CGFloat = 2
+        static let statTileMinHeight: CGFloat = 112
+        static let emptyStateBadge: CGFloat = 56
+        static let emptyStateTextWidth: CGFloat = 380
+        static let bannerIcon: CGFloat = 30
+        static let sheetWidth: CGFloat = 480
+        static let snippetCardMinWidth: CGFloat = 300
+        static let snippetCardMinHeight: CGFloat = 148
+        static let progressBarWidth: CGFloat = 140
+        static let firstRunVisualHeight: CGFloat = 52
+        static let expansionEditorHeight: CGFloat = 120
+        static let styleBubbleMinHeight: CGFloat = 76
+        static let categoryIcon: CGFloat = 34
+        /// Transcript lines shown before "Show more".
+        static let transcriptLines = 3
+        /// Characters past which a transcript is probably longer than `transcriptLines`.
+        static let transcriptFoldLength = 210
+        static let recentCount = 5
+        static let pageHeaderBottom: CGFloat = 20
+    }
+}
+
+/// Press and disabled feedback shared by every custom control.
+enum Interaction {
+    static let pressedScale: CGFloat = 0.97
+    static let disabledOpacity: Double = 0.45
+    static let dimmedOpacity: Double = 0.55
+}
+
+extension Palette {
+    /// Pressed surfaces and ghost buttons.
+    static let surfacePressed = Color.adaptive(light: 0xE8E7E2, dark: 0x343432)
+    static let emberHover = Color.adaptive(light: 0xEC5F37, dark: 0xFF7A51)
+    static let emberPressed = Color.adaptive(light: 0xC9471F, dark: 0xEE5A2D)
+    /// Keycaps: a face a shade lighter than the surface and a darker lip below it.
+    static let keyFace = Color.adaptive(light: 0xFFFFFF, dark: 0x3A3A37)
+    static let keyLip = Color.adaptive(light: 0x1C1B19, lightAlpha: 0.20, dark: 0x000000, darkAlpha: 0.60)
+    static let keyHighlight = Color.adaptive(light: 0xFFFFFF, lightAlpha: 1, dark: 0xFFFFFF, darkAlpha: 0.12)
+    /// Selected filter chips are inked in, like a pressed key.
+    static let chipSelected = Color.adaptive(light: 0x1C1B19, dark: 0xF2F1EE)
+    static let onChipSelected = Color.adaptive(light: 0xFFFFFF, dark: 0x1A1A19)
+}
+
+extension Motion {
+    /// Stat numerals rolling up when Home appears. Short enough to finish before a glance.
+    static let countUp = Animation.easeOut(duration: 0.5)
+    /// How long inline confirmations ("Copied") stay before fading.
+    static let confirmation: Duration = .milliseconds(1400)
+    /// How long a row revealed from elsewhere stays highlighted.
+    static let highlight: Duration = .milliseconds(1800)
+    /// How long a deletion can be undone before it's committed.
+    static let undoWindow: Duration = .seconds(5)
+    /// The first-run keycap pressing and releasing to act out "hold".
+    static let demoKeyInterval: Duration = .milliseconds(1400)
+}
