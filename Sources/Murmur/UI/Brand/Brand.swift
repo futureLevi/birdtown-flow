@@ -1,14 +1,25 @@
-#!/usr/bin/env swift
-import AppKit
-import CoreGraphics
-import Foundation
+import SwiftUI
 
-// Renders Resources/AppIcon.iconset/*.png from code: no design tool, no binary asset to drift
-// from the app. Run: swift Tools/makeicon.swift   (then `iconutil`, or just `make icon`).
-//
-// The painter below is a verbatim copy of `AppIconPainter` in
-// Sources/Murmur/UI/Brand/Brand.swift (the script can't import the app). The app's
-// `AppIconArtwork` view draws with that copy; the `brand-*` snapshots show it.
+// MARK: - App icon
+
+/// The app icon, drawn in code. `Tools/makeicon.swift` carries an identical copy of
+/// `AppIconPainter` (the script can't import the app), so the .icns and this view match.
+/// If you change one, paste it into the other; the `brand-*` snapshots show the result.
+struct AppIconArtwork: View {
+    var size: CGFloat = 128
+
+    var body: some View {
+        Canvas { context, canvasSize in
+            context.withCGContext { cg in
+                AppIconPainter.draw(in: cg, side: canvasSize.width)
+            }
+        }
+        .frame(width: size, height: size)
+        // The same soft shadow the .icns bakes in, so the tile sits on the page.
+        .shadow(color: .black.opacity(0.3), radius: size * 0.014, y: size * 0.01)
+        .accessibilityLabel("Murmur")
+    }
+}
 
 // BEGIN AppIconPainter — keep identical in Tools/makeicon.swift
 enum AppIconPainter {
@@ -129,61 +140,65 @@ enum AppIconPainter {
 }
 // END AppIconPainter
 
-/// One PNG at `pixels` square. Drawn natively at each size (not scaled from one master)
-/// so small sizes stay crisp and get the simplified three-bar mark.
-func renderPNG(pixels: Int) -> Data? {
-    let side = CGFloat(pixels)
-    guard let space = CGColorSpace(name: CGColorSpace.sRGB),
-          let cg = CGContext(
-              data: nil, width: pixels, height: pixels, bitsPerComponent: 8, bytesPerRow: 0,
-              space: space, bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
-          )
-    else { return nil }
-    cg.setShouldAntialias(true)
-    cg.interpolationQuality = .high
+// MARK: - Marks
 
-    // The painter works y-down, like SwiftUI.
-    cg.translateBy(x: 0, y: side)
-    cg.scaleBy(x: 1, y: -1)
+/// The Murmur mark: five bars, centre in Ember. For onboarding, About and empty states.
+struct BrandMark: View {
+    var height: CGFloat = 28
 
-    // Soft drop shadow under the tile. Shadow offsets are in device space (y-up here), so a
-    // negative y falls below the tile whatever the CTM.
-    let inset = side * 100 / 1024
-    let tile = CGRect(x: inset, y: inset, width: side - inset * 2, height: side - inset * 2)
-    cg.saveGState()
-    cg.setShadow(offset: CGSize(width: 0, height: -side * 0.01), blur: side * 0.028,
-                 color: AppIconPainter.rgb(0x000000, 0.3))
-    cg.addPath(AppIconPainter.squircle(tile, radius: tile.width * 0.225))
-    cg.setFillColor(AppIconPainter.rgb(0x141312))
-    cg.fillPath()
-    cg.restoreGState()
-
-    AppIconPainter.draw(in: cg, side: side)
-
-    guard let image = cg.makeImage() else { return nil }
-    return NSBitmapImageRep(cgImage: image).representation(using: .png, properties: [:])
-}
-
-let fileManager = FileManager.default
-let iconset = URL(fileURLWithPath: fileManager.currentDirectoryPath)
-    .appendingPathComponent("Resources/AppIcon.iconset")
-try? fileManager.removeItem(at: iconset)
-try fileManager.createDirectory(at: iconset, withIntermediateDirectories: true)
-
-// (point size, scale) pairs iconutil expects.
-let variants: [(Int, Int)] = [
-    (16, 1), (16, 2), (32, 1), (32, 2), (128, 1), (128, 2),
-    (256, 1), (256, 2), (512, 1), (512, 2),
-]
-
-for (points, scale) in variants {
-    let pixels = points * scale
-    guard let data = renderPNG(pixels: pixels) else {
-        print("failed to render \(pixels) px")
-        exit(1)
+    var body: some View {
+        HStack(alignment: .center, spacing: height * BrandGeometry.gap) {
+            ForEach(BrandGeometry.heights.indices, id: \.self) { index in
+                Capsule(style: .continuous)
+                    .fill(index == BrandGeometry.heights.count / 2 ? Palette.ember : Palette.ink)
+                    .frame(width: height * BrandGeometry.barWidth, height: height * BrandGeometry.heights[index])
+            }
+        }
+        .frame(height: height)
+        .accessibilityHidden(true)
     }
-    let name = "icon_\(points)x\(points)\(scale == 2 ? "@2x" : "").png"
-    try data.write(to: iconset.appendingPathComponent(name))
 }
 
-print("wrote \(variants.count) PNGs to Resources/AppIcon.iconset")
+/// Monochrome mark for the menu bar (or anywhere a template glyph is needed). Draws in the
+/// current foreground style, so it follows the menu bar's appearance. `isActive` lifts the
+/// bars while recording.
+struct BrandGlyph: View {
+    var size: CGFloat = 16
+    var isActive = false
+
+    var body: some View {
+        let heights = isActive ? BrandGeometry.activeHeights : BrandGeometry.heights
+        HStack(alignment: .center, spacing: size * BrandGeometry.gap) {
+            ForEach(heights.indices, id: \.self) { index in
+                Capsule(style: .continuous)
+                    .frame(width: size * BrandGeometry.barWidth, height: size * heights[index] * 0.82)
+            }
+        }
+        .frame(width: size, height: size)
+        .accessibilityLabel("Murmur")
+    }
+}
+
+/// Mark plus name, in the serif display face.
+struct BrandWordmark: View {
+    var height: CGFloat = 22
+
+    var body: some View {
+        HStack(spacing: height * 0.45) {
+            BrandMark(height: height)
+            Text("Murmur")
+                .font(Typography.title)
+                .tracking(Tracking.title)
+                .foregroundStyle(Palette.ink)
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Murmur")
+    }
+}
+
+private enum BrandGeometry {
+    static let heights: [CGFloat] = [0.34, 0.62, 1, 0.62, 0.34]
+    static let activeHeights: [CGFloat] = [0.5, 0.86, 1, 0.74, 0.44]
+    static let barWidth: CGFloat = 0.12
+    static let gap: CGFloat = 0.1
+}
