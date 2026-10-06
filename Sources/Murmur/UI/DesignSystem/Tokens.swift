@@ -164,6 +164,82 @@ enum Elevation {
     static let hud = Shadow(color: .black.opacity(0.35), radius: 16, y: 6)
 }
 
+// MARK: - HUD additions (owned by the HUD area; additive only)
+
+extension Palette.HUD {
+    /// Waveform bars are drawn in white; opacity carries loudness.
+    static let barColor = Color.white
+    static let barRestOpacity: Double = 0.42
+    static let barPeakOpacity: Double = 0.95
+    /// The resting idle pill is a whisper until hovered.
+    static let idleOpacity: Double = 0.4
+    /// Edge of the resting pill (before `idleOpacity`), so it stays visible on dark content.
+    static let idleStroke = Color.white.opacity(0.5)
+    /// Shadow size of the resting pill, relative to `Elevation.hud`.
+    static let idleShadowScale: CGFloat = 0.3
+    /// Round HUD buttons at rest and under the pointer.
+    static let control = Color.white.opacity(0.08)
+    static let controlHover = Color.white.opacity(0.18)
+    /// Soft halo behind the record dot; brightens with the voice.
+    static let emberGlow = Color(hex: 0xFF6A3D, alpha: 0.55)
+    static let dangerSoft = Color(hex: 0xFF6B5E, alpha: 0.18)
+    static let onEmber = Color.white
+    /// The pill's shadow is built from stacked layers (see `HUDPillBody`), shaped by
+    /// `Elevation.hud`'s radius and offset.
+    static let shadow = Color.black
+    static let shadowLayerOpacity: Double = 0.018
+    static let contactShadowOpacity: Double = 0.18
+}
+
+extension Layout.HUD {
+    /// Fixed panel size: fits the widest state plus room for the pill's shadow, so state
+    /// changes never move or resize the window.
+    static let panelSize = CGSize(width: 480, height: 88)
+    /// Space under the pill, inside the panel, for its shadow.
+    static let shadowMargin: CGFloat = 26
+    /// The idle pill grows to this height to show its hint.
+    static let hintHeight: CGFloat = 26
+    /// Extra pointer slack around the tiny idle pill.
+    static let hitSlop: CGFloat = 10
+    static let buttonSize: CGFloat = 24
+    static let stopGlyph: CGFloat = 8
+    static let stopGlyphRadius: CGFloat = 2
+    static let timerWidth: CGFloat = 32
+    static let checkSize: CGFloat = 14
+    static let checkStroke: CGFloat = 2
+    static let failureGlyph: CGFloat = 16
+    static let contentPadding: CGFloat = 14
+    static let hintSpacing: CGFloat = 5
+    static let keycapPadding: CGFloat = 4
+    static let keycapHeight: CGFloat = 15
+    /// AppKit twins of `Typography.hud` / `.hudKeycap`, used to measure labels so the pill
+    /// can spring to an exact width. Keep in step with those fonts.
+    static let labelPointSize: CGFloat = 12
+    static let keycapPointSize: CGFloat = 10.5
+    /// How far silent bars ripple, so the user can see the mic is live.
+    static let idleShimmer: CGFloat = 1.6
+}
+
+extension Typography {
+    static let hudKeycap = Font.system(size: 10.5, weight: .semibold, design: .rounded)
+    static let hudGlyph = Font.system(size: 10, weight: .bold)
+}
+
+extension Motion {
+    /// Failure shake offsets, played once (returns to the first).
+    static let shakeOffsets: [CGFloat] = [0, -7, 6, -4, 2]
+    static let shakeStep = Animation.easeInOut(duration: 0.055)
+    /// The done check drawing itself.
+    static let checkDraw = Animation.easeOut(duration: 0.34).delay(0.08)
+    /// Per-bar spring for the live waveform (same feel as `bars`).
+    static let barStiffness: Double = 420
+    static let barDamping: Double = 26
+    /// Record dot breathing period, seconds.
+    static let breathPeriod: Double = 1.8
+    /// Travelling "thinking" wave, cycles per second.
+    static let thinkingFrequency: Double = 0.8
+}
+
 /// Every animation goes through here so Reduce Motion is honoured consistently.
 enum Motion {
     /// Small state changes: hover, toggles, selection.
