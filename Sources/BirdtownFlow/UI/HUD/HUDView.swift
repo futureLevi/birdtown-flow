@@ -216,6 +216,7 @@ struct HUDKeycap: View {
 struct HUDDrawnCheck: View {
     let animated: Bool
     var side: CGFloat = Layout.HUD.checkSize
+    var color: Color = Palette.HUD.check
     /// Film frames pass the stroke's progress explicitly instead of animating it.
     var fixedProgress: CGFloat?
     @State private var progress: CGFloat = 0
@@ -228,7 +229,7 @@ struct HUDDrawnCheck: View {
             path.addLine(to: CGPoint(x: side * 0.86, y: side * 0.24))
         }
         .trim(from: 0, to: fixedProgress ?? (animated ? progress : 1))
-        .stroke(Palette.HUD.success, style: StrokeStyle(lineWidth: Layout.HUD.checkStroke, lineCap: .round, lineJoin: .round))
+        .stroke(color, style: StrokeStyle(lineWidth: Layout.HUD.checkStroke, lineCap: .round, lineJoin: .round))
         .frame(width: side, height: side)
         .onAppear {
             guard animated, fixedProgress == nil else { return }
@@ -250,7 +251,7 @@ struct HUDMessage: View {
     var body: some View {
         HStack(spacing: Spacing.s) {
             ZStack {
-                Circle().fill(tone == .success ? Palette.HUD.successSoft : Palette.HUD.dangerSoft)
+                Circle().fill(tone == .success ? Palette.HUD.control : Palette.HUD.dangerSoft)
                 switch tone {
                 case .success:
                     HUDDrawnCheck(animated: animated, side: Layout.HUD.noticeCheckSize)
@@ -276,38 +277,6 @@ struct HUDMessage: View {
 }
 
 // MARK: - Buttons
-
-/// Hands-free Stop: the primary action, so it carries the Ember and breathes with the
-/// recording it ends.
-struct HUDStopButton: View {
-    let isHovered: Bool
-    let breath: Double
-    let action: @MainActor () -> Void
-
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
-    var body: some View {
-        Button {
-            action()
-        } label: {
-            ZStack {
-                Circle()
-                    .fill(Palette.HUD.ember)
-                    .opacity(isHovered ? 1 : 0.86 + 0.14 * breath)
-                RoundedRectangle(cornerRadius: Layout.HUD.stopGlyphRadius, style: .continuous)
-                    .fill(Palette.HUD.onEmber)
-                    .frame(width: Layout.HUD.stopGlyph, height: Layout.HUD.stopGlyph)
-            }
-            .frame(width: Layout.HUD.buttonSize, height: Layout.HUD.buttonSize)
-            .scaleEffect(isHovered ? 1.08 : 1)
-            .contentShape(Circle())
-        }
-        .buttonStyle(.plain)
-        .animation(Motion.resolve(Motion.snappy, reduceMotion: reduceMotion), value: isHovered)
-        .accessibilityLabel("Stop and insert")
-        .help("Stop and insert")
-    }
-}
 
 struct HUDIconButton: View {
     let symbol: String

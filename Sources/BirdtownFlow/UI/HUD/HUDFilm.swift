@@ -26,6 +26,9 @@ enum HUDFilm {
         var heights: [CGFloat]
         var opacities: [Double]
         var level: Float
+        /// The orb, stepped by the same dynamics as the live `SpectrumOrb`, so the morph into
+        /// the thinking ring plays out across frames instead of cutting.
+        var orb: OrbDynamics.Look
     }
 
     static let frames: [Frame] = simulate()
@@ -53,6 +56,8 @@ enum HUDFilm {
 
     private static func simulate() -> [Frame] {
         let springs = BarSprings()
+        let orbDynamics = OrbDynamics()
+        var orb = OrbDynamics.settled(mode: .live, level: 0, at: 0, reduceMotion: false)
         let tick = 1.0 / 120.0
         var history = [Float](repeating: 0, count: DictationController.levelHistoryCount)
         var level: Float = 0
@@ -74,10 +79,12 @@ enum HUDFilm {
                 }
                 let wave = HUDWave.frame(kind: kind(at: time), levels: history, at: time, reduceMotion: false)
                 heights = springs.step(toward: wave.heights, at: time, critical: false)
+                let thinking = time >= releaseAt
+                orb = orbDynamics.step(mode: thinking ? .thinking : .live, level: thinking ? 0 : level, at: time)
                 opacities = wave.opacities
                 time += tick
             }
-            frames.append(Frame(time: frameTime, heights: heights, opacities: opacities, level: level))
+            frames.append(Frame(time: frameTime, heights: heights, opacities: opacities, level: level, orb: orb))
         }
         return frames
     }
@@ -140,10 +147,8 @@ struct HUDFilmFrame: View {
         let frame = HUDFilm.frames[min(index, HUDFilm.frames.count - 1)]
         let time = frame.time
         let pill = HUDFilm.pill(at: time)
-        let breath = 0.5 + 0.5 * sin(2 * .pi * time / Motion.breathPeriod)
         let live = HUDFilm.fade(time, from: HUDFilm.pressAt + 0.04, over: 0.2)
             * (1 - HUDFilm.fade(time, from: HUDFilm.doneAt, over: 0.14))
-        let dot = 1 - HUDFilm.fade(time, from: HUDFilm.releaseAt, over: 0.2)
         let check = HUDFilm.fade(time, from: HUDFilm.doneAt + 0.04, over: 0.16)
             * (1 - HUDFilm.fade(time, from: HUDFilm.idleAt, over: 0.12))
         let trim = HUDFilm.fade(time, from: HUDFilm.doneAt + 0.08, over: 0.34)
@@ -157,9 +162,7 @@ struct HUDFilmFrame: View {
                             shadowScale: shadowScale)
                 ZStack {
                     ZStack {
-                        HUDRecordDot(breath: breath, level: frame.level, reduceMotion: false)
-                            .scaleEffect(CGFloat(0.4 + 0.6 * dot))
-                            .opacity(dot)
+                        HUDFilmOrb(look: frame.orb, diameter: Layout.HUD.orb)
                             .position(x: HUDMetrics.capCentre, y: pill.size.height / 2)
                         HUDBars(heights: frame.heights, opacities: frame.opacities)
                             .position(x: pill.size.width / 2, y: pill.size.height / 2)
@@ -180,5 +183,35 @@ struct HUDFilmFrame: View {
         }
         .frame(width: HUDFilm.size.width, height: HUDFilm.size.height)
         .clipped()
+    }
+}
+
+/// `SpectrumOrb`'s drawing, fed a precomputed look so the film can show the ring opening
+/// frame by frame (a snapshot `SpectrumOrb` only draws a mode's settled look).
+struct HUDFilmOrb: View {
+    let look: OrbDynamics.Look
+    let diameter: CGFloat
+
+    @Environment(\.displayScale) private var displayScale
+
+    var body: some View {
+        let comet = AngularGradient(colors: [.white.opacity(1 - 0.85 * look.tail), .white], center: .center)
+        let radius = diameter / 2
+        ZStack {
+            SpectrumHalo(diameter: diameter, scale: displayScale)
+                .mask {
+                    RadialGradient(colors: [.clear, .white], center: .center,
+                                   startRadius: look.hole * radius * 0.9, endRadius: radius)
+                }
+                .mask { Circle().fill(comet) }
+                .opacity(look.glow)
+                .blendMode(.plusLighter)
+            SpectrumDisc(diameter: diameter, scale: displayScale)
+                .mask { OrbAperture(hole: look.hole).fill(comet, style: FillStyle(eoFill: true)) }
+        }
+        .rotationEffect(.radians(look.angle))
+        .scaleEffect(look.swell)
+        .frame(width: diameter, height: diameter)
+        .accessibilityHidden(true)
     }
 }
