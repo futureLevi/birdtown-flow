@@ -654,12 +654,13 @@ final class DictationController {
             }
 
             let outcome = await TextInjector.insert(text, restoreClipboard: settings.restoreClipboard)
+            var copiedNotice: String?
             switch outcome {
             case .inserted:
                 record.outcome = .inserted
             case .copied(let reason):
                 record.outcome = .copied
-                notice = reason.message
+                copiedNotice = reason.message
             }
             // A polish fallback note ("timed out", "no API key") is the only message a
             // successful record carries.
@@ -670,6 +671,12 @@ final class DictationController {
             // Re-read: retention may just have dropped the audio file.
             lastRecord = history.record(id: id) ?? record
 
+            // Insertion awaits (paste, clipboard restore), and Esc is live meanwhile. If this
+            // dictation was cancelled or a new one began, the text is in and recorded, but the
+            // phase, sounds and `processing` now belong to whatever came next: touching them
+            // would flash "done" over a live recording or orphan the next dictation.
+            guard isCurrent(id) else { return }
+            if let copiedNotice { notice = copiedNotice }
             processing = nil
             Sounds.play(.done)
             showTransient(.done, for: notice == nil ? Timing.doneDisplay : Timing.copiedDisplay)
