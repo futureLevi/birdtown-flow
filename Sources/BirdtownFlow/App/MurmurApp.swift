@@ -54,6 +54,9 @@ struct MurmurCommands: Commands {
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationWillFinishLaunching(_ notification: Notification) {
+        // Writing to a pipe whose reader has gone (a Claude Code session that just exited)
+        // must fail with an error, not kill the app with SIGPIPE.
+        signal(SIGPIPE, SIG_IGN)
         // Before any window is built, so nothing draws first in the wrong appearance.
         Settings.shared.appearance.apply()
     }
@@ -112,5 +115,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationWillTerminate(_ notification: Notification) {
         AppModel.shared.history.flush()
+        ClaudeCodePolisher.shutDown()
     }
 }

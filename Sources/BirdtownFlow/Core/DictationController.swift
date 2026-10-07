@@ -356,6 +356,8 @@ final class DictationController {
 
         let (quick, pid) = FrontmostContext.quick()
         context = quick
+        // Claude Code takes a second or two to start; do it while the person is talking.
+        if settings.polishProvider == .claudeCode { ClaudeCodePolisher.prewarm(likelyPolishRequest(for: quick)) }
         let contextTask = Task.detached(priority: .userInitiated) {
             FrontmostContext.refined(quick, pid: pid)
         }
@@ -769,7 +771,8 @@ final class DictationController {
                 style: style,
                 category: context.category,
                 appName: context.appName,
-                vocabulary: dictionary.biasPhrases
+                vocabulary: dictionary.biasPhrases,
+                level: settings.polishLevel
             )
             let outcome = await polish(request)
             text = outcome.text
@@ -814,6 +817,28 @@ final class DictationController {
         } catch TranscriptionError.modelNotReady {
             throw DictationFailure(message: modelNotReadyMessage())
         }
+    }
+
+    /// Starts or stops the waiting Claude Code session after the polish settings change.
+    func polishSettingsChanged() {
+        if settings.polishProvider == .claudeCode {
+            ClaudeCodePolisher.prewarm(likelyPolishRequest(for: context ?? AppContext(bundleID: nil, appName: nil, category: .other)))
+        } else {
+            ClaudeCodePolisher.shutDown()
+        }
+    }
+
+    /// The instructions the next dictation will most likely need, so a session can be started
+    /// with them ahead of time. Only the text is unknown, and the instructions don't include it.
+    private func likelyPolishRequest(for context: AppContext) -> PolishRequest {
+        PolishRequest(
+            text: "",
+            style: settings.style(for: context.category),
+            category: context.category,
+            appName: context.appName,
+            vocabulary: dictionary.biasPhrases,
+            level: settings.polishLevel
+        )
     }
 
     /// PolishService never throws and has its own timeout; this is the backstop in case it

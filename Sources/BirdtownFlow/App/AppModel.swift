@@ -83,6 +83,7 @@ final class AppModel {
             audioDays: settings.audioRetentionDays >= 0 ? settings.audioRetentionDays : nil
         )
         controller.activate()
+        controller.polishSettingsChanged()
         Task { await models.prepare() }
     }
 

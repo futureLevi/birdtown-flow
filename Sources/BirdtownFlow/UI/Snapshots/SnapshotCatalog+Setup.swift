@@ -82,11 +82,15 @@ extension SnapshotCatalog {
         let text = AppModel.setupPreview { $0.polishProvider = .anthropic }
         var textFacts = SetupPreview()
         textFacts.keySaved = true
+        let claudeCode = AppModel.setupPreview { $0.polishProvider = .claudeCode }
 
         return [
             shot("general", height: Layout.Setup.settingsHeight, model: general, facts: SetupPreview()) { GeneralSettingsPane() },
             shot("audio", height: Layout.Setup.settingsHeight, model: audio, facts: audioFacts) { AudioSettingsPane() },
             shot("text", height: Layout.Setup.settingsHeight, model: text, facts: textFacts) { TextSettingsPane() },
+            shot("text-claude-code", height: Layout.Setup.settingsHeight, model: claudeCode, facts: textFacts) {
+                TextSettingsPane()
+            },
             shot("privacy", height: Layout.Setup.settingsHeight, model: general, facts: SetupPreview()) { PrivacySettingsPane() },
             shot("about", height: Layout.Setup.settingsHeight, model: general, facts: SetupPreview()) { AboutSettingsPane() },
         ]

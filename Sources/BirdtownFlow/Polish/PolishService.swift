@@ -82,7 +82,8 @@ final class PolishService {
             style: settings.style(for: .email),
             category: .email,
             appName: "Mail",
-            vocabulary: []
+            vocabulary: [],
+            level: settings.polishLevel
         )
         let limit = max(timeLimit, Self.testTimeLimit)
         do {
@@ -161,6 +162,11 @@ final class PolishService {
                 return .failure(Unavailable(reason: "Add the API key for this endpoint.", note: "No API key"))
             }
             return .success(OpenAICompatibleClient(baseURL: baseURL, apiKey: key ?? "", model: model))
+
+        case .claudeCode:
+            // Whether it's installed and signed in is only known by trying; the polisher
+            // reports either problem in its own words.
+            return .success(ClaudeCodePolisher())
         }
     }
 
@@ -194,6 +200,7 @@ final class PolishService {
         if error is HardDeadline.Exceeded { return "Timed out after \(format(limit)) s" }
         if error is CancellationError { return "Cancelled" }
         if let failure = error as? AppleIntelligencePolisher.Failure { return failure.note }
+        if let failure = error as? ClaudeCodePolisher.Failure { return failure.note }
         if let polishError = error as? PolishError {
             // `if case` rather than a switch: MurmurKit may grow new cases, and those should
             // land on the generic note instead of breaking the build.
@@ -227,6 +234,7 @@ final class PolishService {
             return "No reply within \(format(limit)) seconds. Check the endpoint, or raise the polish timeout."
         }
         if let failure = error as? AppleIntelligencePolisher.Failure { return failure.detail }
+        if let failure = error as? ClaudeCodePolisher.Failure { return failure.detail }
         if let polishError = error as? PolishError {
             switch polishError {
             case .http(let status, let message) where status == 401 || status == 403:

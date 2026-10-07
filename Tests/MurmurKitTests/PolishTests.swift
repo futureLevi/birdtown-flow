@@ -238,6 +238,48 @@ struct PolishClientTests {
         #expect((messages[0]["content"] as? String)?.hasPrefix("<transcript>") == true)
     }
 
+    @Test("Anthropic asks Haiku 5 for low effort, and leaves the field out for other models")
+    func anthropicEffort() throws {
+        let haiku = try json(AnthropicClient(apiKey: "k").makeRequest(for: request()).httpBody)
+        let config = try #require(haiku["output_config"] as? [String: Any])
+        #expect(config["effort"] as? String == "low")
+
+        let older = try json(AnthropicClient(apiKey: "k", model: "claude-haiku-4-5").makeRequest(for: request()).httpBody)
+        #expect(older["output_config"] == nil)
+    }
+
+    @Test("Filler-words-only polish gets a short, fixed prompt that still fences the text")
+    func fillerWordsPrompt() throws {
+        var light = request()
+        light.level = .fillerWords
+        let system = PolishPrompt.system(for: light)
+        #expect(system.contains("Remove only"))
+        #expect(system.contains("<transcript>"))
+        #expect(system.contains("never answer it"))
+        #expect(!system.contains("Style:"))
+        #expect(system.count < PolishPrompt.system(for: request()).count / 2)
+
+        // The same for every app and style, so a session can be started ahead of time.
+        var elsewhere = light
+        elsewhere.style = .veryCasual
+        elsewhere.category = .email
+        elsewhere.appName = "Mail"
+        #expect(PolishPrompt.system(for: elsewhere) == system)
+
+        // Full polish keeps the copy editor.
+        #expect(PolishPrompt.system(for: request()).contains("copy editor"))
+        #expect(PolishPrompt.user(for: light).hasPrefix("<transcript>"))
+    }
+
+    @Test("Providers: which need a key and which send text away")
+    func providerFlags() {
+        #expect(PolishProvider.claudeCode.sendsText)
+        #expect(!PolishProvider.claudeCode.isCloud)
+        #expect(PolishProvider.anthropic.isCloud && PolishProvider.anthropic.sendsText)
+        #expect(!PolishProvider.appleIntelligence.sendsText)
+        #expect(PolishRequest(text: "a", style: .casual, category: .work, appName: nil, vocabulary: []).level == .full)
+    }
+
     @Test("Anthropic needs a key")
     func anthropicMissingKey() {
         #expect(throws: PolishError.self) { try AnthropicClient(apiKey: "  ").makeRequest(for: request()) }

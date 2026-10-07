@@ -133,6 +133,10 @@ public enum PolishProvider: String, Codable, CaseIterable, Sendable, Identifiabl
     case appleIntelligence
     case anthropic
     case openAICompatible
+    /// Claude through Claude Code signed in on this Mac, on the person's own Claude plan.
+    /// Personal builds only: Anthropic's terms don't let an app run its users' requests on
+    /// their Pro or Max logins, so this must come out before Birdtown Flow is sold.
+    case claudeCode
 
     public var id: String { rawValue }
 
@@ -142,6 +146,7 @@ public enum PolishProvider: String, Codable, CaseIterable, Sendable, Identifiabl
         case .appleIntelligence: "Apple Intelligence"
         case .anthropic: "Claude"
         case .openAICompatible: "OpenAI-compatible"
+        case .claudeCode: "Claude Code"
         }
     }
 
@@ -149,12 +154,41 @@ public enum PolishProvider: String, Codable, CaseIterable, Sendable, Identifiabl
         switch self {
         case .off: "Fast, private rules only: fillers, spacing, capitals."
         case .appleIntelligence: "On-device. Private and free, on supported Macs."
-        case .anthropic: "Claude Haiku via your Anthropic API key. Best quality."
-        case .openAICompatible: "OpenAI, Groq, Ollama, LM Studio — any compatible endpoint."
+        case .anthropic: "Claude Haiku 5.5 via your Anthropic API key. Best quality."
+        case .openAICompatible: "OpenAI, Groq, Ollama, LM Studio, or any compatible endpoint."
+        case .claudeCode: "Your Claude plan, through Claude Code on this Mac. For personal testing."
         }
     }
 
+    /// Needs an API key of its own.
     public var isCloud: Bool { self == .anthropic || self == .openAICompatible }
+    /// The text leaves this Mac.
+    public var sendsText: Bool { isCloud || self == .claudeCode }
+}
+
+/// How much the AI is allowed to change.
+public enum PolishLevel: String, Codable, CaseIterable, Sendable, Identifiable {
+    /// Take out "um", "like", "you know" and stutters; leave every other word as spoken.
+    case fillerWords
+    /// Also fix punctuation and grammar, apply self-corrections ("Friday, no wait, Monday"),
+    /// write numbers and dictated lists properly, and follow the app's style.
+    case full
+
+    public var id: String { rawValue }
+
+    public var title: String {
+        switch self {
+        case .fillerWords: "Filler words only"
+        case .full: "Full polish"
+        }
+    }
+
+    public var detail: String {
+        switch self {
+        case .fillerWords: "Takes out “um”, “like”, “you know” and stutters. Every other word stays as you said it."
+        case .full: "Also fixes punctuation and grammar, applies your corrections (“Friday, no wait, Monday”) and formats lists."
+        }
+    }
 }
 
 /// Everything a polisher needs to know about one utterance.
@@ -165,13 +199,18 @@ public struct PolishRequest: Sendable, Hashable {
     public var appName: String?
     /// Dictionary words, passed as spelling hints. Keep it short — see `DictionaryCorrector.biasLimit`.
     public var vocabulary: [String]
+    public var level: PolishLevel
 
-    public init(text: String, style: WritingStyle, category: AppCategory, appName: String?, vocabulary: [String]) {
+    public init(
+        text: String, style: WritingStyle, category: AppCategory, appName: String?, vocabulary: [String],
+        level: PolishLevel = .full
+    ) {
         self.text = text
         self.style = style
         self.category = category
         self.appName = appName
         self.vocabulary = vocabulary
+        self.level = level
     }
 }
 

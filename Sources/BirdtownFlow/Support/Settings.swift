@@ -171,6 +171,10 @@ final class Settings {
     var polishProvider: PolishProvider {
         didSet { defaults.set(polishProvider.rawValue, forKey: Keys.polishProvider) }
     }
+    /// How much the AI may change: just the filler, or a full edit.
+    var polishLevel: PolishLevel {
+        didSet { defaults.set(polishLevel.rawValue, forKey: Keys.polishLevel) }
+    }
     var anthropicModel: String {
         didSet { defaults.set(anthropicModel, forKey: Keys.anthropicModel) }
     }
@@ -233,6 +237,7 @@ final class Settings {
         static let restoreClipboard = "restoreClipboard"
         static let styles = "styles"
         static let polishProvider = "polishProvider"
+        static let polishLevel = "polishLevel"
         static let anthropicModel = "anthropicModel"
         static let openAIBaseURL = "openAIBaseURL"
         static let openAIModel = "openAIModel"
@@ -269,6 +274,7 @@ final class Settings {
             }
         }
         polishProvider = PolishProvider(rawValue: defaults.string(forKey: Keys.polishProvider) ?? "") ?? .off
+        polishLevel = PolishLevel(rawValue: defaults.string(forKey: Keys.polishLevel) ?? "") ?? .fillerWords
         anthropicModel = defaults.string(forKey: Keys.anthropicModel) ?? AnthropicClient.defaultModel
         openAIBaseURL = defaults.string(forKey: Keys.openAIBaseURL) ?? "https://api.openai.com/v1"
         openAIModel = defaults.string(forKey: Keys.openAIModel) ?? "gpt-4.1-mini"

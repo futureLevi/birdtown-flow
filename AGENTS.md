@@ -57,6 +57,15 @@ make snapshots      # every screen to ./snapshots, light and dark
 - **`log` may be shadowed in your shell.** Use `/usr/bin/log show --predicate
   'subsystem == "com.birdtownlabs.flow"'`.
 
+## Before Birdtown Flow is sold
+
+- **Remove the Claude Code polish provider** (`PolishProvider.claudeCode`,
+  `Polish/ClaudeCodePolisher.swift`). It runs polish on the user's own Claude Pro or Max
+  login through Claude Code, which is fine for the developer's personal builds and not
+  allowed in an app others use: Anthropic's terms don't let third-party apps route
+  requests through Free, Pro or Max credentials. Customers use the Anthropic option with
+  their own API key.
+
 ## Not built yet
 
 - **Command Mode**: select text, hold a key, say "make this more formal".

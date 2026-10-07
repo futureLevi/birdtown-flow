@@ -33,7 +33,8 @@ Sources/BirdtownFlow             the macOS app
   App/                     @main, AppDelegate, AppModel (composition root)
   Core/                    DictationController, HotkeyMonitor, AudioRecorder, TextInjector…
   Transcription/           TranscriptionEngine, ModelManager, Parakeet + Apple engines
-  Polish/                  PolishService (routing, timeout), Apple Intelligence, Keychain
+  Polish/                  PolishService (routing, timeout), Apple Intelligence, Keychain,
+                           Claude Code (personal builds only: a pre-started `claude -p` session)
   Stores/                  DictionaryStore
   Support/                 Settings, AppPaths, Log, Permissions
   UI/DesignSystem          Tokens.swift, the only place literal design values live

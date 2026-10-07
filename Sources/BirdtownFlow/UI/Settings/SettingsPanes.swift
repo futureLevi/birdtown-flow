@@ -413,6 +413,9 @@ struct TextSettingsPane: View {
     @State private var keySaved = false
     @State private var testing = false
     @State private var testResult: Result<String, any Error>?
+    /// Where Claude Code was found; `nil` until looked up or when it isn't installed.
+    @State private var claudeCodePath: String?
+    @State private var claudeCodeChecked = false
 
     var body: some View {
         @Bindable var settings = model.settings
@@ -454,6 +457,23 @@ struct TextSettingsPane: View {
             }
         }
         .onAppear(perform: refreshKey)
+        .onChange(of: settings.polishProvider) { polishSettingsChanged() }
+        .onChange(of: settings.polishLevel) { polishSettingsChanged() }
+        .task(id: settings.polishProvider) {
+            guard settings.polishProvider == .claudeCode else { return }
+            if let preview {
+                claudeCodePath = preview.keySaved ? "~/.local/bin/claude" : nil
+                claudeCodeChecked = true
+                return
+            }
+            claudeCodePath = await ClaudeCodeSessions.shared.installedPath()
+            claudeCodeChecked = true
+        }
+    }
+
+    private func polishSettingsChanged() {
+        guard preview == nil else { return }
+        model.controller.polishSettingsChanged()
     }
 
     @ViewBuilder
@@ -472,6 +492,26 @@ struct TextSettingsPane: View {
                 )
             }
             SettingsGroup(title: provider.title) {
+                SettingsRow(title: "Cleanup", detail: settings.polishLevel.detail) {
+                    Picker("Cleanup", selection: $settings.polishLevel) {
+                        ForEach(PolishLevel.allCases) { level in
+                            Text(level.title).tag(level)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    .labelsHidden()
+                    .fixedSize()
+                }
+                SettingsDivider()
+                if provider == .claudeCode {
+                    SettingsRow(
+                        title: "Claude Code",
+                        detail: "Claude Haiku 5.5 at low effort, through Claude Code signed in on this Mac, on your Claude plan. For personal testing: it comes out before Birdtown Flow is sold."
+                    ) {
+                        claudeCodeStatus
+                    }
+                    SettingsDivider()
+                }
                 if provider.isCloud {
                     SettingsRow(title: "API key", detail: keySaved ? "Stored in your Keychain, never shown again." : "Saved to your Keychain, not to disk.") {
                         apiKeyControl(provider)
@@ -529,6 +569,22 @@ struct TextSettingsPane: View {
                         .padding(.bottom, Spacing.m)
                 }
             }
+        }
+    }
+
+    @ViewBuilder
+    private var claudeCodeStatus: some View {
+        if !claudeCodeChecked {
+            ProgressView().controlSize(.small)
+        } else if claudeCodePath != nil {
+            Label("Found", systemImage: "checkmark.circle.fill")
+                .font(Typography.callout.weight(.medium))
+                .foregroundStyle(Palette.success)
+                .help(claudeCodePath ?? "")
+        } else {
+            Label("Not installed", systemImage: "exclamationmark.triangle.fill")
+                .font(Typography.callout.weight(.medium))
+                .foregroundStyle(Palette.warning)
         }
     }
 
@@ -634,7 +690,7 @@ private struct ProviderCard: View {
 
     private var locality: (text: String, symbol: String) {
         if provider == .off { return ("Nothing leaves this Mac", "lock") }
-        if provider == .anthropic { return ("Text is sent to Anthropic", "cloud") }
+        if provider == .anthropic || provider == .claudeCode { return ("Text is sent to Anthropic", "cloud") }
         if provider.isCloud { return ("Text is sent to the endpoint you set", "cloud") }
         return ("Runs on this Mac", "desktopcomputer")
     }
