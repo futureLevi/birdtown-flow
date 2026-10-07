@@ -5,6 +5,7 @@ import Foundation
 ///     ~/Library/Application Support/Birdtown Flow/
 ///         dictionary.txt     the dictionary, plain text, hand-editable
 ///         snippets.json
+///         lab.json           the Lab's polish configurations
 ///         history/history.json
 ///         history/recordings/<id>.wav
 enum AppPaths {

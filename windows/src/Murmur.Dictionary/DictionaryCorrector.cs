@@ -68,9 +68,9 @@ public sealed class DictionaryCorrector
     /// <summary>True when no enabled correction entry produced a usable rule.</summary>
     public bool IsEmpty => _rules.Count == 0;
 
-    /// <summary>Applies every rule in order.</summary>
+    /// <summary>Applies every rule, longest trigger first, in a single pass over the text.</summary>
     /// <param name="text">Raw transcribed text.</param>
-    /// <returns>The rewritten text, plus one entry per rule that fired.</returns>
+    /// <returns>The rewritten text, plus one entry per rule that changed something.</returns>
     public (string Text, IReadOnlyList<AppliedCorrection> Applied) Apply(string text)
     {
         if (_rules.Count == 0 || string.IsNullOrEmpty(text)) return (text, []);
@@ -79,29 +79,63 @@ public sealed class DictionaryCorrector
         // composed forms of the same accented word are different sequences of code points —
         // "café" is 4 or 5 depending on form — so an accented trigger silently never fires
         // unless both sides agree. This is part of the shared contract, not an optimisation.
-        var result = text.Normalize(NormalizationForm.FormC);
+        var source = text.Normalize(NormalizationForm.FormC);
+        var claimed = new List<(int Start, int End)>();
+        var edits = new List<(int Start, int Length, string Write)>();
         var applied = new List<AppliedCorrection>();
 
+        // One pass: every rule matches what was heard, longest trigger first, and a span a
+        // longer rule claims is off limits to the rest, so no rule ever rewrites another's
+        // output ("data@birdtown.com" stays as written next to a "bird town" rule).
         foreach (var rule in _rules)
         {
-            var matches = rule.Regex.Matches(result);
-            if (matches.Count == 0) continue;
+            var written = rule.Replacement.Normalize(NormalizationForm.FormC);
+            string? heard = null;
+            var changed = 0;
+            foreach (Match match in rule.Regex.Matches(source))
+            {
+                var start = match.Index;
+                var end = match.Index + match.Length;
+                var overlaps = false;
+                foreach (var span in claimed)
+                {
+                    if (start < span.End && span.Start < end)
+                    {
+                        overlaps = true;
+                        break;
+                    }
+                }
+                if (overlaps) continue;
+                claimed.Add((start, end));
 
-            // Record what the engine actually produced, not the rule's trigger — seeing the
-            // real mishearing is the point, and it can differ in case or spacing
-            // ("CloudCode" matched by "cloud code").
-            var heard = matches[0].Value;
+                // Only matches the rule actually changes are corrections: one already written
+                // exactly as the rule writes it ("Birdtown" under "bird town -> Birdtown") is
+                // left alone and not reported. Record what the engine actually produced, not
+                // the rule's trigger — seeing the real mishearing is the point, and it can
+                // differ in case or spacing ("CloudCode" matched by "cloud code").
+                if (match.Value == written) continue;
+                // The replacement is inserted as-is, never read as a substitution pattern:
+                // "$1", "$&" and friends in the user's own text stay literal.
+                edits.Add((start, match.Length, rule.Replacement));
+                heard ??= match.Value;
+                changed++;
+            }
 
-            // MatchEvaluator rather than a replacement string: it makes the replacement
-            // strictly literal. A plain Replace would treat "$1", "$&" and friends in the
-            // user's own text as substitutions, which is a real hazard when the replacement
-            // is arbitrary user input.
-            result = rule.Regex.Replace(result, _ => rule.Replacement);
-
-            applied.Add(new AppliedCorrection(heard, rule.Replacement, matches.Count));
+            if (heard is not null) applied.Add(new AppliedCorrection(heard, rule.Replacement, changed));
         }
 
-        return (result, applied);
+        if (edits.Count == 0) return (source, applied);
+
+        // From the end backwards, so each position still points at the text it matched.
+        edits.Sort((a, b) => b.Start.CompareTo(a.Start));
+        var result = new StringBuilder(source);
+        foreach (var edit in edits)
+        {
+            result.Remove(edit.Start, edit.Length);
+            result.Insert(edit.Start, edit.Write);
+        }
+
+        return (result.ToString(), applied);
     }
 
     /// <summary>Builds the pattern for one trigger phrase.</summary>

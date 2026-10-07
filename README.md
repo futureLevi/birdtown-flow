@@ -31,6 +31,7 @@ rebuilt into a product meant to stand next to Wispr Flow.
 | **Snippets** | Say "my calendly link", get the URL. |
 | **Styles** | Formal, casual, very casual or excited, chosen per kind of app: personal messages, work chat, email, everything else. Gmail and Slack in a browser are recognised by window title. |
 | **AI polish** (optional) | Removes false starts and applies self-corrections ("at 3, no wait, 4" → "at 4"). Runs on Apple Intelligence on-device, Claude with your Anthropic key, or any OpenAI-compatible endpoint (OpenAI, Groq, Ollama, LM Studio). It has a hard time limit and a guard that rejects rewrites that answer, refuse or invent; either way the plain transcript is used. Off by default. |
+| **Lab** | For tuning polish: named configurations (provider, model, effort, instructions) run side by side on your real dictations, with timings, the guard's verdict and a word-by-word diff. Hand a configuration the styles it should polish once it earns it. |
 | **The pill** | A small dark HUD at the bottom of the screen that never takes focus: a live waveform while you talk, a travelling wave while it thinks, a check when it's done. Honors Reduce Motion. |
 
 Quiet, synthesized sounds mark start, hands-free, stop, done, cancel and error, and can be

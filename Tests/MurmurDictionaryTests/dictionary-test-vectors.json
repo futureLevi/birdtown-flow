@@ -13,7 +13,11 @@
     "  3. Longest match first - a longer trigger wins over a shorter overlapping one.",
     "  4. Glued words match   - parts may be separated by any number of spaces or hyphens,",
     "                           including none at all.",
-    "  5. Disabled is inert   - a disabled entry changes nothing."
+    "  5. Disabled is inert   - a disabled entry changes nothing.",
+    "  6. Only changes count  - a match already written exactly as the rule writes it is",
+    "                           left alone and not reported as a correction.",
+    "  7. One pass            - every rule matches what was heard; a span a longer rule claims",
+    "                           is off limits to shorter ones, so no rule rewrites another's output."
   ],
   "version": 1,
   "cases": [
@@ -345,6 +349,91 @@
       "expectedCorrections": [
         {
           "to": "Café Racer",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "name": "a match already written the right way is not counted",
+      "entries": [
+        {
+          "kind": "correction",
+          "hear": "bird town",
+          "write": "Birdtown"
+        }
+      ],
+      "input": "Birdtown, bird town and BirdTown.",
+      "expected": "Birdtown, Birdtown and Birdtown.",
+      "expectedCorrections": [
+        {
+          "to": "Birdtown",
+          "count": 2
+        }
+      ]
+    },
+    {
+      "name": "nothing to fix reports no correction",
+      "entries": [
+        {
+          "kind": "correction",
+          "hear": "bird town",
+          "write": "Birdtown"
+        }
+      ],
+      "input": "Birdtown is already right.",
+      "expected": "Birdtown is already right.",
+      "expectedCorrections": []
+    },
+    {
+      "name": "a rule's output is never rewritten by a shorter rule",
+      "entries": [
+        {
+          "kind": "correction",
+          "hear": "bird town",
+          "write": "Birdtown"
+        },
+        {
+          "kind": "correction",
+          "hear": "data at bird town dot com",
+          "write": "data@birdtown.com"
+        }
+      ],
+      "input": "Write to data at bird town dot com about bird town.",
+      "expected": "Write to data@birdtown.com about Birdtown.",
+      "expectedCorrections": [
+        {
+          "to": "data@birdtown.com",
+          "count": 1
+        },
+        {
+          "to": "Birdtown",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "name": "glued output is safe from a shorter rule too",
+      "entries": [
+        {
+          "kind": "correction",
+          "hear": "side quest",
+          "write": "Side[Quest]"
+        },
+        {
+          "kind": "correction",
+          "hear": "side quest dot video",
+          "write": "sidequest.video"
+        }
+      ],
+      "input": "Sign up at side quest dot video to try side quest.",
+      "expected": "Sign up at sidequest.video to try Side[Quest].",
+      "expectedCorrections": [
+        {
+          "to": "sidequest.video",
+          "count": 1
+        },
+        {
+          "to": "Side[Quest]",
           "count": 1
         }
       ]

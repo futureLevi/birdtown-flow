@@ -51,6 +51,8 @@ struct LabView: View {
                             .frame(width: Layout.Lab.listWidth)
                         if let selected = bench.selected {
                             LabEditor(configuration: selected, onDelete: { deleting = $0 }, onApplied: { applied() })
+                                // A fresh editor per configuration: no focus or scroll carried over.
+                                .id(selected.id)
                         } else {
                             EmptyState(
                                 symbol: "flask",
@@ -94,11 +96,12 @@ struct LabView: View {
     /// Snapshots render with a fixed status and must not start anything.
     private var isLive: Bool { preview.status == nil }
 
-    /// A save, an assignment or a deletion can change how dictation polishes: get its Claude
-    /// Code session (if any) ready for the new setup.
+    /// After a save, an assignment or a deletion, keep a session ready for the next test.
+    /// Dictation needs nothing here: it starts its own session as you begin talking, and
+    /// leaving the Lab hands the waiting session back to it.
     private func applied() {
         guard isLive else { return }
-        model.controller.polishSettingsChanged()
+        model.bench.schedulePrewarm()
     }
 }
 

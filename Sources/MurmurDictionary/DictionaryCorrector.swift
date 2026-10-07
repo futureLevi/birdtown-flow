@@ -17,7 +17,7 @@ public struct AppliedCorrection: Codable, Hashable, Sendable {
 /// odds of the right word and promises nothing — so anything that must be correct has to be
 /// fixed here, after the fact, deterministically.
 ///
-/// Three rules, all load-bearing:
+/// The rules, all load-bearing:
 ///
 /// **Longest match first.** "Claude Code" is applied before "Claude", so the longer rule
 /// isn't pre-empted by a shorter one that overlaps it.
@@ -28,19 +28,29 @@ public struct AppliedCorrection: Codable, Hashable, Sendable {
 /// **Glued words still match.** Engines run words together — "CloudCode", "cloud-code" — so
 /// the gap between the parts of a phrase is matched as *optional* whitespace or hyphens
 /// rather than a literal space.
+///
+/// **One pass.** Every rule matches against what was heard, and a span a longer rule claims
+/// is off limits to the rest, so no rule ever rewrites another's output: "data@birdtown.com"
+/// stays as written even with a "bird town -> Birdtown" rule around.
+///
+/// **Only changes count.** A match already written exactly as its rule writes it is left
+/// alone and not reported, so History credits the dictionary only for real fixes.
 public struct DictionaryCorrector: Sendable {
     private let rules: [Rule]
 
     private struct Rule: Sendable {
         let regex: NSRegularExpression
-        let replacement: String
+        /// What the rule writes, verbatim.
+        let write: String
+        /// The same in NFC, to compare with text (which is NFC by then).
+        let normalizedWrite: String
         let trigger: String
     }
 
     public init(entries: [DictionaryEntry]) {
         // Longest trigger first. Sorting by the trigger's length is what makes "Claude Code"
-        // win over "Claude" — once the longer rule has rewritten the span, the shorter one
-        // no longer sees the text it would have matched.
+        // win over "Claude": the longer rule claims the span first, and the shorter one may
+        // not match inside it.
         let corrections = entries
             .filter { $0.isEnabled && $0.kind == .correction }
             .filter { !$0.hear.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
@@ -50,7 +60,8 @@ public struct DictionaryCorrector: Sendable {
             guard let regex = Self.makeRegex(for: entry.hear) else { return nil }
             return Rule(
                 regex: regex,
-                replacement: NSRegularExpression.escapedTemplate(for: entry.write),
+                write: entry.write,
+                normalizedWrite: entry.write.precomposedStringWithCanonicalMapping,
                 trigger: entry.hear
             )
         }
@@ -58,9 +69,9 @@ public struct DictionaryCorrector: Sendable {
 
     public var isEmpty: Bool { rules.isEmpty }
 
-    /// Applies every rule in order.
+    /// Applies every rule, longest trigger first, in a single pass over the text.
     ///
-    /// - Returns: the rewritten text, plus one `AppliedCorrection` per rule that fired.
+    /// - Returns: the rewritten text, plus one `AppliedCorrection` per rule that changed something.
     public func apply(to text: String) -> (text: String, applied: [AppliedCorrection]) {
         guard !rules.isEmpty, !text.isEmpty else { return (text, []) }
 
@@ -69,36 +80,42 @@ public struct DictionaryCorrector: Sendable {
         // "café" decomposed is five scalars where composed is four. The pattern and the text
         // must be in the same form or an accented trigger silently never matches. The Windows
         // implementation normalizes identically; this is part of the shared contract.
-        var result = text.precomposedStringWithCanonicalMapping
+        let source = text.precomposedStringWithCanonicalMapping
+        let heardText = source as NSString
+        let whole = NSRange(location: 0, length: heardText.length)
+        var claimed: [NSRange] = []
+        var edits: [(range: NSRange, write: String)] = []
         var applied: [AppliedCorrection] = []
 
         for rule in rules {
-            let range = NSRange(result.startIndex..., in: result)
-            let matches = rule.regex.numberOfMatches(in: result, range: range)
-            guard matches > 0 else { continue }
-
-            // Record what the engine actually produced, not the rule's trigger — seeing the
-            // real mishearing is the point, and it can differ from the trigger in case or
-            // spacing ("CloudCode" matched by "cloud code").
-            let firstMatch = rule.regex.firstMatch(in: result, range: range)
-            let heard = firstMatch
-                .flatMap { Range($0.range, in: result) }
-                .map { String(result[$0]) } ?? rule.trigger
-
-            result = rule.regex.stringByReplacingMatches(
-                in: result,
-                range: range,
-                withTemplate: rule.replacement
-            )
-
-            applied.append(AppliedCorrection(
-                from: heard,
-                to: rule.replacement.replacingOccurrences(of: "\\", with: ""),
-                count: matches
-            ))
+            var heard: String?
+            var changed = 0
+            for match in rule.regex.matches(in: source, range: whole) {
+                // A longer rule got here first; its span, and what it writes there, are final.
+                guard !claimed.contains(where: { NSIntersectionRange($0, match.range).length > 0 }) else { continue }
+                claimed.append(match.range)
+                let original = heardText.substring(with: match.range)
+                // Already right: nothing to change, nothing to report.
+                guard original != rule.normalizedWrite else { continue }
+                edits.append((match.range, rule.write))
+                // Record what the engine actually produced, not the rule's trigger — seeing
+                // the real mishearing is the point, and it can differ from the trigger in case
+                // or spacing ("CloudCode" matched by "cloud code").
+                if heard == nil { heard = original }
+                changed += 1
+            }
+            if let heard {
+                applied.append(AppliedCorrection(from: heard, to: rule.write, count: changed))
+            }
         }
 
-        return (result, applied)
+        guard !edits.isEmpty else { return (source, applied) }
+        // From the end backwards, so each range still points at the text it matched.
+        let result = NSMutableString(string: source)
+        for edit in edits.sorted(by: { $0.range.location > $1.range.location }) {
+            result.replaceCharacters(in: edit.range, with: edit.write)
+        }
+        return (result as String, applied)
     }
 
     /// Builds the pattern for one trigger phrase.
