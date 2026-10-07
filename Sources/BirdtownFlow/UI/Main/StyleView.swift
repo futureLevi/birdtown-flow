@@ -26,6 +26,15 @@ struct StyleView: View {
         }
     }
 
+    /// "From the Lab: Casual uses “Filler v3”." when the Lab has taken styles over.
+    private var labLine: String? {
+        let uses = WritingStyle.allCases.compactMap { style in
+            model.lab.configuration(for: style).map { "\(style.title) uses “\($0.name)”" }
+        }
+        guard !uses.isEmpty else { return nil }
+        return "From the Lab: " + ListFormatter.localizedString(byJoining: uses) + "."
+    }
+
     private func polishNote(provider: PolishProvider) -> some View {
         HStack(alignment: .center, spacing: Spacing.m) {
             Image(systemName: "sparkles")
@@ -42,6 +51,12 @@ struct StyleView: View {
                     .font(Typography.callout)
                     .foregroundStyle(Palette.inkSecondary)
                     .fixedSize(horizontal: false, vertical: true)
+                if provider != .off, let lab = labLine {
+                    Text(lab)
+                        .font(Typography.callout)
+                        .foregroundStyle(Palette.inkSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
             Spacer(minLength: Spacing.m)
             SettingsLink {

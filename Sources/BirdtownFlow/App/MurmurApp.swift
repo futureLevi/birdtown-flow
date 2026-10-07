@@ -47,6 +47,10 @@ struct MurmurCommands: Commands {
         CommandGroup(after: .pasteboard) {
             Button("Paste Last Dictation") { AppModel.shared.controller.pasteLast() }
                 .keyboardShortcut("v", modifiers: [.control, .option])
+            // Hands-free from the keyboard while the app is in front, now that the toolbar
+            // has no Dictate button.
+            Button("Start or Stop Dictating") { AppModel.shared.controller.toggleRecording() }
+                .keyboardShortcut("d", modifiers: [.command, .shift])
         }
     }
 }

@@ -25,14 +25,19 @@ extension SnapshotCatalog {
             SnapshotRenderer.Shot("dictionary", size: size) { window(.dictionary, records: records, preview: sample) },
             SnapshotRenderer.Shot("snippets", size: size) { window(.snippets, records: records, preview: sample) },
             SnapshotRenderer.Shot("style", size: size) { window(.style, records: records, preview: sample) },
+            // The Lab as it opens, and the whole page: editor, test text and results.
+            SnapshotRenderer.Shot("lab", size: size) { lab(records: records, preview: sample) },
+            SnapshotRenderer.Shot("lab-full", size: CGSize(width: size.width, height: 2_150)) {
+                lab(records: records, preview: sample)
+            },
             // The sidebar column on its own: macOS 26 hosts it in a glass panel that offscreen
             // rendering can't capture, so it gets a shot of its own (with each status state).
             SnapshotRenderer.Shot("main-sidebar", size: CGSize(width: 4 * Layout.sidebarWidth, height: 520)) {
                 sidebars(records: records)
             },
-            // The toolbar never renders in window shots, so the Dictate pill (idle and live)
+            // The toolbar never renders in window shots, so its contents (a mock of the bar)
             // and the shared controls get a sheet of their own.
-            SnapshotRenderer.Shot("main-components", size: CGSize(width: 760, height: 420)) {
+            SnapshotRenderer.Shot("main-components", size: CGSize(width: 760, height: 470)) {
                 components(records: records)
             },
         ]
@@ -43,9 +48,8 @@ extension SnapshotCatalog {
 
     private static func components(records: [HistoryRecord]) -> some View {
         VStack(alignment: .leading, spacing: Spacing.xl) {
+            toolbarMock
             HStack(spacing: Spacing.m) {
-                DictateButton(isRecording: false) {}
-                DictateButton(isRecording: true, orbPhase: Self.orbPhase) {}
                 Button("Continue Setup") {}.buttonStyle(.flowPrimary).controlSize(.small)
                 Button("Open Settings") {}.buttonStyle(.flowSecondary)
                 Button("All history") {}.buttonStyle(.flowGhost)
@@ -88,6 +92,53 @@ extension SnapshotCatalog {
         .background(Palette.canvas)
         .environment(previewModel(records: records, section: .home))
         .transaction { $0.disablesAnimations = true }
+    }
+
+    /// The window's toolbar as macOS lays it out: traffic lights, the sidebar button and
+    /// Settings on the left, the wordmark centred. Only the wordmark is the real view; the
+    /// glass buttons are drawn here because offscreen rendering can't capture the toolbar.
+    private static var toolbarMock: some View {
+        ZStack {
+            HStack(spacing: Spacing.s) {
+                ForEach(0..<3, id: \.self) { _ in
+                    Circle().fill(Palette.hairlineStrong).frame(width: MockChrome.light, height: MockChrome.light)
+                }
+                Spacer().frame(width: Spacing.l)
+                ForEach(["sidebar.left", "gearshape"], id: \.self) { symbol in
+                    Image(systemName: symbol)
+                        .font(Typography.bodyEmphasis)
+                        .foregroundStyle(Palette.inkSecondary)
+                        .frame(width: MockChrome.button, height: MockChrome.button)
+                        .background(Circle().fill(Palette.surface))
+                        .overlay(Circle().strokeBorder(Palette.hairline, lineWidth: Layout.Main.hairline))
+                }
+                Spacer()
+            }
+            ToolbarWordmark()
+        }
+        .padding(.horizontal, Spacing.m)
+        .frame(height: MockChrome.bar)
+        .background(RoundedRectangle(cornerRadius: Radius.m, style: .continuous).fill(Palette.canvas))
+        .overlay(RoundedRectangle(cornerRadius: Radius.m, style: .continuous)
+            .strokeBorder(Palette.hairline, lineWidth: Layout.Main.hairline))
+    }
+
+    /// Sizes of the system chrome the toolbar mock draws: traffic lights, glass buttons, the bar.
+    private enum MockChrome {
+        static let light: CGFloat = 12
+        static let button: CGFloat = 32
+        static let bar: CGFloat = 52
+    }
+
+    /// The Lab mid-session: a draft open, three styles assigned and four results.
+    private static func lab(records: [HistoryRecord], preview: MainPreview) -> some View {
+        let model = AppModel.preview(records: records, lab: SampleData.labState)
+        model.section = .lab
+        model.bench.preview(selected: SampleData.labDraft.id, draft: SampleData.labDraft, runs: SampleData.labRuns())
+        return MainView()
+            .environment(model)
+            .environment(\.mainPreview, preview)
+            .transaction { $0.disablesAnimations = true }
     }
 
     private static func sidebars(records: [HistoryRecord]) -> some View {

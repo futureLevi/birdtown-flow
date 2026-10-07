@@ -10,6 +10,8 @@ enum SidebarSection: String, CaseIterable, Identifiable, Hashable {
     case dictionary
     case snippets
     case style
+    /// Admin: polish setups tried out before they're used everywhere.
+    case lab
 
     var id: String { rawValue }
 
@@ -20,6 +22,7 @@ enum SidebarSection: String, CaseIterable, Identifiable, Hashable {
         case .dictionary: "Dictionary"
         case .snippets: "Snippets"
         case .style: "Style"
+        case .lab: "Lab"
         }
     }
 
@@ -30,8 +33,13 @@ enum SidebarSection: String, CaseIterable, Identifiable, Hashable {
         case .dictionary: "character.book.closed"
         case .snippets: "text.badge.plus"
         case .style: "textformat"
+        case .lab: "flask"
         }
     }
+
+    /// Everyday sections, then admin tools under their own heading.
+    static let everyday: [SidebarSection] = [.home, .history, .dictionary, .snippets, .style]
+    static let admin: [SidebarSection] = [.lab]
 }
 
 /// The composition root. Owns every long-lived object; views receive it through the
@@ -45,6 +53,9 @@ final class AppModel {
     let history: HistoryStore
     let snippets: SnippetStore
     let dictionary: DictionaryStore
+    let lab: PolishLabStore
+    /// The Lab page's edits, test text and results.
+    let bench: LabBench
     let models: ModelManager
     let permissions: PermissionsMonitor
     let controller: DictationController
@@ -58,12 +69,15 @@ final class AppModel {
         settings: Settings = .shared,
         history: HistoryStore = HistoryStore(directory: AppPaths.history),
         snippets: SnippetStore = SnippetStore(fileURL: AppPaths.snippets),
-        dictionary: DictionaryStore = .shared
+        dictionary: DictionaryStore = .shared,
+        lab: PolishLabStore = PolishLabStore(fileURL: AppPaths.lab)
     ) {
         self.settings = settings
         self.history = history
         self.snippets = snippets
         self.dictionary = dictionary
+        self.lab = lab
+        self.bench = LabBench(settings: settings, lab: lab, dictionary: dictionary, snippets: snippets)
         let models = ModelManager(settings: settings)
         self.models = models
         self.permissions = PermissionsMonitor()
@@ -72,6 +86,7 @@ final class AppModel {
             history: history,
             snippets: snippets,
             dictionary: dictionary,
+            lab: lab,
             models: models
         )
     }

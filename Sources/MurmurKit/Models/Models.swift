@@ -200,10 +200,12 @@ public struct PolishRequest: Sendable, Hashable {
     /// Dictionary words, passed as spelling hints. Keep it short — see `DictionaryCorrector.biasLimit`.
     public var vocabulary: [String]
     public var level: PolishLevel
+    /// A system prompt to use instead of the built-in one: a Lab configuration's.
+    public var instructions: String?
 
     public init(
         text: String, style: WritingStyle, category: AppCategory, appName: String?, vocabulary: [String],
-        level: PolishLevel = .full
+        level: PolishLevel = .full, instructions: String? = nil
     ) {
         self.text = text
         self.style = style
@@ -211,6 +213,7 @@ public struct PolishRequest: Sendable, Hashable {
         self.appName = appName
         self.vocabulary = vocabulary
         self.level = level
+        self.instructions = instructions
     }
 }
 
@@ -257,6 +260,8 @@ public struct HistoryRecord: Identifiable, Codable, Hashable, Sendable {
     public var finalText: String
     /// Which polisher rewrote the text, if any did.
     public var polishedBy: PolishProvider?
+    /// The Lab configuration it used, by name, when one polished this style.
+    public var polishConfiguration: String?
     public var corrections: [AppliedCorrection]
     /// Triggers of snippets that expanded.
     public var snippets: [String]

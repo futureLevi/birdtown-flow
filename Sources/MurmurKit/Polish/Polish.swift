@@ -38,12 +38,50 @@ public enum PolishError: LocalizedError, Sendable {
 
 // MARK: - Prompt
 
+/// What a Lab configuration's instructions can leave to be filled in per dictation, so one
+/// prompt can serve every style and app it's used for.
+public enum PolishPlaceholder: String, CaseIterable, Sendable, Identifiable {
+    case style
+    case destination
+    case vocabulary
+
+    public var id: String { rawValue }
+
+    /// `{{style}}`
+    public var token: String { "{{\(rawValue)}}" }
+
+    /// What it becomes, for the Lab's help text.
+    public var detail: String {
+        switch self {
+        case .style: "The style's rule, like “Casual. Normal capitalization, light punctuation…”"
+        case .destination: "Where the text is going, like “Slack, a work chat app.”"
+        case .vocabulary: "Names and terms from your dictionary, or “None.”"
+        }
+    }
+
+    public func value(for request: PolishRequest) -> String {
+        switch self {
+        case .style:
+            return PolishPrompt.styleLine(request.style)
+        case .destination:
+            return PolishPrompt.destinationLine(category: request.category, appName: request.appName)
+        case .vocabulary:
+            let terms = PolishPrompt.cleanVocabulary(request.vocabulary)
+            return terms.isEmpty ? "None." : terms.joined(separator: ", ")
+        }
+    }
+}
+
 /// The instructions every provider gets.
 public enum PolishPrompt {
     /// Vocabulary beyond this is dropped from the prompt; long lists make small models drift.
     public static let vocabularyLimit = DictionaryCorrector.biasLimit
 
     public static func system(for request: PolishRequest) -> String {
+        if let instructions = request.instructions?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !instructions.isEmpty {
+            return fill(instructions, for: request)
+        }
         // The light edit is the same for every app and style: those are applied afterwards by
         // `TextPipeline.finalize`, and a fixed prompt lets a session be started ahead of time.
         if request.level == .fillerWords { return fillerWords }
@@ -55,20 +93,43 @@ public enum PolishPrompt {
             """)
         let vocabulary = cleanVocabulary(request.vocabulary)
         if !vocabulary.isEmpty {
-            sections.append(
-                """
-                Vocabulary — the speaker's names and terms, spelled correctly. When the transcript has a \
-                word or phrase that sounds like one of these, use this spelling and capitalization:
-                \(vocabulary.joined(separator: ", "))
-                """)
+            sections.append(vocabularyHeading + "\n" + vocabulary.joined(separator: ", "))
         }
-        sections.append(
-            """
-            Reply with the edited text and nothing else: no quotation marks, no tags, no preamble such as \
-            "Here is", no notes about what you changed. If nothing needs fixing, return the text as it is.
-            """)
+        sections.append(replyLine)
         return sections.joined(separator: "\n\n")
     }
+
+    /// The full built-in prompt as a template for the Lab: the same text, with the parts that
+    /// change per dictation left as placeholders.
+    public static let fullTemplate = [
+        core,
+        "Style: \(PolishPlaceholder.style.token)\nDestination: \(PolishPlaceholder.destination.token)",
+        vocabularyHeading + "\n" + PolishPlaceholder.vocabulary.token,
+        replyLine,
+    ].joined(separator: "\n\n")
+
+    /// The light edit, for the Lab.
+    public static var fillerWordsTemplate: String { fillerWords }
+
+    /// Fills in a Lab configuration's placeholders for this dictation.
+    public static func fill(_ instructions: String, for request: PolishRequest) -> String {
+        guard instructions.contains("{{") else { return instructions }
+        var text = instructions
+        for placeholder in PolishPlaceholder.allCases where text.contains(placeholder.token) {
+            text = text.replacingOccurrences(of: placeholder.token, with: placeholder.value(for: request))
+        }
+        return text
+    }
+
+    private static let vocabularyHeading = """
+        Vocabulary — the speaker's names and terms, spelled correctly. When the transcript has a \
+        word or phrase that sounds like one of these, use this spelling and capitalization:
+        """
+
+    private static let replyLine = """
+        Reply with the edited text and nothing else: no quotation marks, no tags, no preamble such as \
+        "Here is", no notes about what you changed. If nothing needs fixing, return the text as it is.
+        """
 
     /// The transcript, fenced so the model can tell the text to edit from its instructions.
     public static func user(for request: PolishRequest) -> String {
@@ -437,12 +498,15 @@ public struct AnthropicClient: PolishClient {
 
     public var apiKey: String
     public var model: String
+    /// `nil` picks automatically (low on models that take it); otherwise exactly this.
+    public var effort: PolishEffort?
     /// Per-request network timeout. PolishService enforces its own, shorter, overall deadline.
     public var timeout: TimeInterval = 20
 
-    public init(apiKey: String, model: String = AnthropicClient.defaultModel) {
+    public init(apiKey: String, model: String = AnthropicClient.defaultModel, effort: PolishEffort? = nil) {
         self.apiKey = apiKey
         self.model = model
+        self.effort = effort
     }
 
     public func polish(_ request: PolishRequest) async throws -> String {
@@ -466,7 +530,7 @@ public struct AnthropicClient: PolishClient {
                 temperature: 0,
                 system: PolishPrompt.system(for: request),
                 messages: [.init(role: "user", content: PolishPrompt.user(for: request))],
-                output_config: Self.effort(for: modelID).map { Body.OutputConfig(effort: $0) }))
+                output_config: (effort.map(\.value) ?? Self.effort(for: modelID)).map { Body.OutputConfig(effort: $0) }))
         return urlRequest
     }
 

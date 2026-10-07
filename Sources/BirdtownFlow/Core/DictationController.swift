@@ -88,6 +88,7 @@ final class DictationController {
     let history: HistoryStore
     let snippets: SnippetStore
     let dictionary: DictionaryStore
+    let lab: PolishLabStore
     let models: ModelManager
 
     // MARK: - Private state
@@ -142,12 +143,14 @@ final class DictationController {
         history: HistoryStore,
         snippets: SnippetStore,
         dictionary: DictionaryStore,
+        lab: PolishLabStore,
         models: ModelManager
     ) {
         self.settings = settings
         self.history = history
         self.snippets = snippets
         self.dictionary = dictionary
+        self.lab = lab
         self.models = models
 
         recorder.setEventHandler { [weak self] event in
@@ -357,7 +360,7 @@ final class DictationController {
         let (quick, pid) = FrontmostContext.quick()
         context = quick
         // Claude Code takes a second or two to start; do it while the person is talking.
-        if settings.polishProvider == .claudeCode { ClaudeCodePolisher.prewarm(likelyPolishRequest(for: quick)) }
+        prewarmPolish(for: quick)
         let contextTask = Task.detached(priority: .userInitiated) {
             FrontmostContext.refined(quick, pid: pid)
         }
@@ -725,6 +728,8 @@ final class DictationController {
         var result: PipelineResult
         var polishedBy: PolishProvider?
         var polishNote: String?
+        /// The Lab configuration this style used, by name.
+        var polishConfiguration: String?
         var transcribeMs: Int
         var polishMs: Int
 
@@ -735,6 +740,7 @@ final class DictationController {
             record.corrections = result.corrections
             record.snippets = result.snippets
             record.polishedBy = polishedBy
+            record.polishConfiguration = polishConfiguration
             record.timings.transcribeMs = transcribeMs
             record.timings.polishMs = polishMs
         }
@@ -761,23 +767,20 @@ final class DictationController {
         var text = TextPipeline.prepare(raw, options: options)
         var polishedBy: PolishProvider?
         var polishNote: String?
+        var polishConfiguration: String?
         var polishMs = 0
 
         if settings.polishProvider != .off, !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             willPolish()
             let polishStart = clock.now
-            let request = PolishRequest(
-                text: text,
-                style: style,
-                category: context.category,
-                appName: context.appName,
-                vocabulary: dictionary.biasPhrases,
-                level: settings.polishLevel
-            )
-            let outcome = await polish(request)
+            // A style can be handed to a Lab configuration; the rest follow Settings.
+            let configuration = lab.configuration(for: style)
+            let request = polishRequest(text: text, style: style, context: context, configuration: configuration)
+            let outcome = await polish(request, using: configuration)
             text = outcome.text
             polishedBy = outcome.provider
             polishNote = outcome.note
+            polishConfiguration = configuration?.name
             polishMs = Self.milliseconds(polishStart.duration(to: clock.now))
             try Task.checkCancellation()
         }
@@ -795,6 +798,7 @@ final class DictationController {
             result: result,
             polishedBy: polishedBy,
             polishNote: polishNote,
+            polishConfiguration: polishConfiguration,
             transcribeMs: transcribeMs,
             polishMs: polishMs
         )
@@ -819,35 +823,60 @@ final class DictationController {
         }
     }
 
-    /// Starts or stops the waiting Claude Code session after the polish settings change.
+    /// Starts or stops the waiting Claude Code session after the polish settings, or the Lab's
+    /// configurations or their styles, change.
     func polishSettingsChanged() {
-        if settings.polishProvider == .claudeCode {
-            ClaudeCodePolisher.prewarm(likelyPolishRequest(for: context ?? AppContext(bundleID: nil, appName: nil, category: .other)))
-        } else {
+        let context = self.context ?? AppContext(bundleID: nil, appName: nil, category: .other)
+        if !prewarmPolish(for: context), !usesClaudeCode {
             ClaudeCodePolisher.shutDown()
         }
     }
 
-    /// The instructions the next dictation will most likely need, so a session can be started
-    /// with them ahead of time. Only the text is unknown, and the instructions don't include it.
-    private func likelyPolishRequest(for context: AppContext) -> PolishRequest {
+    /// Whether any dictation could polish with Claude Code: Settings, or a Lab configuration
+    /// some style uses.
+    private var usesClaudeCode: Bool {
+        guard settings.polishProvider != .off else { return false }
+        return settings.polishProvider == .claudeCode
+            || WritingStyle.allCases.contains { lab.configuration(for: $0)?.provider == .claudeCode }
+    }
+
+    /// Starts a Claude Code session for a dictation into `context`, if that's how it will be
+    /// polished. Returns whether it is.
+    @discardableResult
+    private func prewarmPolish(for context: AppContext) -> Bool {
+        guard settings.polishProvider != .off else { return false }
+        let style = settings.style(for: context.category)
+        let configuration = lab.configuration(for: style)
+        guard (configuration?.provider ?? settings.polishProvider) == .claudeCode else { return false }
+        // Only the text is unknown yet, and the instructions don't include it.
+        let request = polishRequest(text: "", style: style, context: context, configuration: configuration)
+        PolishService.claudeCode(model: configuration?.model, effort: configuration?.effort).prewarm(request)
+        return true
+    }
+
+    /// What polish gets for a dictation: Settings' cleanup level, or the instructions of the
+    /// Lab configuration the style uses.
+    private func polishRequest(
+        text: String, style: WritingStyle, context: AppContext, configuration: PolishConfiguration?
+    ) -> PolishRequest {
         PolishRequest(
-            text: "",
-            style: settings.style(for: context.category),
+            text: text,
+            style: style,
             category: context.category,
             appName: context.appName,
             vocabulary: dictionary.biasPhrases,
-            level: settings.polishLevel
+            level: settings.polishLevel,
+            instructions: configuration?.instructions
         )
     }
 
     /// PolishService never throws and has its own timeout; this is the backstop in case it
     /// hangs anyway. Any failure means the deterministic text is used.
-    private func polish(_ request: PolishRequest) async -> PolishService.Outcome {
+    private func polish(_ request: PolishRequest, using configuration: PolishConfiguration?) async -> PolishService.Outcome {
         let service = PolishService(settings: settings)
         let limit = Duration.seconds(max(1, settings.polishTimeout) + Timing.polishGrace)
         do {
-            return try await Watchdog.run(within: limit) { await service.polish(request) }
+            return try await Watchdog.run(within: limit) { await service.polish(request, using: configuration) }
         } catch {
             return PolishService.Outcome(text: request.text, provider: nil, note: "timed out")
         }

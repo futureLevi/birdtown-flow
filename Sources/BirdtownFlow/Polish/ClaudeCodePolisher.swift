@@ -15,8 +15,11 @@ import os
 /// dictation per session also means nothing said earlier rides along with the next.
 struct ClaudeCodePolisher: PolishClient {
     /// The model and effort measured at about 1.2 s for a 190-word dictation.
-    static let model = "claude-haiku-5-5"
-    static let effort = "low"
+    static let defaultModel = "claude-haiku-5-5"
+    static let defaultEffort: PolishEffort = .low
+
+    var model = ClaudeCodePolisher.defaultModel
+    var effort = ClaudeCodePolisher.defaultEffort
 
     /// A failure with two phrasings: a few words for History, a sentence for Settings.
     struct Failure: LocalizedError {
@@ -35,22 +38,46 @@ struct ClaudeCodePolisher: PolishClient {
     }
 
     func polish(_ request: PolishRequest) async throws -> String {
+        try await reply(to: request).text
+    }
+
+    /// The answer with Claude Code's own timings, for the Lab.
+    func reply(to request: PolishRequest) async throws -> ClaudeCodeReply {
         try await ClaudeCodeSessions.shared.run(
-            systemPrompt: PolishPrompt.system(for: request),
+            ClaudeCodeSessionKey(systemPrompt: PolishPrompt.system(for: request), model: model, effort: effort),
             message: PolishPrompt.user(for: request)
         )
     }
 
     /// Starts a session for the dictation that's about to happen, so it doesn't wait for
-    /// Claude Code to launch. Cheap when one is already waiting with the same instructions.
-    static func prewarm(_ request: PolishRequest) {
-        let systemPrompt = PolishPrompt.system(for: request)
-        Task { await ClaudeCodeSessions.shared.prewarm(systemPrompt: systemPrompt) }
+    /// Claude Code to launch. Cheap when one is already waiting with the same setup.
+    func prewarm(_ request: PolishRequest) {
+        let key = ClaudeCodeSessionKey(systemPrompt: PolishPrompt.system(for: request), model: model, effort: effort)
+        Task { await ClaudeCodeSessions.shared.prewarm(key) }
     }
 
     static func shutDown() {
         Task { await ClaudeCodeSessions.shared.shutDown() }
     }
+}
+
+/// What a session is started with. A waiting session is only used for a dictation that
+/// needs exactly the same.
+struct ClaudeCodeSessionKey: Sendable, Equatable {
+    var systemPrompt: String
+    var model: String
+    var effort: PolishEffort
+}
+
+/// Claude's answer, and how long it took by Claude Code's own clock.
+struct ClaudeCodeReply: Sendable {
+    var text: String
+    /// Time spent waiting on the model.
+    var modelMilliseconds: Int?
+    /// Time from the message arriving to the answer, inside Claude Code.
+    var sessionMilliseconds: Int?
+    /// No session was waiting with this setup, so this answer also waited for Claude Code to start.
+    var startedCold = false
 }
 
 // MARK: - Sessions
@@ -72,31 +99,35 @@ actor ClaudeCodeSessions {
     /// rather than trusted with a login it read long ago.
     static let maxSpareAge: Duration = .seconds(15 * 60)
 
-    func prewarm(systemPrompt: String) async {
-        if let spare, spare.systemPrompt == systemPrompt, spare.isRunning, spare.age < Self.maxSpareAge { return }
+    func prewarm(_ key: ClaudeCodeSessionKey) async {
+        if let spare, spare.key == key, spare.isRunning, spare.age < Self.maxSpareAge { return }
         spare?.terminate()
         spare = nil
         guard let installation = await locate() else { return }
-        spare = try? ClaudeCodeProcess.start(installation: installation, systemPrompt: systemPrompt)
+        spare = try? ClaudeCodeProcess.start(installation: installation, key: key)
     }
 
-    func run(systemPrompt: String, message: String) async throws -> String {
+    func run(_ key: ClaudeCodeSessionKey, message: String) async throws -> ClaudeCodeReply {
         guard let installation = await locate() else { throw ClaudeCodePolisher.Failure.notInstalled }
         let session: ClaudeCodeProcess
-        if let spare, spare.systemPrompt == systemPrompt, spare.isRunning {
+        var cold = false
+        if let spare, spare.key == key, spare.isRunning {
             session = spare
         } else {
-            // Instructions changed (another app's style under full polish) or nothing was
+            // The setup changed (another style's configuration, a Lab test) or nothing was
             // waiting: this one pays the startup.
             spare?.terminate()
-            session = try ClaudeCodeProcess.start(installation: installation, systemPrompt: systemPrompt)
+            session = try ClaudeCodeProcess.start(installation: installation, key: key)
+            cold = true
         }
         spare = nil
         // The next dictation's session starts now, while this one is answering.
-        spare = try? ClaudeCodeProcess.start(installation: installation, systemPrompt: systemPrompt)
+        spare = try? ClaudeCodeProcess.start(installation: installation, key: key)
 
         do {
-            return try await session.send(message)
+            var reply = try await session.send(message)
+            reply.startedCold = cold
+            return reply
         } catch {
             session.terminate()
             throw error
@@ -131,7 +162,7 @@ actor ClaudeCodeSessions {
 /// Foundation calls made outside it (writing to the input pipe, reading the output pipe on
 /// one background thread, `terminate`, `isRunning`) are thread-safe.
 final class ClaudeCodeProcess: @unchecked Sendable {
-    let systemPrompt: String
+    let key: ClaudeCodeSessionKey
     private let startedAt = ContinuousClock.now
     private let process: Process
     private let input: FileHandle
@@ -139,23 +170,23 @@ final class ClaudeCodeProcess: @unchecked Sendable {
     private let lock = NSLock()
     private var errorText = ""
 
-    private init(process: Process, input: FileHandle, output: FileHandle, systemPrompt: String) {
+    private init(process: Process, input: FileHandle, output: FileHandle, key: ClaudeCodeSessionKey) {
         self.process = process
         self.input = input
         self.output = output
-        self.systemPrompt = systemPrompt
+        self.key = key
     }
 
     var isRunning: Bool { process.isRunning }
     var age: Duration { ContinuousClock.now - startedAt }
 
-    static func start(installation: ClaudeCodeLocator.Installation, systemPrompt: String) throws -> ClaudeCodeProcess {
+    static func start(installation: ClaudeCodeLocator.Installation, key: ClaudeCodeSessionKey) throws -> ClaudeCodeProcess {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: installation.executable)
-        process.arguments = [
-            "-p",
-            "--model", ClaudeCodePolisher.model,
-            "--effort", ClaudeCodePolisher.effort,
+        let model = key.model.trimmingCharacters(in: .whitespacesAndNewlines)
+        process.arguments = ["-p", "--model", model.isEmpty ? ClaudeCodePolisher.defaultModel : model]
+            + (key.effort.value.map { ["--effort", $0] } ?? [])
+            + [
             "--input-format", "stream-json",
             "--output-format", "stream-json",
             "--verbose",
@@ -166,7 +197,7 @@ final class ClaudeCodeProcess: @unchecked Sendable {
             "--disable-slash-commands",
             "--setting-sources", "",
             "--no-session-persistence",
-            "--system-prompt", systemPrompt,
+            "--system-prompt", key.systemPrompt,
         ]
         process.environment = installation.environment
         // An empty folder of our own, so no project instructions are picked up from wherever
@@ -183,8 +214,7 @@ final class ClaudeCodeProcess: @unchecked Sendable {
         process.standardError = stderr
 
         let session = ClaudeCodeProcess(
-            process: process, input: stdin.fileHandleForWriting, output: stdout.fileHandleForReading,
-            systemPrompt: systemPrompt)
+            process: process, input: stdin.fileHandleForWriting, output: stdout.fileHandleForReading, key: key)
         // Keep a little of what it says on stderr, for the error message if it never answers.
         stderr.fileHandleForReading.readabilityHandler = { [weak session] handle in
             let data = handle.availableData
@@ -199,7 +229,7 @@ final class ClaudeCodeProcess: @unchecked Sendable {
     }
 
     /// Sends one dictation and waits for Claude's answer.
-    func send(_ message: String) async throws -> String {
+    func send(_ message: String) async throws -> ClaudeCodeReply {
         let line = try Self.userMessageLine(message)
         return try await withTaskCancellationHandler {
             try input.write(contentsOf: line)
@@ -209,7 +239,8 @@ final class ClaudeCodeProcess: @unchecked Sendable {
             guard !event.isError else { throw Self.failure(for: event.text) }
             let text = event.text.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !text.isEmpty else { throw PolishError.emptyResponse }
-            return text
+            return ClaudeCodeReply(text: text, modelMilliseconds: event.apiMilliseconds,
+                                   sessionMilliseconds: event.milliseconds)
         } onCancel: {
             // A timeout or a cancelled dictation: stop it rather than let it finish unheard.
             self.terminate()
@@ -226,6 +257,8 @@ final class ClaudeCodeProcess: @unchecked Sendable {
     struct ResultEvent: Sendable {
         var isError: Bool
         var text: String
+        var milliseconds: Int?
+        var apiMilliseconds: Int?
     }
 
     /// `{"type":"user","message":{"role":"user","content":"…"}}` and a newline.
@@ -244,7 +277,10 @@ final class ClaudeCodeProcess: @unchecked Sendable {
         else { return nil }
         let isError = (object["is_error"] as? Bool ?? false) || (object["subtype"] as? String ?? "success") != "success"
         let text = object["result"] as? String ?? (object["subtype"] as? String ?? "")
-        return ResultEvent(isError: isError, text: text)
+        return ResultEvent(
+            isError: isError, text: text,
+            milliseconds: (object["duration_ms"] as? NSNumber)?.intValue,
+            apiMilliseconds: (object["duration_api_ms"] as? NSNumber)?.intValue)
     }
 
     private func readResult() async throws -> ResultEvent {

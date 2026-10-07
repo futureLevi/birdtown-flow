@@ -27,15 +27,18 @@ final class PolishService {
         self.settings = settings
     }
 
-    func polish(_ request: PolishRequest) async -> Outcome {
-        let provider = settings.polishProvider
+    /// Polishes with Settings' provider, or with a Lab configuration's provider, model and
+    /// effort when one is given (its instructions travel in `request.instructions`). Turning
+    /// polish off in Settings turns it off for Lab configurations too.
+    func polish(_ request: PolishRequest, using configuration: PolishConfiguration? = nil) async -> Outcome {
+        let provider = configuration?.provider ?? settings.polishProvider
         let unchanged = Outcome(text: request.text, provider: nil, note: nil)
-        guard provider != .off,
+        guard settings.polishProvider != .off, provider != .off,
               !request.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         else { return unchanged }
 
         let client: any PolishClient
-        switch makeClient(for: provider) {
+        switch makeClient(for: provider, model: configuration?.model, effort: configuration?.effort) {
         case .success(let made):
             client = made
         case .failure(let unavailable):
@@ -106,11 +109,81 @@ final class PolishService {
     func availability() -> (available: Bool, reason: String?) {
         let provider = settings.polishProvider
         guard provider != .off else { return (true, nil) }
+        return availability(of: provider)
+    }
+
+    /// The same for any provider, for the Lab.
+    func availability(of provider: PolishProvider) -> (available: Bool, reason: String?) {
         switch makeClient(for: provider) {
         case .success:
             return (true, nil)
         case .failure(let unavailable):
             return (false, unavailable.reason)
+        }
+    }
+
+    // MARK: - Lab
+
+    /// How one Lab configuration did on one piece of text.
+    struct LabResult: Sendable {
+        enum Verdict: Sendable, Equatable {
+            /// The guard accepted the rewrite; this is what dictation would use.
+            case accepted(String)
+            /// The model replied, but the guard would have kept the original.
+            case rejected(reply: String, reason: String)
+            /// No usable reply: an error, a missing key, a timeout.
+            case failed(String)
+        }
+
+        var verdict: Verdict
+        /// From sending to the answer, as dictation would wait for it.
+        var totalMilliseconds: Int
+        /// Claude Code only: time spent on the model, and in Claude Code overall.
+        var modelMilliseconds: Int?
+        var sessionMilliseconds: Int?
+        /// Claude Code only: the session had to start first, which dictation does ahead of time.
+        var startedCold = false
+    }
+
+    /// The Lab's longest wait: long enough to see how slow a slow setup is.
+    static let labTimeLimit: Double = 60
+
+    /// Runs one configuration on `request` the way dictation would, but with a long time
+    /// limit, and reports the guard's verdict and the timings instead of falling back.
+    func labRun(_ configuration: PolishConfiguration, request: PolishRequest) async -> LabResult {
+        var request = request
+        request.instructions = configuration.instructions
+        let client: any PolishClient
+        switch makeClient(for: configuration.provider, model: configuration.model, effort: configuration.effort) {
+        case .success(let made):
+            client = made
+        case .failure(let unavailable):
+            return LabResult(verdict: .failed(unavailable.reason), totalMilliseconds: 0)
+        }
+
+        let clock = ContinuousClock()
+        let started = clock.now
+        let limit = Self.labTimeLimit
+        do {
+            let request = request
+            let reply: ClaudeCodeReply = try await HardDeadline.run(within: .seconds(limit)) {
+                if let claude = client as? ClaudeCodePolisher {
+                    return try await claude.reply(to: request)
+                }
+                return ClaudeCodeReply(text: try await client.polish(request))
+            }
+            let total = Self.milliseconds(clock.now - started)
+            let verdict: LabResult.Verdict =
+                switch PolishGuard.review(reply.text, original: request.text, vocabulary: request.vocabulary) {
+                case .accepted(let text): .accepted(text)
+                case .rejected(let rejection): .rejected(reply: reply.text, reason: rejection.reason)
+                }
+            return LabResult(
+                verdict: verdict, totalMilliseconds: total, modelMilliseconds: reply.modelMilliseconds,
+                sessionMilliseconds: reply.sessionMilliseconds, startedCold: reply.startedCold)
+        } catch {
+            let message = error is CancellationError ? "Stopped before it finished." : Self.explanation(for: error, limit: limit)
+            return LabResult(verdict: .failed(message), totalMilliseconds: Self.milliseconds(clock.now - started))
         }
     }
 
@@ -127,7 +200,13 @@ final class PolishService {
         var errorDescription: String? { message }
     }
 
-    private func makeClient(for provider: PolishProvider) -> Result<any PolishClient, Unavailable> {
+    /// A client for `provider`. `model` and `effort` come from a Lab configuration; without
+    /// them, Settings decides.
+    private func makeClient(
+        for provider: PolishProvider, model: String? = nil, effort: PolishEffort? = nil
+    ) -> Result<any PolishClient, Unavailable> {
+        // A configuration with no model named uses the one in Settings.
+        let chosenModel = model.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.flatMap { $0.isEmpty ? nil : $0 }
         switch provider {
         case .off:
             return .failure(Unavailable(reason: "AI polish is off.", note: "Polish is off"))
@@ -142,8 +221,9 @@ final class PolishService {
             guard let key = Keychain.string(for: .anthropic) else {
                 return .failure(Unavailable(reason: "Add your Anthropic API key to polish with Claude.", note: "No API key"))
             }
-            let model = settings.anthropicModel.trimmingCharacters(in: .whitespacesAndNewlines)
-            return .success(AnthropicClient(apiKey: key, model: model.isEmpty ? AnthropicClient.defaultModel : model))
+            let model = chosenModel ?? settings.anthropicModel.trimmingCharacters(in: .whitespacesAndNewlines)
+            return .success(AnthropicClient(
+                apiKey: key, model: model.isEmpty ? AnthropicClient.defaultModel : model, effort: effort))
 
         case .openAICompatible:
             guard let baseURL = endpointURL else {
@@ -152,7 +232,7 @@ final class PolishService {
                     note: "Invalid endpoint URL"
                 ))
             }
-            let model = settings.openAIModel.trimmingCharacters(in: .whitespacesAndNewlines)
+            let model = chosenModel ?? settings.openAIModel.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !model.isEmpty else {
                 return .failure(Unavailable(reason: "Enter the name of the model to use.", note: "No model set"))
             }
@@ -166,8 +246,16 @@ final class PolishService {
         case .claudeCode:
             // Whether it's installed and signed in is only known by trying; the polisher
             // reports either problem in its own words.
-            return .success(ClaudeCodePolisher())
+            return .success(Self.claudeCode(model: chosenModel, effort: effort))
         }
+    }
+
+    /// Claude Code with a configuration's model and effort, or the defaults.
+    static func claudeCode(model: String?, effort: PolishEffort?) -> ClaudeCodePolisher {
+        var polisher = ClaudeCodePolisher()
+        if let model, !model.isEmpty { polisher.model = model }
+        if let effort { polisher.effort = effort }
+        return polisher
     }
 
     private var endpointURL: URL? {
@@ -267,5 +355,9 @@ final class PolishService {
     private static func seconds(_ duration: Duration) -> Double {
         let parts = duration.components
         return Double(parts.seconds) + Double(parts.attoseconds) / 1e18
+    }
+
+    private static func milliseconds(_ duration: Duration) -> Int {
+        Int((seconds(duration) * 1000).rounded())
     }
 }

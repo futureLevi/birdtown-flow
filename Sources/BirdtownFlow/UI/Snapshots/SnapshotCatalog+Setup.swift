@@ -167,7 +167,8 @@ extension AppModel {
         return AppModel(
             settings: settings,
             history: HistoryStore(previewRecords: setupSampleHistory),
-            snippets: SnippetStore(preview: [])
+            snippets: SnippetStore(preview: []),
+            lab: PolishLabStore(preview: PolishLabState(configurations: PolishConfiguration.starters()))
         )
     }
 

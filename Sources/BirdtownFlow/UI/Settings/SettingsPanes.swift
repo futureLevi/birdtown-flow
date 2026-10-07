@@ -409,6 +409,7 @@ private struct EngineRow: View {
 struct TextSettingsPane: View {
     @Environment(AppModel.self) private var model
     @Environment(\.setupPreview) private var preview
+    @Environment(\.openWindow) private var openWindow
     @State private var keyDraft = ""
     @State private var keySaved = false
     @State private var testing = false
@@ -455,6 +456,8 @@ struct TextSettingsPane: View {
             if settings.polishProvider != .off {
                 providerSettings(settings)
             }
+
+            labGroup
         }
         .onAppear(perform: refreshKey)
         .onChange(of: settings.polishProvider) { polishSettingsChanged() }
@@ -474,6 +477,31 @@ struct TextSettingsPane: View {
     private func polishSettingsChanged() {
         guard preview == nil else { return }
         model.controller.polishSettingsChanged()
+    }
+
+    /// Which styles the Lab has taken over, and the way there.
+    private var labGroup: some View {
+        let lab = model.lab
+        let styles = lab.assignedStyles
+        let title = styles.isEmpty
+            ? "No styles use Lab configurations"
+            : ListFormatter.localizedString(byJoining: styles.map(\.title)) + (styles.count == 1 ? " uses" : " use")
+                + " a Lab configuration"
+        let detail = styles.isEmpty
+            ? "Try other instructions, models and effort levels on real dictations, then pick the styles they polish."
+            : model.settings.polishProvider == .off
+                ? "Turn AI polish on for them to take effect."
+                : "Other styles use the settings above."
+        return SettingsGroup(title: "Lab") {
+            SettingsRow(title: title, detail: detail) {
+                Button("Open Lab") {
+                    guard preview == nil else { return }
+                    openWindow(id: "main")
+                    model.show(.lab)
+                }
+                .buttonStyle(SetupKit.SecondaryButtonStyle())
+            }
+        }
     }
 
     @ViewBuilder

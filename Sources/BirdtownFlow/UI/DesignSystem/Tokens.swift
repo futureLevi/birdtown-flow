@@ -111,7 +111,7 @@ extension Layout {
     enum Orb {
         /// Menu bar window status, list rows.
         static let small: CGFloat = 8
-        /// The record light in the pill, the Dictate button while recording.
+        /// The record light in the pill.
         static let medium: CGFloat = 12
         /// Onboarding's "try it" moment.
         static let large: CGFloat = 44
@@ -512,6 +512,20 @@ extension Layout {
         static let progressBarHeight: CGFloat = 4
         /// The logo's bars beside a snippet's trigger.
         static let triggerMark: CGFloat = 10
+        /// The app icon in the toolbar wordmark (its tile is about 80 % of this).
+        static let toolbarIcon: CGFloat = 22
+    }
+
+    /// The Lab: polish configurations, their editor, the test text and results.
+    enum Lab {
+        static let listWidth: CGFloat = 210
+        static let instructionsHeight: CGFloat = 260
+        static let sampleHeight: CGFloat = 88
+        static let fieldHeight: CGFloat = 30
+        static let appFieldWidth: CGFloat = 150
+        static let modelMenuWidth: CGFloat = 24
+        /// Results kept on screen; older ones drop off the end.
+        static let replyMaxHeight: CGFloat = 160
     }
 }
 

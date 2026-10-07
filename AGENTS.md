@@ -65,6 +65,9 @@ make snapshots      # every screen to ./snapshots, light and dark
   allowed in an app others use: Anthropic's terms don't let third-party apps route
   requests through Free, Pro or Max credentials. Customers use the Anthropic option with
   their own API key.
+- **Decide what the Lab is for customers.** It's an admin tool for tuning prompts. Either
+  hide it behind an advanced setting or keep it to internal builds, and drop Claude Code
+  from its provider list along with the provider itself.
 
 ## Not built yet
 

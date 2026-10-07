@@ -171,7 +171,9 @@ struct HistoryRow: View {
     private var footer: some View {
         HStack(spacing: Spacing.s) {
             if let polisher = record.polishedBy, polisher != .off {
-                Badge(text: "Polished · \(polisher.title)", symbol: "sparkles")
+                // A Lab configuration names itself; Settings' provider names the provider.
+                Badge(text: "Polished · \(record.polishConfiguration ?? polisher.title)", symbol: "sparkles")
+                    .help(record.polishConfiguration.map { "Lab configuration “\($0)”, on \(polisher.title)" } ?? "")
             }
             if correctionCount > 0 {
                 Badge(
@@ -428,7 +430,8 @@ struct OriginalPanel: View {
             HStack(spacing: Spacing.l) {
                 timing("Transcribed", record.timings.transcribeMs)
                 if let polisher = record.polishedBy, polisher != .off {
-                    timing("Polished by \(polisher.title)", record.timings.polishMs)
+                    timing(record.polishConfiguration.map { "Polished by \(polisher.title) (Lab: \($0))" }
+                               ?? "Polished by \(polisher.title)", record.timings.polishMs)
                 }
                 timing("Total", record.timings.totalMs)
             }

@@ -13,6 +13,7 @@ a product that can stand next to Wispr Flow.
 | **Pipeline** | raw text → fillers / stutters / spoken commands → optional AI polish → dictionary corrections → snippets → style rules → insert. |
 | **Styles** | Per app category (personal messages, work messages, email, other): formal, casual, very casual, excited. Category comes from the frontmost app (and the window title, for web apps in browsers). |
 | **AI polish** | Off, Apple Intelligence (on-device), Claude (Anthropic key) or any OpenAI-compatible endpoint. Hard timeout; any failure falls back to the deterministic text. |
+| **Lab** | Admin tool in the main window. Named polish configurations (provider, model, effort, instructions with `{{style}}`, `{{destination}}`, `{{vocabulary}}` placeholders), run side by side on real dictations with timings, the guard's verdict and a word diff. A configuration can take over chosen writing styles; the rest follow Settings, and turning polish off in Settings turns it off for all of them. |
 | **History** | Every dictation with its audio. Search, copy, paste again, play, retry transcription, see what the dictionary and polish changed. Failed dictations keep their audio so nothing said is ever lost. |
 | **Dictionary** | Vocabulary terms and "hear X → write Y" corrections, also editable as a plain text file. |
 | **Snippets** | Say a trigger phrase, get the expansion. |
@@ -28,20 +29,22 @@ Sources/MurmurKit          pure logic. Foundation only, builds and tests on Linu
   Text/                    TextPipeline, SnippetStore
   History/                 HistoryStore (JSON + recordings/)
   Stats/                   DictationStats
-  Polish/                  prompts, PolishGuard, Anthropic + OpenAI-compatible clients
+  Polish/                  prompts, PolishGuard, Anthropic + OpenAI-compatible clients,
+                           the Lab's configurations (PolishLabStore → lab.json) and WordDiff
 Sources/BirdtownFlow             the macOS app
   App/                     @main, AppDelegate, AppModel (composition root)
   Core/                    DictationController, HotkeyMonitor, AudioRecorder, TextInjector…
   Transcription/           TranscriptionEngine, ModelManager, Parakeet + Apple engines
-  Polish/                  PolishService (routing, timeout), Apple Intelligence, Keychain,
-                           Claude Code (personal builds only: a pre-started `claude -p` session)
+  Polish/                  PolishService (routing, timeout, Lab runs), Apple Intelligence,
+                           Keychain, Claude Code (personal builds only: a pre-started
+                           `claude -p` session), LabBench (the Lab page's drafts and results)
   Stores/                  DictionaryStore
   Support/                 Settings, AppPaths, Log, Permissions
   UI/DesignSystem          Tokens.swift, the only place literal design values live
   UI/Brand                 the logo drawn in code (LogoPainter), icon export, SpectrumOrb
   UI/Components            shared controls
   UI/HUD                   floating pill
-  UI/Main                  main window (Home, History, Dictionary, Snippets, Style)
+  UI/Main                  main window (Home, History, Dictionary, Snippets, Style, Lab)
   UI/Onboarding, UI/Settings, UI/MenuBar
   UI/Snapshots             `BirdtownFlow --render-snapshots <dir>` renders screens to PNG
 ```
@@ -58,6 +61,7 @@ key up   ─► AudioRecorder.stop → samples
               engine.transcribe(samples, vocabulary)          [Transcription]
               TextPipeline.prepare                            [MurmurKit]
               PolishService.polish (timeout, PolishGuard)     [Polish]
+                (Settings' provider, or the Lab configuration the style uses)
               TextPipeline.finalize (dictionary, snippets, style)
               TextInjector.insert                             [Core]
               HistoryStore.update(final text, timings, outcome)

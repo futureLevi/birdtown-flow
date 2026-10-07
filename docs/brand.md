@@ -43,7 +43,7 @@ Tile: Apple's macOS grid (824 px tile on a 1024 px canvas), continuous corners a
   appearance it adds a faint light rim so the navy tile doesn't sink into a navy window.
 - **Menu bar:** the five bars alone as a template image (`MenuBarGlyph`, `LogoBars`).
 - **Live states:** the spectrum disc on its own is `SpectrumOrb`. It means "your voice is live"
-  and nothing else: the pill's record light, the Dictate button and menu bar status while
+  and nothing else: the pill's record light, the sidebar and menu bar status while
   recording, onboarding's try-it moment. While listening it turns slowly (one turn per 9 s)
   and swells a little with your voice; while transcribing or polishing it hollows into a ring
   that spins with a comet tail. It is painted once by `LogoPainter.drawDisc` and then only

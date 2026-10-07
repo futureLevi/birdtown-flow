@@ -17,4 +17,6 @@ enum AppPaths {
 
     static var history: URL { support.appendingPathComponent("history", isDirectory: true) }
     static var snippets: URL { support.appendingPathComponent("snippets.json") }
+    /// The Lab's saved polish configurations and which styles use them.
+    static var lab: URL { support.appendingPathComponent("lab.json") }
 }

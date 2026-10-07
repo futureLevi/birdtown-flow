@@ -25,12 +25,15 @@ struct MainView: View {
             // Pages cross-fade; the window never slides.
             .animation(Motion.resolve(Motion.smooth, reduceMotion: reduceMotion), value: model.section)
             .toolbar {
-                ToolbarItem(placement: .primaryAction) {
-                    DictateButton(isRecording: status.isRecording, orbPhase: preview.orbPhase) {
-                        model.controller.toggleRecording()
-                    }
+                // Settings one click away from anywhere in the window, at the leading edge.
+                ToolbarItem(placement: .navigation) {
+                    SettingsToolbarButton()
                 }
-                // The button is its own navy pill; a glass capsule behind it would double it.
+                // The name, centred, where a document window would show its title.
+                ToolbarItem(placement: .principal) {
+                    ToolbarWordmark()
+                }
+                // A wordmark, not a control: no glass capsule behind it.
                 .sharedBackgroundVisibility(.hidden)
             }
         }
@@ -60,43 +63,45 @@ struct MainView: View {
             SnippetsView()
         case .style:
             StyleView()
+        case .lab:
+            LabView()
         }
     }
 }
 
-/// Start or stop hands-free dictation from the toolbar: the window's one primary action, so
-/// it's the navy pill (porcelain with a navy label in dark mode). A system prominent button
-/// would draw a white label on that porcelain and vanish, hence the custom style. While
-/// recording, the mic becomes the live orb: the brand's way of saying "listening".
-struct DictateButton: View {
-    let isRecording: Bool
-    /// Pins the orb's frame for snapshots.
-    var orbPhase: Double?
-    let action: () -> Void
-
-    @Environment(AppModel.self) private var model
+/// Opens Settings from the main window's toolbar, so it's never a trip through the menu bar.
+struct SettingsToolbarButton: View {
+    @Environment(\.openSettings) private var openSettings
+    @Environment(\.mainPreview) private var preview
 
     var body: some View {
-        Button(action: action) {
-            HStack(spacing: Spacing.s) {
-                if isRecording {
-                    // Read the level here, not in MainView, so only this button redraws with the voice.
-                    SpectrumOrb(mode: .live, diameter: Layout.Orb.medium, level: model.controller.level, phase: orbPhase)
-                } else {
-                    Image(systemName: "mic.fill")
-                }
-                Text(isRecording ? "Stop" : "Dictate")
-            }
+        Button {
+            guard preview.status == nil else { return }
+            openSettings()
+        } label: {
+            Label("Settings", systemImage: "gearshape")
         }
-        .buttonStyle(.flowPrimary)
-        .keyboardShortcut("d", modifiers: [.command, .shift])
-        .help(isRecording ? "Finish and insert the text (⇧⌘D)"
-                          : "Dictate hands-free (⇧⌘D). You can also just hold your shortcut key.")
-        .accessibilityLabel(isRecording ? "Stop dictating" : "Dictate")
+        .help("Settings (⌘,)")
     }
 }
 
-/// ⌘1–⌘5 switch sections, in sidebar order.
+/// The app icon and name, centred in the toolbar.
+struct ToolbarWordmark: View {
+    var body: some View {
+        HStack(spacing: Spacing.s) {
+            AppIconArtwork(size: Layout.Main.toolbarIcon, showsShadow: false)
+            Text("Birdtown Flow")
+                .font(Typography.headline)
+                .foregroundStyle(Palette.ink)
+                .fixedSize()
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Birdtown Flow")
+        .accessibilityAddTraits(.isHeader)
+    }
+}
+
+/// ⌘1–⌘6 switch sections, in sidebar order.
 private struct SectionShortcuts: View {
     @Environment(AppModel.self) private var model
 
@@ -122,10 +127,16 @@ struct MainSidebar: View {
     var body: some View {
         let failed = model.history.records.filter { $0.outcome == .failed }.count
         List(selection: selection) {
-            ForEach(SidebarSection.allCases) { section in
+            ForEach(SidebarSection.everyday) { section in
                 Label(section.title, systemImage: section.symbol)
                     .badge(section == .history ? failed : 0)
                     .tag(section)
+            }
+            Section("Admin") {
+                ForEach(SidebarSection.admin) { section in
+                    Label(section.title, systemImage: section.symbol)
+                        .tag(section)
+                }
             }
         }
         .listStyle(.sidebar)

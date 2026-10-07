@@ -26,7 +26,6 @@ struct DictionaryView: View {
                     } label: {
                         Label("Add Entry", systemImage: "plus")
                     }
-                    // Secondary: the toolbar's Dictate pill is the window's one primary action.
                     .buttonStyle(.flowSecondary)
                     .keyboardShortcut("n", modifiers: .command)
                     .help("Add a word or a replacement (⌘N)")
