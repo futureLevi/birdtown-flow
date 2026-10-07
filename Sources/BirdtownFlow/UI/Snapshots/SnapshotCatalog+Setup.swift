@@ -88,7 +88,8 @@ extension SnapshotCatalog {
             shot("general", height: Layout.Setup.settingsHeight, model: general, facts: SetupPreview()) { GeneralSettingsPane() },
             shot("audio", height: Layout.Setup.settingsHeight, model: audio, facts: audioFacts) { AudioSettingsPane() },
             shot("text", height: Layout.Setup.settingsHeight, model: text, facts: textFacts) { TextSettingsPane() },
-            shot("text-claude-code", height: Layout.Setup.settingsHeight, model: claudeCode, facts: textFacts) {
+            // Taller than the window, to show the provider's settings below the cards.
+            shot("text-claude-code", height: Layout.Setup.settingsHeight + 360, model: claudeCode, facts: textFacts) {
                 TextSettingsPane()
             },
             shot("privacy", height: Layout.Setup.settingsHeight, model: general, facts: SetupPreview()) { PrivacySettingsPane() },

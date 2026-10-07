@@ -68,8 +68,12 @@ actor ClaudeCodeSessions {
         await locate()?.executable
     }
 
+    /// A session left waiting longer than this is replaced when the next dictation starts,
+    /// rather than trusted with a login it read long ago.
+    static let maxSpareAge: Duration = .seconds(15 * 60)
+
     func prewarm(systemPrompt: String) async {
-        if let spare, spare.systemPrompt == systemPrompt, spare.isRunning { return }
+        if let spare, spare.systemPrompt == systemPrompt, spare.isRunning, spare.age < Self.maxSpareAge { return }
         spare?.terminate()
         spare = nil
         guard let installation = await locate() else { return }
@@ -128,6 +132,7 @@ actor ClaudeCodeSessions {
 /// one background thread, `terminate`, `isRunning`) are thread-safe.
 final class ClaudeCodeProcess: @unchecked Sendable {
     let systemPrompt: String
+    private let startedAt = ContinuousClock.now
     private let process: Process
     private let input: FileHandle
     private let output: FileHandle
@@ -142,6 +147,7 @@ final class ClaudeCodeProcess: @unchecked Sendable {
     }
 
     var isRunning: Bool { process.isRunning }
+    var age: Duration { ContinuousClock.now - startedAt }
 
     static func start(installation: ClaudeCodeLocator.Installation, systemPrompt: String) throws -> ClaudeCodeProcess {
         let process = Process()
