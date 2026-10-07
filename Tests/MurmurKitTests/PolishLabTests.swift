@@ -188,6 +188,10 @@ struct PolishLabTests {
         var apple = config
         apple.provider = .appleIntelligence
         #expect(apple.summary == "Apple Intelligence")
+        var api = config
+        api.provider = .anthropic
+        api.effort = .standard
+        #expect(api.summary == "Claude API · claude-haiku-5-5 · Default effort")
     }
 }
 

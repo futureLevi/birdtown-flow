@@ -94,13 +94,18 @@ public struct PolishConfiguration: Codable, Identifiable, Hashable, Sendable {
     /// Providers a configuration can use: everything but Off.
     public static let providers: [PolishProvider] = PolishProvider.allCases.filter { $0 != .off }
 
+    /// Next to Claude Code, plain "Claude" for the API is ambiguous.
+    public static func providerTitle(_ provider: PolishProvider) -> String {
+        provider == .anthropic ? "Claude API" : provider.title
+    }
+
     /// Whether the provider takes a model name and an effort level.
     public var usesModel: Bool { provider != .appleIntelligence && provider != .off }
     public var usesEffort: Bool { provider == .claudeCode || provider == .anthropic }
 
     /// "Claude Code · claude-haiku-5-5 · Low effort"
     public var summary: String {
-        var parts = [provider.title]
+        var parts = [Self.providerTitle(provider)]
         if usesModel, !model.isEmpty { parts.append(model) }
         if usesEffort { parts.append(effort == .standard ? "Default effort" : "\(effort.title) effort") }
         return parts.joined(separator: " · ")

@@ -218,14 +218,13 @@ private struct LabEditor: View {
 
                 HStack(alignment: .top, spacing: Spacing.l) {
                     LabField(label: "Provider") {
-                        Picker("Provider", selection: Binding(get: { configuration.provider }, set: { switchProvider($0) })) {
-                            ForEach(PolishConfiguration.providers) { provider in
-                                Text(provider.title).tag(provider)
-                            }
-                        }
-                        .pickerStyle(.menu)
-                        .labelsHidden()
-                        .fixedSize()
+                        LabPicker(
+                            label: "Provider",
+                            options: PolishConfiguration.providers,
+                            title: PolishConfiguration.providerTitle,
+                            selection: Binding(get: { configuration.provider }, set: { switchProvider($0) })
+                        )
+                        .frame(width: Layout.Lab.providerWidth)
                     }
                     if configuration.usesModel {
                         LabField(label: "Model") { modelField }
@@ -339,10 +338,14 @@ private struct LabEditor: View {
         var parts = [assigned.isEmpty
             ? "Pick the styles whose dictations this should polish."
             : "Dictations in these styles use this configuration."]
-        for style in WritingStyle.allCases where !assigned.contains(style) {
-            if let other = model.lab.configuration(for: style) {
-                parts.append("\(style.title) uses “\(other.name)”.")
-            }
+        // The other configurations in use, each with its styles: "Casual and Very casual use
+        // “Filler words only”."
+        let others = model.lab.configurations.filter { $0.id != configuration.id }
+        for other in others {
+            let styles = WritingStyle.allCases.filter(model.lab.styles(for: other.id).contains).map(\.title)
+            guard !styles.isEmpty else { continue }
+            let verb = styles.count == 1 ? "uses" : "use"
+            parts.append("\(ListFormatter.localizedString(byJoining: styles)) \(verb) “\(other.name)”.")
         }
         if isDirty, !assigned.isEmpty { parts.append("Until you save, they use the saved version.") }
         parts.append("Styles without a configuration follow Settings.")
@@ -474,21 +477,13 @@ private struct LabTestCard: View {
                         .accessibilityLabel("Text to polish")
                     HStack(spacing: Spacing.s) {
                         Text("Dictated as")
-                        Picker("Style", selection: $bench.sampleStyle) {
-                            ForEach(WritingStyle.allCases) { style in
-                                Text(style.title).tag(style)
-                            }
-                        }
-                        .labelsHidden()
-                        .fixedSize()
+                        LabPicker(label: "Style", options: WritingStyle.allCases, title: \.title,
+                                  selection: $bench.sampleStyle)
+                            .frame(width: Layout.Lab.styleWidth)
                         Text("into")
-                        Picker("Kind of app", selection: $bench.sampleCategory) {
-                            ForEach(AppCategory.allCases) { category in
-                                Text(category.title).tag(category)
-                            }
-                        }
-                        .labelsHidden()
-                        .fixedSize()
+                        LabPicker(label: "Kind of app", options: AppCategory.allCases, title: \.title,
+                                  selection: $bench.sampleCategory)
+                            .frame(width: Layout.Lab.categoryWidth)
                         LabTextInput("App", text: appName, prompt: "App name")
                             .frame(width: Layout.Lab.appFieldWidth)
                         Spacer(minLength: 0)
@@ -818,6 +813,49 @@ private struct LabRunCard: View {
 }
 
 // MARK: - Fields
+
+/// A choice drawn like the Lab's inset fields: the value and a chevron in a sunken well,
+/// opening a menu with the current one ticked.
+private struct LabPicker<Value: Hashable>: View {
+    let label: String
+    let options: [Value]
+    let title: (Value) -> String
+    @Binding var selection: Value
+
+    var body: some View {
+        let shape = RoundedRectangle(cornerRadius: Radius.s, style: .continuous)
+        Menu {
+            Picker(label, selection: $selection) {
+                ForEach(options, id: \.self) { option in
+                    Text(title(option)).tag(option)
+                }
+            }
+            .pickerStyle(.inline)
+            .labelsHidden()
+        } label: {
+            HStack(spacing: Spacing.s) {
+                Text(title(selection))
+                    .font(Typography.body)
+                    .foregroundStyle(Palette.ink)
+                    .lineLimit(1)
+                Spacer(minLength: Spacing.s)
+                Image(systemName: "chevron.up.chevron.down")
+                    .font(Typography.caption)
+                    .foregroundStyle(Palette.inkTertiary)
+            }
+            .padding(.horizontal, Spacing.m)
+            .frame(height: Layout.Lab.fieldHeight)
+            .background(shape.fill(Palette.sunken))
+            .overlay(shape.strokeBorder(Palette.hairline, lineWidth: Layout.Main.hairline))
+            .contentShape(shape)
+        }
+        .menuStyle(.button)
+        .buttonStyle(.plain)
+        .menuIndicator(.hidden)
+        .accessibilityLabel(label)
+        .accessibilityValue(title(selection))
+    }
+}
 
 /// A caption over a control, like `LabeledInput`'s.
 private struct LabField<Content: View>: View {

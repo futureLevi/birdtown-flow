@@ -134,6 +134,7 @@ extension SnapshotCatalog {
     private static func lab(records: [HistoryRecord], preview: MainPreview) -> some View {
         let model = AppModel.preview(records: records, lab: SampleData.labState)
         model.section = .lab
+        model.settings.polishProvider = .claudeCode
         model.bench.preview(selected: SampleData.labDraft.id, draft: SampleData.labDraft, runs: SampleData.labRuns())
         return MainView()
             .environment(model)

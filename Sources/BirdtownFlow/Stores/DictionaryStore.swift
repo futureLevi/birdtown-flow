@@ -160,8 +160,13 @@ final class DictionaryStore {
     /// were watching is gone the moment the file changes — including when *we* save.
     private func startWatching() {
         watcher?.cancel()
+        watcher = nil
 
-        let descriptor = open(Self.fileURL.path, O_EVTONLY)
+        // No file yet: watch its folder instead, so a dictionary.txt created in a text editor
+        // or Terminal is picked up too, not just one the app wrote first.
+        let exists = FileManager.default.fileExists(atPath: Self.fileURL.path)
+        let watched = exists ? Self.fileURL : Self.fileURL.deletingLastPathComponent()
+        let descriptor = open(watched.path, O_EVTONLY)
         guard descriptor >= 0 else { return }
 
         let source = DispatchSource.makeFileSystemObjectSource(
@@ -172,8 +177,10 @@ final class DictionaryStore {
 
         source.setEventHandler { [weak self] in
             guard let self else { return }
-            if !self.isSaving { self.load() }
-            self.startWatching()
+            // A folder event is any file in it changing; only reload once ours exists.
+            let appeared = !exists && FileManager.default.fileExists(atPath: Self.fileURL.path)
+            if !self.isSaving, exists || appeared { self.load() }
+            if exists || appeared { self.startWatching() }
         }
         source.setCancelHandler { close(descriptor) }
         source.resume()

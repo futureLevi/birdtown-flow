@@ -523,8 +523,11 @@ extension Layout {
         static let sampleHeight: CGFloat = 88
         static let fieldHeight: CGFloat = 30
         static let appFieldWidth: CGFloat = 150
+        static let providerWidth: CGFloat = 190
+        static let styleWidth: CGFloat = 130
+        static let categoryWidth: CGFloat = 180
         static let modelMenuWidth: CGFloat = 24
-        /// Results kept on screen; older ones drop off the end.
+        /// The refused reply, shown on request, scrolls past this.
         static let replyMaxHeight: CGFloat = 160
     }
 }
