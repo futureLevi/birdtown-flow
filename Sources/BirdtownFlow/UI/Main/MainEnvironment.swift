@@ -27,6 +27,9 @@ struct SystemStatus: Equatable, Sendable {
     var microphone: Bool
     var hotkeyActive: Bool
     var model: ModelDisplayState
+    /// Forces the footer's recording line, for snapshots. `live` leaves it off: the footer
+    /// reads the controller's phase itself, so the main window doesn't observe every phase
+    /// change (and Home doesn't re-render) during a dictation.
     var isRecording: Bool
     var engineName: String
     var engineDownloadSize: String
@@ -39,7 +42,7 @@ struct SystemStatus: Equatable, Sendable {
             microphone: model.permissions.microphone,
             hotkeyActive: model.controller.isHotkeyActive,
             model: ModelDisplayState(model.models.state),
-            isRecording: model.controller.phase.isRecording,
+            isRecording: false,
             engineName: model.settings.engine.displayName,
             engineDownloadSize: model.settings.engine.downloadSize,
             pushToTalkKey: model.settings.pushToTalkKey.displayName
