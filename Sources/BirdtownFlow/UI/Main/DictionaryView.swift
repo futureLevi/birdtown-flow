@@ -10,11 +10,13 @@ struct DictionaryView: View {
     @State private var query = ""
     @State private var isAdding = false
     @State private var editing: DictionaryEntry?
+    /// Fired counts only change with history, not with each keystroke in the search field.
+    @State private var firedMemo = ViewMemo<[HistoryRecord], [String: Int]>()
 
     var body: some View {
         let store = model.dictionary
         let entries = store.filtered(by: query)
-        let fired = Self.firedCounts(in: model.history.records)
+        let fired = firedMemo.value(for: model.history.records) { Self.firedCounts(in: $0) }
         ScrollView {
             VStack(alignment: .leading, spacing: Spacing.xxl) {
                 PageHeader(
