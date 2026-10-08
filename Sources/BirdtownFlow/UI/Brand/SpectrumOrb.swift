@@ -28,6 +28,9 @@ struct SpectrumOrb: View {
     /// Seconds into the animation to draw instead of animating, for snapshots. The frame is
     /// the settled look of `mode` at that moment.
     var phase: Double?
+    /// A host's own timeline time (seconds since the reference date) to animate from instead of
+    /// running a second timeline. The HUD passes its bars' clock so both draw in lockstep.
+    var time: Double?
     /// Snapshots pin this; otherwise the system setting applies.
     var reduceMotionOverride: Bool?
 
@@ -42,8 +45,12 @@ struct SpectrumOrb: View {
                 orb(OrbDynamics.settled(mode: mode, level: level, at: phase, reduceMotion: reduceMotion))
             } else if mode == .still || reduceMotion {
                 orb(OrbDynamics.settled(mode: mode, level: level, at: 0, reduceMotion: reduceMotion))
+            } else if let time {
+                orb(dynamics.step(mode: mode, level: level, at: time))
             } else {
-                TimelineView(.animation) { context in
+                // Capped at the HUD's rate: on ProMotion an uncapped timeline would repaint the
+                // masked orb at 120 Hz for no visible gain.
+                TimelineView(.animation(minimumInterval: 1.0 / 60.0)) { context in
                     orb(dynamics.step(mode: mode, level: level, at: context.date.timeIntervalSinceReferenceDate))
                 }
             }

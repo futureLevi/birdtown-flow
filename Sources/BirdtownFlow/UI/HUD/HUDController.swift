@@ -142,11 +142,18 @@ final class HUDController {
 
     private func updateHover() {
         guard let panel, let model else { return }
+        let mouse = NSEvent.mouseLocation
+        // Every clickable region lies inside the panel, so a pointer outside it (padded by the
+        // hit slop) can only mean "no hover". Most moves happen elsewhere on screen: when
+        // nothing is hovered already, there's nothing to update.
+        let reach = panel.frame.insetBy(dx: -Layout.HUD.hitSlop, dy: -Layout.HUD.hitSlop)
+        if !reach.contains(mouse), model.hover == nil, panel.ignoresMouseEvents { return }
+
         var hover: HUDHover?
-        if model.state.isInteractive, panel.isVisible {
-            let mouse = NSEvent.mouseLocation
+        let state = model.state
+        if state.isInteractive, panel.isVisible {
             let point = CGPoint(x: mouse.x - panel.frame.minX, y: mouse.y - panel.frame.minY)
-            hover = HUDMetrics.hitTest(point, state: model.state)
+            hover = HUDMetrics.hitTest(point, state: state)
         }
         if model.hover != hover {
             model.hover = hover
@@ -173,19 +180,23 @@ final class HUDModel {
         self.settings = settings
     }
 
+    /// Everything but the audio levels. Those change ~30 times a second, so the live content
+    /// reads them itself each frame (`liveLevels`) and the rest of the HUD isn't rebuilt per level.
     var state: HUDState {
         HUDState(
             phase: HUDState.Phase(controller.phase),
             showsIdlePill: settings.showIdlePill,
             isHandsFree: controller.isHandsFree,
-            level: controller.level,
-            levels: controller.levels,
             recordingStartedAt: controller.recordingStartedAt,
             hover: hover,
             keyName: settings.pushToTalkKey.displayName,
             appName: controller.context?.appName,
             notice: controller.notice
         )
+    }
+
+    var liveLevels: (level: Float, levels: [Float]) {
+        (controller.level, controller.levels)
     }
 
     func stop() { controller.stopRecording() }
@@ -217,7 +228,8 @@ struct HUDRootView: View {
                 stop: { model.stop() },
                 cancel: { model.cancel() },
                 activate: { model.activate() }
-            )
+            ),
+            liveLevels: { model.liveLevels }
         )
     }
 }
