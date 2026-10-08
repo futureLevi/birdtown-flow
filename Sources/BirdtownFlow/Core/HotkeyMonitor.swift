@@ -130,9 +130,10 @@ final class HotkeyMonitor {
     /// Whether the tap exists.
     var isArmed: Bool { tap != nil }
 
+    /// - Parameter logFailure: `false` when the caller (the rearm loop) logs failures itself.
     /// - Returns: `false` if the tap couldn't be created — almost always missing Accessibility permission.
     @discardableResult
-    func start() -> Bool {
+    func start(logFailure: Bool = true) -> Bool {
         stop()
 
         let mask = (1 << CGEventType.flagsChanged.rawValue)
@@ -165,7 +166,7 @@ final class HotkeyMonitor {
             },
             userInfo: refcon
         ) else {
-            Log.hotkey.error("tapCreate failed — Accessibility permission missing?")
+            if logFailure { Log.hotkey.error("tapCreate failed — Accessibility permission missing?") }
             return false
         }
 
