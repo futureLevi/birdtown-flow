@@ -78,7 +78,7 @@ final class AppModel {
         self.dictionary = dictionary
         self.lab = lab
         self.bench = LabBench(settings: settings, lab: lab, dictionary: dictionary, snippets: snippets)
-        let models = ModelManager(settings: settings)
+        let models = ModelManager(settings: settings, boostVocabulary: { dictionary.biasPhrases })
         self.models = models
         self.permissions = PermissionsMonitor()
         self.controller = DictationController(
