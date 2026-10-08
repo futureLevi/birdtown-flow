@@ -152,17 +152,23 @@ actor ParakeetEngine: TranscriptionEngine {
     // MARK: - Helpers
 
     private func warmUp() async throws {
-        // Near-silence rather than exact zeros: a log-mel front end can take log(0) on
-        // digital silence, and the point is to exercise the real path, not an edge case.
-        var noise = [Float](repeating: 0, count: Self.minimumSamples)
+        let noise = Self.nearSilence(count: Self.minimumSamples)
+        let layers = await manager.decoderLayerCount
+        var decoderState = try TdtDecoderState(decoderLayers: layers)
+        _ = try await manager.transcribe(noise, decoderState: &decoderState)
+    }
+
+    /// Warm-up audio, shared with the boosting model's warm-up. Near-silence rather than exact
+    /// zeros: a log-mel front end can take log(0) on digital silence, and the point is to
+    /// exercise the real path, not an edge case.
+    static func nearSilence(count: Int) -> [Float] {
+        var noise = [Float](repeating: 0, count: count)
         var seed: UInt32 = 0x9E37_79B9
         for index in noise.indices {
             seed = seed &* 1_664_525 &+ 1_013_904_223
             noise[index] = (Float(seed >> 8) / Float(1 << 24) - 0.5) * 2e-4
         }
-        let layers = await manager.decoderLayerCount
-        var decoderState = try TdtDecoderState(decoderLayers: layers)
-        _ = try await manager.transcribe(noise, decoderState: &decoderState)
+        return noise
     }
 
     private static func padded(_ samples: [Float]) -> [Float] {
@@ -187,7 +193,7 @@ actor ParakeetEngine: TranscriptionEngine {
         }
     }
 
-    private static func seconds(_ duration: Duration) -> Double {
+    static func seconds(_ duration: Duration) -> Double {
         let parts = duration.components
         return Double(parts.seconds) + Double(parts.attoseconds) / 1e18
     }
