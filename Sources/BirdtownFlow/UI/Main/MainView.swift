@@ -300,9 +300,11 @@ struct SidebarStatusView: View {
                     .foregroundStyle(Palette.inkSecondary)
                     .lineLimit(1)
                 Spacer(minLength: 0)
+                // The sidebar card is narrow: short copy, and the button never truncates.
                 Button("Get") { Task { await model.models.prepare() } }
                     .buttonStyle(.flowGhost)
                     .controlSize(.small)
+                    .fixedSize()
                     .help("Download \(status.engineName) (\(status.engineDownloadSize))")
             }
         case .failed(let message):
@@ -317,6 +319,7 @@ struct SidebarStatusView: View {
                 Button("Retry") { Task { await model.models.prepare() } }
                     .buttonStyle(.flowGhost)
                     .controlSize(.small)
+                    .fixedSize()
             }
         }
     }

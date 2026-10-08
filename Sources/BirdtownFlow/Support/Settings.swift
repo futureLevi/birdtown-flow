@@ -58,9 +58,11 @@ enum HandsFreeShortcut: String, CaseIterable, Identifiable, Sendable {
 
     var id: String { rawValue }
 
-    func title(key: PushToTalkKey) -> String {
+    /// `keyName` is the push-to-talk key as the UI spells it (`SetupKit.name(for:)`), so the
+    /// hands-free picker names the key the same way as the push-to-talk picker above it.
+    func title(keyName: String) -> String {
         switch self {
-        case .doubleTap: "Double-tap \(key.displayName)"
+        case .doubleTap: "Double-tap \(keyName)"
         case .controlOption: "Control + Option"
         case .off: "Off"
         }

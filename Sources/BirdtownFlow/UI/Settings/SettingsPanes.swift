@@ -3,6 +3,11 @@ import Combine
 import MurmurKit
 import SwiftUI
 
+extension SetupKit {
+    /// The paste-last-dictation chord, drawn as keycaps in Settings and as text in the menu.
+    static let pasteLastKeys = ["⌃", "⌥", "V"]
+}
+
 // MARK: - General
 
 struct GeneralSettingsPane: View {
@@ -16,7 +21,7 @@ struct GeneralSettingsPane: View {
         @Bindable var settings = model.settings
         SettingsPane {
             SettingsGroup(title: "Shortcuts") {
-                SettingsRow(title: "Push-to-talk key", detail: "Hold to talk, let go to type.") {
+                SettingsRow(title: "Push-to-talk key", detail: "Hold to dictate, let go to type.") {
                     Picker("Push-to-talk key", selection: $settings.pushToTalkKey) {
                         ForEach(SetupKit.orderedKeys, id: \.self) { key in
                             Text(SetupKit.name(for: key)).tag(key)
@@ -26,10 +31,10 @@ struct GeneralSettingsPane: View {
                     .fixedSize()
                 }
                 SettingsDivider()
-                SettingsRow(title: "Hands-free", detail: handsFreeDetail(settings.handsFreeShortcut)) {
+                SettingsRow(title: "Hands-free", detail: handsFreeDetail(settings.handsFreeShortcut, key: settings.pushToTalkKey)) {
                     Picker("Hands-free", selection: $settings.handsFreeShortcut) {
                         ForEach(HandsFreeShortcut.allCases) { shortcut in
-                            Text(shortcut.title(key: settings.pushToTalkKey)).tag(shortcut)
+                            Text(shortcut.title(keyName: SetupKit.name(for: settings.pushToTalkKey))).tag(shortcut)
                         }
                     }
                     .labelsHidden()
@@ -38,7 +43,7 @@ struct GeneralSettingsPane: View {
                 SettingsDivider()
                 SettingsRow(title: "Paste last dictation", detail: "Pastes what you said last into any app, again.") {
                     HStack(spacing: Spacing.m) {
-                        SetupKit.KeyCombo(keys: ["⌃", "⌥", "V"])
+                        SetupKit.KeyCombo(keys: SetupKit.pasteLastKeys)
                             .opacity(settings.pasteLastShortcutEnabled ? 1 : Layout.Setup.disabledOpacity)
                         SettingsSwitch(label: "Paste last dictation", isOn: $settings.pasteLastShortcutEnabled)
                     }
@@ -101,14 +106,15 @@ struct GeneralSettingsPane: View {
         .onChange(of: settings.pasteLastShortcutEnabled) { reloadShortcuts() }
     }
 
-    private func handsFreeDetail(_ shortcut: HandsFreeShortcut) -> String {
+    /// Names the keys the same way the picker beside it does.
+    private func handsFreeDetail(_ shortcut: HandsFreeShortcut, key: PushToTalkKey) -> String {
         switch shortcut {
         case .doubleTap:
-            "Double-tap the key, or press Space while holding it, to keep listening. Tap again to finish."
+            "Double-tap \(SetupKit.name(for: key)), or press Space while holding it, to keep listening. Tap again to finish."
         case .controlOption:
-            "Press ⌃ and ⌥ together to keep listening without holding a key. Press them again to finish."
+            "Press Control and Option together to keep listening without holding a key. Press them again to finish."
         case .off:
-            "Only hold to talk."
+            "Only hold to dictate."
         }
     }
 
@@ -308,9 +314,12 @@ private struct EngineRow: View {
 
     var body: some View {
         HStack(alignment: .center, spacing: Spacing.m) {
-            Image(systemName: selected ? "largecircle.fill.circle" : "circle")
-                .font(Typography.body)
-                .foregroundStyle(selected ? Palette.accent : Palette.inkTertiary)
+            // A mark, not a control: the trailing Use and Download buttons switch engines.
+            // Always laid out so the names line up; shown only on the selected engine.
+            Image(systemName: "checkmark")
+                .font(Typography.bodyEmphasis)
+                .foregroundStyle(Palette.accent)
+                .opacity(selected ? 1 : 0)
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: Spacing.xxs) {
                 HStack(spacing: Spacing.s) {
@@ -318,12 +327,7 @@ private struct EngineRow: View {
                         .font(Typography.bodyEmphasis)
                         .foregroundStyle(Palette.ink)
                     if choice == .parakeetUltra {
-                        Text("Recommended")
-                            .font(Typography.caption)
-                            .foregroundStyle(Palette.inkSecondary)
-                            .padding(.horizontal, Spacing.s)
-                            .padding(.vertical, Spacing.xxs)
-                            .background(Capsule().fill(Palette.sunken))
+                        Badge(text: "Recommended", tone: .neutral)
                     }
                 }
                 Text(detail)
@@ -372,13 +376,7 @@ private struct EngineRow: View {
         } else if downloaded || !choice.isParakeet {
             HStack(spacing: Spacing.s) {
                 if deletable {
-                    Button(action: onDelete) {
-                        Image(systemName: "trash")
-                            .foregroundStyle(Palette.inkSecondary)
-                    }
-                    .buttonStyle(.borderless)
-                    .help("Delete the downloaded \(choice.displayName) model")
-                    .accessibilityLabel("Delete \(choice.displayName)")
+                    IconButton(symbol: "trash", label: "Delete the downloaded \(choice.displayName) model", action: onDelete)
                 }
                 Button("Use", action: onUse)
                     .buttonStyle(SetupKit.SecondaryButtonStyle())
@@ -388,13 +386,7 @@ private struct EngineRow: View {
             HStack(spacing: Spacing.s) {
                 // A partial download can still be cleared away.
                 if deletable {
-                    Button(action: onDelete) {
-                        Image(systemName: "trash")
-                            .foregroundStyle(Palette.inkSecondary)
-                    }
-                    .buttonStyle(.borderless)
-                    .help("Delete the partial \(choice.displayName) download")
-                    .accessibilityLabel("Delete partial \(choice.displayName) download")
+                    IconButton(symbol: "trash", label: "Delete the partial \(choice.displayName) download", action: onDelete)
                 }
                 Button("Download", action: onUse)
                     .buttonStyle(SetupKit.SecondaryButtonStyle())
@@ -417,11 +409,46 @@ struct TextSettingsPane: View {
     /// Where Claude Code was found; `nil` until looked up or when it isn't installed.
     @State private var claudeCodePath: String?
     @State private var claudeCodeChecked = false
+    /// Set when a provider card is clicked, so its settings scroll into view once they show.
+    @State private var revealProviderSettings = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    private static let providerSettingsID = "providerSettings"
 
     var body: some View {
         @Bindable var settings = model.settings
-        SettingsPane {
-            SettingsGroup(title: "Cleanup") {
+        ScrollViewReader { proxy in
+            pane(settings, proxy: proxy)
+        }
+        .onAppear(perform: refreshKey)
+        .onChange(of: settings.polishProvider) { polishSettingsChanged() }
+        .onChange(of: settings.polishLevel) { polishSettingsChanged() }
+        .task(id: settings.polishProvider) {
+            guard settings.polishProvider == .claudeCode else { return }
+            if let preview {
+                claudeCodePath = preview.keySaved ? "~/.local/bin/claude" : nil
+                claudeCodeChecked = true
+                return
+            }
+            claudeCodePath = await ClaudeCodeSessions.shared.installedPath()
+            claudeCodeChecked = true
+        }
+    }
+
+    /// Picking a provider reveals its settings (the API key first of all) below the cards,
+    /// often below the fold: bring them into view so the click visibly did something.
+    private func revealProviderSettingsIfNeeded(_ proxy: ScrollViewProxy) {
+        guard revealProviderSettings else { return }
+        revealProviderSettings = false
+        withAnimation(Motion.resolve(Motion.smooth, reduceMotion: reduceMotion)) {
+            proxy.scrollTo(Self.providerSettingsID, anchor: .top)
+        }
+    }
+
+    private func pane(_ source: Settings, proxy: ScrollViewProxy) -> some View {
+        @Bindable var settings = source
+        return SettingsPane {
+            SettingsGroup(title: "Basics", footnote: "These run on every dictation, with or without AI polish.") {
                 SettingsRow(title: "Remove filler words", detail: "Drops “um”, “uh” and false starts.") {
                     SettingsSwitch(label: "Remove filler words", isOn: $settings.removeFillers)
                 }
@@ -445,6 +472,7 @@ struct TextSettingsPane: View {
                 ) {
                     ForEach(PolishProvider.allCases) { provider in
                         ProviderCard(provider: provider, selected: settings.polishProvider == provider) {
+                            revealProviderSettings = provider != .off && provider != settings.polishProvider
                             settings.polishProvider = provider
                             testResult = nil
                             refreshKey()
@@ -455,22 +483,13 @@ struct TextSettingsPane: View {
 
             if settings.polishProvider != .off {
                 providerSettings(settings)
+                    .id(Self.providerSettingsID)
+                    // From Off the group appears; between providers it changes in place.
+                    .onAppear { revealProviderSettingsIfNeeded(proxy) }
+                    .onChange(of: settings.polishProvider) { revealProviderSettingsIfNeeded(proxy) }
             }
 
             labGroup
-        }
-        .onAppear(perform: refreshKey)
-        .onChange(of: settings.polishProvider) { polishSettingsChanged() }
-        .onChange(of: settings.polishLevel) { polishSettingsChanged() }
-        .task(id: settings.polishProvider) {
-            guard settings.polishProvider == .claudeCode else { return }
-            if let preview {
-                claudeCodePath = preview.keySaved ? "~/.local/bin/claude" : nil
-                claudeCodeChecked = true
-                return
-            }
-            claudeCodePath = await ClaudeCodeSessions.shared.installedPath()
-            claudeCodeChecked = true
         }
     }
 
@@ -483,17 +502,14 @@ struct TextSettingsPane: View {
     private var labGroup: some View {
         let lab = model.lab
         let styles = lab.assignedStyles
-        let title = styles.isEmpty
-            ? "No styles use Lab configurations"
-            : ListFormatter.localizedString(byJoining: styles.map(\.title)) + (styles.count == 1 ? " uses" : " use")
-                + " a Lab configuration"
         let detail = styles.isEmpty
-            ? "Try other instructions, models and effort levels on real dictations, then pick the styles they polish."
-            : model.settings.polishProvider == .off
-                ? "Turn AI polish on for them to take effect."
-                : "Other styles use the settings above."
+            ? "Not used by any style yet. Try other instructions and models on real dictations."
+            : "Used by \(ListFormatter.localizedString(byJoining: styles.map(\.title)))."
+                + (model.settings.polishProvider == .off
+                    ? " Turn AI polish on for them to take effect."
+                    : " Other styles use the settings above.")
         return SettingsGroup(title: "Lab") {
-            SettingsRow(title: title, detail: detail) {
+            SettingsRow(title: "Prompt Lab", detail: detail) {
                 Button("Open Lab") {
                     guard preview == nil else { return }
                     openWindow(id: "main")
@@ -520,8 +536,8 @@ struct TextSettingsPane: View {
                 )
             }
             SettingsGroup(title: provider.title) {
-                SettingsRow(title: "Cleanup", detail: settings.polishLevel.detail) {
-                    Picker("Cleanup", selection: $settings.polishLevel) {
+                SettingsRow(title: "How much to edit", detail: settings.polishLevel.detail) {
+                    Picker("How much to edit", selection: $settings.polishLevel) {
                         ForEach(PolishLevel.allCases) { level in
                             Text(level.title).tag(level)
                         }
@@ -714,7 +730,7 @@ private struct ProviderCard: View {
     let provider: PolishProvider
     let selected: Bool
     let action: () -> Void
-    @State private var hovering = false
+    @FocusState private var isFocused: Bool
 
     private var locality: (text: String, symbol: String) {
         if provider == .off { return ("Nothing leaves this Mac", "lock") }
@@ -724,7 +740,6 @@ private struct ProviderCard: View {
     }
 
     var body: some View {
-        let shape = RoundedRectangle(cornerRadius: Radius.m, style: .continuous)
         Button(action: action) {
             VStack(alignment: .leading, spacing: Spacing.xs) {
                 HStack {
@@ -748,7 +763,40 @@ private struct ProviderCard: View {
             }
             .padding(Spacing.m)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(shape.fill(selected ? Palette.accentSoft : (hovering ? Palette.surfaceHover : Palette.surface)))
+        }
+        .buttonStyle(ProviderCardButtonStyle(selected: selected, drawsFocusRing: isFocused))
+        // The style draws a Signal blue focus ring outside the card, clear of its selection border.
+        .focusEffectDisabled()
+        .focused($isFocused)
+        .accessibilityLabel("\(provider.title). \(provider.subtitle) \(locality.text).")
+        .accessibilityAddTraits(selected ? .isSelected : [])
+    }
+}
+
+/// A provider card's surface: selected, hovered and pressed fills, the selection border, and
+/// a Signal blue focus ring under keyboard focus. Pass the button's own focus as
+/// `drawsFocusRing` and put `.focusEffectDisabled()` on the button.
+private struct ProviderCardButtonStyle: ButtonStyle {
+    let selected: Bool
+    var drawsFocusRing = false
+
+    func makeBody(configuration: Configuration) -> some View {
+        ProviderCardButtonBody(configuration: configuration, selected: selected, drawsFocusRing: drawsFocusRing)
+    }
+}
+
+private struct ProviderCardButtonBody: View {
+    let configuration: ButtonStyleConfiguration
+    let selected: Bool
+    let drawsFocusRing: Bool
+
+    @State private var hovering = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        let shape = RoundedRectangle(cornerRadius: Radius.m, style: .continuous)
+        configuration.label
+            .background(shape.fill(fill))
             .overlay(
                 shape.strokeBorder(
                     selected ? Palette.accent : Palette.hairline,
@@ -756,11 +804,17 @@ private struct ProviderCard: View {
                 )
             )
             .contentShape(shape)
-        }
-        .buttonStyle(.plain)
-        .onHover { hovering = $0 }
-        .accessibilityLabel("\(provider.title). \(provider.subtitle) \(locality.text).")
-        .accessibilityAddTraits(selected ? .isSelected : [])
+            .flowFocusRing(shape, drawn: drawsFocusRing)
+            .scaleEffect(configuration.isPressed && !reduceMotion ? Interaction.pressedScale : 1)
+            .onHover { hovering = $0 }
+            .animation(Motion.resolve(Motion.fadeFast, reduceMotion: reduceMotion), value: hovering)
+            .animation(Motion.resolve(Motion.snappy, reduceMotion: reduceMotion), value: configuration.isPressed)
+    }
+
+    private var fill: Color {
+        if selected { return Palette.accentSoft }
+        if configuration.isPressed { return Palette.surfacePressed }
+        return hovering ? Palette.surfaceHover : Palette.surface
     }
 }
 
@@ -796,10 +850,12 @@ struct PrivacySettingsPane: View {
             SettingsGroup(title: "History", footnote: "Older dictations are removed automatically when Birdtown Flow starts.") {
                 SettingsRow(title: "Keep history", detail: "Text of every dictation, searchable in History.") {
                     Picker("Keep history", selection: $settings.historyRetentionDays) {
-                        Text("Forever").tag(0)
-                        Text("90 days").tag(90)
-                        Text("30 days").tag(30)
+                        // Shortest first, like Keep audio below.
                         Text("7 days").tag(7)
+                        Text("30 days").tag(30)
+                        Text("90 days").tag(90)
+                        Divider()
+                        Text("Forever").tag(0)
                     }
                     .labelsHidden()
                     .fixedSize()
@@ -811,6 +867,7 @@ struct PrivacySettingsPane: View {
                         Text("1 day").tag(1)
                         Text("7 days").tag(7)
                         Text("30 days").tag(30)
+                        Divider()
                         Text("Forever").tag(-1)
                     }
                     .labelsHidden()
@@ -829,7 +886,7 @@ struct PrivacySettingsPane: View {
                 SettingsDivider()
                 SettingsRow(title: "Clear history", detail: "Removes every dictation and its audio from this Mac.") {
                     Button("Clear History…", role: .destructive) { confirmClear = true }
-                        .buttonStyle(SetupKit.SecondaryButtonStyle())
+                        .buttonStyle(.flowSecondary)
                         .disabled(model.history.records.isEmpty)
                 }
             }

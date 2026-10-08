@@ -1,3 +1,4 @@
+import Accessibility
 import AppKit
 import MurmurKit
 import SwiftUI
@@ -15,7 +16,7 @@ enum HistoryFilter: String, CaseIterable, Identifiable {
         switch self {
         case .all: "All"
         case .failed: "Failed"
-        case .corrected: "Edited by dictionary"
+        case .corrected: "Replaced"
         case .polished: "Polished"
         }
     }
@@ -174,11 +175,22 @@ struct HistoryView: View {
 
     // MARK: - Header
 
+    /// Matches Settings › Keep audio, so the header never promises audio that isn't kept.
+    /// Failed dictations keep theirs regardless, so they can be retried.
+    private var subtitle: String {
+        switch model.settings.audioRetentionDays {
+        case ..<0: "Everything you've dictated, with its audio. Nothing you say is lost."
+        case 0: "Everything you've dictated. Audio is kept only for dictations that fail."
+        case 1: "Everything you've dictated. Audio is kept for a day."
+        case let days: "Everything you've dictated. Audio is kept for \(days) days."
+        }
+    }
+
     private func header(counts: [HistoryFilter: Int]) -> some View {
         VStack(alignment: .leading, spacing: Spacing.l) {
             PageHeader(
                 title: "History",
-                subtitle: "Everything you've dictated, with its audio. Nothing you say is lost."
+                subtitle: subtitle
             ) {
                 SearchField(text: $query, prompt: "Search words or apps")
                     .frame(width: Layout.Main.searchFieldWidth)
@@ -228,8 +240,8 @@ struct HistoryView: View {
             detail: "\(day.records.count) \(day.records.count == 1 ? "dictation" : "dictations") · \(words.formatted()) words"
         )
         .padding(.vertical, Spacing.s)
-        .padding(.horizontal, Spacing.xs)
-        .background(Palette.canvas)
+        // The text lines up with the title and cards; the pinned backing still covers the gutter.
+        .background { Palette.canvas.padding(.horizontal, -Spacing.xs) }
     }
 
     // MARK: - Empty states
@@ -245,8 +257,8 @@ struct HistoryView: View {
             EmptyState(
                 symbol: "waveform",
                 title: "Your words will gather here",
-                message: "Every dictation lands in History with its audio, so you can copy it, paste it "
-                    + "again or retry it. Hold your shortcut and say something to begin.",
+                message: "Every dictation lands in History, so you can copy it or paste it again. "
+                    + "Hold your shortcut and say something to begin.",
                 showsBrandMark: true
             )
         } else if searchMatches == 0 {
@@ -262,17 +274,26 @@ struct HistoryView: View {
             EmptyState(
                 symbol: "checkmark",
                 title: trimmed.isEmpty ? "Nothing has failed" : "No failed dictations match",
-                message: "Every dictation made it through. If one ever doesn't, it waits here with its audio."
+                // With a search, failures may exist outside it: don't claim everything worked.
+                message: trimmed.isEmpty
+                    ? "Every dictation made it through. If one ever doesn't, it waits here with its audio."
+                    : "None of your failed dictations mention “\(trimmed)”."
             ) {
-                Button("Show All") { filter = .all }
-                    .buttonStyle(.flowSecondary)
+                HStack(spacing: Spacing.s) {
+                    if !trimmed.isEmpty {
+                        Button("Clear Search") { query = "" }
+                            .buttonStyle(.flowSecondary)
+                    }
+                    Button("Show All") { filter = .all }
+                        .buttonStyle(.flowSecondary)
+                }
             }
         } else {
             EmptyState(
                 symbol: "line.3.horizontal.decrease",
                 title: trimmed.isEmpty ? "None of these yet" : "None of these match “\(trimmed)”",
                 message: filter == .corrected
-                    ? "Dictations your dictionary corrected will show up here."
+                    ? "Dictations your replacements changed will show up here."
                     : "Dictations rewritten by AI polish will show up here."
             ) {
                 Button("Show All") { filter = .all }
@@ -296,6 +317,7 @@ struct HistoryView: View {
                     .buttonStyle(.flowGhost)
                     .controlSize(.small)
                     .keyboardShortcut("z", modifiers: .command)
+                    .accessibilityHint("Command-Z")
             }
             .padding(.leading, Spacing.l)
             .padding(.trailing, Spacing.s)
@@ -337,6 +359,11 @@ struct HistoryView: View {
         if let playing = player.playingID, ids.contains(playing) { player.stop() }
         pendingDeletion = ids
         selection.subtract(ids)
+        // The toast is easy to miss without sight, and it only lasts the undo window.
+        let announcement: String = ids.count == 1
+            ? "Dictation deleted. Press Command-Z to undo."
+            : "\(ids.count) dictations deleted. Press Command-Z to undo."
+        AccessibilityNotification.Announcement(announcement).post()
         commitTask = Task {
             try? await Task.sleep(for: Motion.undoWindow)
             guard !Task.isCancelled else { return }

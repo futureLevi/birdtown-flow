@@ -18,7 +18,10 @@ struct HomeView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: Spacing.xxl) {
                 header(stats: stats, isFirstRun: records.isEmpty)
-                HomeBanners(status: status)
+                // An empty banner stack would still take a slot and double the gap.
+                if HomeBanners.isVisible(status: status, hasCompletedOnboarding: model.settings.hasCompletedOnboarding) {
+                    HomeBanners(status: status)
+                }
                 if records.isEmpty {
                     FirstRunCard(keyName: status.pushToTalkKey)
                 } else {
@@ -42,7 +45,8 @@ struct HomeView: View {
                 if isFirstRun {
                     Text("Birdtown Flow turns your voice into clean text, wherever you're typing.")
                 } else if stats.wordsThisWeek > 0 {
-                    Text("You've spoken \(stats.wordsThisWeek.formatted()) words into your Mac this week.")
+                    // The week's word count is the first tile below; don't say it twice.
+                    Text("Hold \(status.pushToTalkKey) anywhere to dictate.")
                 } else {
                     Text("Ready when you are.")
                 }
@@ -142,6 +146,15 @@ private struct HomeBanners: View {
     let status: SystemStatus
     @Environment(AppModel.self) private var model
 
+    /// Whether any banner below would show; keep in step with `body`.
+    static func isVisible(status: SystemStatus, hasCompletedOnboarding: Bool) -> Bool {
+        if !hasCompletedOnboarding || !status.microphone || !status.accessibility { return true }
+        switch status.model {
+        case .notDownloaded, .downloading, .failed: return true
+        case .loading, .ready: return false
+        }
+    }
+
     var body: some View {
         VStack(spacing: Spacing.s) {
             // Until setup is finished, its banner stands in for the permission banners below:
@@ -150,11 +163,12 @@ private struct HomeBanners: View {
                 Banner(
                     symbol: "checklist",
                     title: "Finish setting up Birdtown Flow",
-                    message: "Two minutes: permissions, your shortcut, and a first dictation.",
+                    message: "About a minute: permissions, your shortcut, and a first dictation.",
                     tone: .info
                 ) {
+                    // Finishing setup unblocks everything else: the screen's one primary action.
                     Button("Continue Setup") { OnboardingWindowController.shared.show(model: model) }
-                        .buttonStyle(.flowSecondary)
+                        .buttonStyle(.flowPrimary)
                         .controlSize(.small)
                 }
             } else {
@@ -236,7 +250,7 @@ private struct HomeBanners: View {
         case .failed(let message):
             Banner(
                 symbol: "exclamationmark.triangle.fill",
-                title: "The speech model didn't load",
+                title: "Speech model didn't load",
                 message: message,
                 tone: .danger
             ) {
@@ -299,8 +313,12 @@ private struct FirstRunCard: View {
                 }
 
                 HStack(spacing: Spacing.m) {
-                    tryButton
-                        .buttonStyle(.flowSecondary)
+                    // Primary once setup is done; until then "Continue Setup" is the primary.
+                    if model.settings.hasCompletedOnboarding {
+                        tryButton.buttonStyle(.flowPrimary)
+                    } else {
+                        tryButton.buttonStyle(.flowSecondary)
+                    }
                     if let handsFreeTip {
                         Text(handsFreeTip)
                             .font(Typography.callout)

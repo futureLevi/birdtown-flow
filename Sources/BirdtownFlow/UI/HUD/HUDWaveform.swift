@@ -143,6 +143,8 @@ struct HUDOrb: View {
     let time: Double?
     let reduceMotion: Bool
     let stop: @MainActor () -> Void
+    /// The push-to-talk key, which also stops a hands-free dictation.
+    var keyName = "fn"
 
     var body: some View {
         // Painted once at the Stop size and scaled down as the record light, so moving between
@@ -150,12 +152,20 @@ struct HUDOrb: View {
         let side = Layout.HUD.stopOrb
         let scale = isStop ? (isHovered ? Layout.HUD.stopHoverScale : 1) : Layout.HUD.orb / side
         let label: String = isStop ? "Stop and insert" : "Listening"
+        let hint: String = isStop ? "Or press \(keyName)" : ""
         Button {
             if isStop { stop() }
         } label: {
             ZStack {
                 SpectrumOrb(mode: mode, diameter: side, level: level, showsHalo: !isStop, phase: phase,
                             time: time, reduceMotionOverride: reduceMotion)
+                // Hovering Stop lightens the orb itself with the same light Cancel's button
+                // takes on hover, so the target reads as pressable without a ring around it.
+                Circle()
+                    .fill(Palette.HUD.controlHover)
+                    .frame(width: side, height: side)
+                    .opacity(isStop && isHovered ? 1 : 0)
+                    .allowsHitTesting(false)
                 RoundedRectangle(cornerRadius: Layout.HUD.stopGlyphRadius, style: .continuous)
                     .fill(Palette.HUD.bar)
                     .frame(width: Layout.HUD.stopGlyph, height: Layout.HUD.stopGlyph)
@@ -166,8 +176,10 @@ struct HUDOrb: View {
             .contentShape(Circle())
         }
         .buttonStyle(.plain)
+        .animation(Motion.resolve(Motion.snappy, reduceMotion: reduceMotion), value: isHovered)
         .allowsHitTesting(isStop)
         .accessibilityLabel(label)
+        .accessibilityHint(hint)
         .accessibilityHidden(!isStop)
         .help(label)
     }
@@ -205,7 +217,7 @@ struct HUDLiveContent: View {
         let midY = size.height / 2
         let handsFree = state.kind == .handsFree
         let layout = HUDMetrics.handsFreeLayout(width: size.width)
-        let barsX = handsFree ? layout.bars : size.width / 2
+        let barsX = handsFree ? layout.bars : HUDMetrics.listeningBarsX(width: size.width)
 
         return ZStack {
             accessory
@@ -215,7 +227,8 @@ struct HUDLiveContent: View {
                 .position(x: barsX, y: midY)
 
             if handsFree {
-                Text(HUDMetrics.elapsedText(since: state.recordingStartedAt, now: Date(timeIntervalSinceReferenceDate: time)))
+                let now = Date(timeIntervalSinceReferenceDate: time)
+                Text(HUDMetrics.elapsedText(since: state.recordingStartedAt, now: now))
                     .font(Typography.hudNumeral)
                     .foregroundStyle(Palette.HUD.inkSecondary)
                     .lineLimit(1)
@@ -223,14 +236,15 @@ struct HUDLiveContent: View {
                     .position(x: layout.timer, y: midY)
                     .transition(.opacity)
                     .accessibilityLabel("Recording time")
-
+                    .accessibilityValue(Text(HUDMetrics.elapsedSpoken(since: state.recordingStartedAt, now: now)))
+                    .accessibilityAddTraits(.updatesFrequently)
             }
 
             // The one orb, outside any per-state branch so it keeps its identity (and its
             // motion) from listening through thinking.
             HUDOrb(mode: thinking ? .thinking : .live, level: audio.level, isStop: handsFree,
                    isHovered: state.hover == .stop, phase: frozenTime, time: smooth ? time : nil,
-                   reduceMotion: reduceMotion, stop: actions.stop)
+                   reduceMotion: reduceMotion, stop: actions.stop, keyName: state.keyName)
                 .position(x: handsFree ? layout.stop : HUDMetrics.capCentre, y: midY)
         }
         .frame(width: size.width, height: size.height)
@@ -240,9 +254,10 @@ struct HUDLiveContent: View {
     private var accessory: some View {
         ZStack {
             if state.kind == .handsFree {
-                HUDIconButton(symbol: "xmark", label: "Cancel dictation", isHovered: state.hover == .cancel,
+                HUDIconButton(symbol: "xmark", label: "Cancel dictation", hint: "Or press Escape",
+                              isHovered: state.hover == .cancel, reduceMotion: reduceMotion,
                               action: actions.cancel)
-                    .transition(.opacity.combined(with: .scale(scale: 0.6)))
+                    .transition(.opacity.combined(with: .scale(scale: Layout.HUD.accessoryEnterScale)))
             }
         }
     }

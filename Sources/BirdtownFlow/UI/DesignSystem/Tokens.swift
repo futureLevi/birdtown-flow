@@ -37,8 +37,9 @@ enum Palette {
     static let ink = Color.adaptive(light: 0x0E183C, dark: 0xEEF1FA)
     /// Secondary text: metadata, descriptions.
     static let inkSecondary = Color.adaptive(light: 0x4A5478, dark: 0xA5ACC6)
-    /// Tertiary text: placeholders, disabled, timestamps.
-    static let inkTertiary = Color.adaptive(light: 0x8A91AC, dark: 0x6A7191)
+    /// Tertiary text: placeholders, disabled, timestamps. Still clears 4.5:1 on canvas, surface
+    /// and hovered surface in both themes, because people read what it carries.
+    static let inkTertiary = Color.adaptive(light: 0x646B88, dark: 0x848CAB)
 
     /// The primary action: a navy pill in light mode, porcelain in dark (the logo's tile and ring).
     static let primaryFill = Color.adaptive(light: 0x0E183C, dark: 0xEEF1FA)
@@ -508,6 +509,14 @@ extension Layout {
         static let brandMarkSmall: CGFloat = 22
         /// Focused inputs: a Signal blue ring this wide.
         static let focusRing: CGFloat = 1.5
+        /// Space between a focused control's edge and its focus ring (`flowFocusRing`), so the
+        /// ring stays distinct from a selected chip's Signal blue border.
+        static let focusRingGap: CGFloat = 2
+        /// `AppIcon`'s monogram tile, as fractions of the icon's size: corner radius, letter
+        /// size, and the inset that matches the margin real app icons leave around their tile.
+        static let monogramCornerRatio: CGFloat = 0.24
+        static let monogramFontRatio: CGFloat = 0.46
+        static let monogramInsetRatio: CGFloat = 0.06
         /// Model download progress (`SpectrumProgressBar`).
         static let progressBarHeight: CGFloat = 4
         /// The logo's bars beside a snippet's trigger.
@@ -556,6 +565,10 @@ extension Palette {
     static let bubble = Color.adaptive(light: 0xECEFF6, dark: 0x222A4B)
     /// The bubble on a chosen card's Signal blue wash.
     static let bubbleOnSelection = Color.adaptive(light: 0xFFFFFF, dark: 0x353F72)
+    /// Small filled marks that sit on a card: neutral badges, monogram tiles, icon tiles. Same
+    /// step as `bubble`: darker than the card in light mode, lighter in dark, so they read as
+    /// raised. Keep `sunken` for inset wells (inputs, code, practice fields).
+    static let chip = Color.adaptive(light: 0xECEFF6, dark: 0x222A4B)
 }
 
 extension Motion {

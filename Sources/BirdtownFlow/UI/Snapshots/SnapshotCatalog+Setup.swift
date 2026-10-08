@@ -30,15 +30,37 @@ extension SnapshotCatalog {
         var micDenied = fresh
         micDenied.microphone = .denied
 
+        var micDeniedWaiting = micDenied
+        micDeniedWaiting.openedSettings = true
+
+        var accessibilityWaiting = micGranted
+        accessibilityWaiting.openedSettings = true
+
         var relaunch = micGranted
         relaunch.accessibility = true
+
+        // What customers get from the app bundle: Relaunch and Later.
+        var relaunchBundled = relaunch
+        relaunchBundled.canRelaunch = true
 
         var downloading = relaunch
         downloading.hotkeyActive = true
         downloading.modelState = .downloading(progress: 0.42)
 
+        var modelFailed = downloading
+        modelFailed.modelState = .failed("The Internet connection appears to be offline.")
+
         var shortcut = downloading
         shortcut.fnHasSystemAction = true
+
+        // Both warnings at once: Wispr Flow listens on fn too.
+        var shortcutWispr = shortcut
+        shortcutWispr.wisprRunning = true
+
+        // Trying before the download finishes.
+        let practiceWaiting = shortcut
+        var practiceFailed = shortcut
+        practiceFailed.phase = .failed("Speech model is still downloading")
 
         var listening = shortcut
         listening.modelState = .ready
@@ -54,10 +76,17 @@ extension SnapshotCatalog {
             shot("2-microphone", .microphone, fresh),
             shot("2-microphone-granted", .microphone, micGranted),
             shot("2-microphone-denied", .microphone, micDenied),
+            shot("2-microphone-denied-waiting", .microphone, micDeniedWaiting),
             shot("3-accessibility", .accessibility, micGranted),
+            shot("3-accessibility-waiting", .accessibility, accessibilityWaiting),
             shot("3-accessibility-relaunch", .accessibility, relaunch),
+            shot("3-accessibility-relaunch-bundled", .accessibility, relaunchBundled),
             shot("4-model-downloading", .model, downloading),
+            shot("4-model-failed", .model, modelFailed),
             shot("5-shortcut", .shortcut, shortcut),
+            shot("5-shortcut-wispr", .shortcut, shortcutWispr),
+            shot("6-practice-model-downloading", .practice, practiceWaiting),
+            shot("6-practice-failed", .practice, practiceFailed),
             shot("6-practice-listening", .practice, listening),
             shot("6-practice-done", .practice, done),
         ]

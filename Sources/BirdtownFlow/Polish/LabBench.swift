@@ -25,6 +25,9 @@ final class LabBench {
         /// What dictation would type: the reply (or the transcript, if the reply was refused)
         /// after the style and the dictionary.
         var output = ""
+        /// It failed for something only Settings can fix, such as a missing API key, so the
+        /// result can link there.
+        var needsSettings = false
     }
 
     /// Newest first.
@@ -215,9 +218,15 @@ final class LabBench {
             polished, style: style, corrector: dictionary.corrector, snippets: snippets.enabled,
             vocabulary: vocabulary
         ).text
+        var needsSettings = false
+        if case .failed = result.verdict {
+            // The same check `PolishService` makes before it calls the API.
+            needsSettings = configuration.provider == .anthropic && Keychain.string(for: .anthropic) == nil
+        }
         if let index = runs.firstIndex(where: { $0.id == run.id }) {
             runs[index].result = result
             runs[index].output = output
+            runs[index].needsSettings = needsSettings
         }
     }
 

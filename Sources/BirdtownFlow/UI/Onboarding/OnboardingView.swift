@@ -38,6 +38,10 @@ struct OnboardingView: View {
     @State private var practiceDone = false
     /// Bumped whenever Birdtown Flow becomes active again, e.g. back from System Settings.
     @State private var activations = 0
+    /// The permission step whose Open System Settings the user has clicked, so a step only says
+    /// it's waiting for access once there's something to wait for (and opening the Microphone
+    /// pane doesn't make the Accessibility step claim it too).
+    @State private var settingsOpenedFor: OnboardingStep?
 
     private let onFinish: () -> Void
 
@@ -61,6 +65,8 @@ struct OnboardingView: View {
     private var phase: DictationController.Phase { preview?.phase ?? model.controller.phase }
     private var practiceSucceeded: Bool { preview?.practiceSucceeded ?? practiceDone }
     private var needsRelaunch: Bool { accessibilityGranted && !hotkeyActive }
+    private var canRelaunch: Bool { preview?.canRelaunch ?? SetupKit.canRelaunch }
+    private var openedSettings: Bool { preview?.openedSettings ?? (settingsOpenedFor == step) }
 
     // System facts nothing observable tells us about: re-read each time the app comes back to
     // the front, since that's when the user has just changed them.
@@ -109,12 +115,14 @@ struct OnboardingView: View {
         case .welcome:
             WelcomeStep(onStart: advance)
         case .microphone:
-            MicrophoneStep(status: microphone)
+            MicrophoneStep(status: microphone, openedSettings: openedSettings)
                 .padding(.bottom, Layout.Setup.footerHeight)
         case .accessibility:
             AccessibilityStep(
                 granted: accessibilityGranted,
-                needsRelaunch: needsRelaunch
+                needsRelaunch: needsRelaunch,
+                canRelaunch: canRelaunch,
+                openedSettings: openedSettings
             )
             .padding(.bottom, Layout.Setup.footerHeight)
         case .model:
@@ -134,9 +142,12 @@ struct OnboardingView: View {
                 key: model.settings.pushToTalkKey,
                 phase: phase,
                 hotkeyActive: hotkeyActive,
+                microphoneGranted: microphone == .granted,
+                modelState: modelState,
                 succeeded: practiceSucceeded,
                 initialText: preview?.practiceText,
-                onFixAccessibility: { go(to: .accessibility) }
+                onFixAccessibility: { go(to: .accessibility) },
+                onFixMicrophone: { go(to: .microphone) }
             )
             .padding(.bottom, Layout.Setup.footerHeight)
             .onAppear {
@@ -167,7 +178,9 @@ struct OnboardingView: View {
                 }
                 Button(primary.title, action: primary.run)
                     .buttonStyle(SetupKit.PrimaryButtonStyle())
-                    .keyboardShortcut(.defaultAction)
+                    // Return belongs to the practice field until the try has worked, so
+                    // pressing it there can't end setup early.
+                    .keyboardShortcut(step != .practice || practiceSucceeded ? KeyboardShortcut.defaultAction : nil)
             }
         }
         .padding(.horizontal, Spacing.xxl)
@@ -181,7 +194,11 @@ struct OnboardingView: View {
         case .microphone:
             switch microphone {
             case .granted: return FooterAction(title: "Continue", run: advance)
-            case .denied: return FooterAction(title: "Open System Settings") { Permissions.openMicrophoneSettings() }
+            case .denied:
+                return FooterAction(title: "Open System Settings") {
+                    settingsOpenedFor = step
+                    Permissions.openMicrophoneSettings()
+                }
             case .notDetermined: return FooterAction(title: "Allow Microphone", run: requestMicrophone)
             }
         case .accessibility:
@@ -189,14 +206,17 @@ struct OnboardingView: View {
                 return FooterAction(title: "Open System Settings") {
                     // The prompt is what adds the app to the Accessibility list; opening the
                     // pane directly saves a click in the system alert.
+                    settingsOpenedFor = step
                     Permissions.promptForAccessibility()
                     Permissions.openAccessibilitySettings()
                 }
             }
-            if needsRelaunch && SetupKit.canRelaunch {
+            if needsRelaunch && canRelaunch {
                 return FooterAction(title: "Relaunch Birdtown Flow") { SetupKit.relaunch() }
             }
             return FooterAction(title: "Continue", run: advance)
+        case .model where SetupKit.isFailed(modelState):
+            return FooterAction(title: "Try Again", run: prepareModel)
         case .model, .shortcut:
             return FooterAction(title: "Continue", run: advance)
         case .practice:
@@ -210,10 +230,10 @@ struct OnboardingView: View {
             return FooterAction(title: "Skip", run: advance)
         case .accessibility where !accessibilityGranted:
             return FooterAction(title: "Skip", run: advance)
-        case .accessibility where needsRelaunch && SetupKit.canRelaunch:
+        case .accessibility where needsRelaunch && canRelaunch:
             return FooterAction(title: "Later", run: advance)
         case .model where SetupKit.isFailed(modelState):
-            return FooterAction(title: "Try Again", run: prepareModel)
+            return FooterAction(title: "Skip for Now", run: advance)
         default:
             return nil
         }
@@ -445,7 +465,7 @@ private struct WelcomeStep: View {
                 Button("Get Started", action: onStart)
                     .buttonStyle(SetupKit.PrimaryButtonStyle(large: true))
                     .keyboardShortcut(.defaultAction)
-                Text("Setup takes about a minute.")
+                Text("Two permissions and a one-time download. You can carry on while it finishes.")
                     .font(Typography.caption)
                     .foregroundStyle(Palette.inkTertiary)
             }
@@ -488,6 +508,7 @@ private struct WelcomeStep: View {
 
 private struct MicrophoneStep: View {
     let status: SetupPreview.Microphone
+    let openedSettings: Bool
 
     var body: some View {
         StepScaffold(
@@ -505,6 +526,9 @@ private struct MicrophoneStep: View {
                         fill: Palette.warningSoft,
                         text: "Microphone access is turned off. Turn on Birdtown Flow in Privacy & Security → Microphone, then come back."
                     )
+                    if openedSettings {
+                        WaitingForAccess()
+                    }
                 }
             }
         }
@@ -583,6 +607,8 @@ private struct PermissionRow: View {
 private struct AccessibilityStep: View {
     let granted: Bool
     let needsRelaunch: Bool
+    let canRelaunch: Bool
+    let openedSettings: Bool
 
     var body: some View {
         StepScaffold(
@@ -593,15 +619,20 @@ private struct AccessibilityStep: View {
         ) {
             VStack(spacing: Spacing.m) {
                 if granted {
-                    PermissionRow(symbol: "accessibility", title: "Accessibility", state: .granted)
+                    // Allowed, but not working until the restart: say that, not a green check.
+                    PermissionRow(
+                        symbol: "accessibility",
+                        title: "Accessibility",
+                        state: needsRelaunch ? .waiting("Restart needed") : .granted
+                    )
                 } else {
                     instructions
                 }
                 if needsRelaunch {
                     SetupKit.Callout(
                         symbol: "arrow.clockwise",
-                        tint: Palette.inkSecondary,
-                        fill: Palette.sunken,
+                        tint: Palette.warning,
+                        fill: Palette.warningSoft,
                         text: relaunchHint
                     )
                 }
@@ -610,7 +641,7 @@ private struct AccessibilityStep: View {
     }
 
     private var relaunchHint: String {
-        if !SetupKit.canRelaunch {
+        if !canRelaunch {
             return "Access is on. Quit Birdtown Flow and open it again so macOS lets it hear your shortcut."
         }
         return "Access is on. macOS needs Birdtown Flow to restart once before it can hear your shortcut."
@@ -622,15 +653,30 @@ private struct AccessibilityStep: View {
             InstructionLine(number: 2, text: "Turn on Birdtown Flow in the Accessibility list.")
             InstructionLine(number: 3, text: "Come back here. This page updates by itself.")
             Divider().overlay(Palette.hairline)
-            HStack(spacing: Spacing.s) {
-                ProgressView().controlSize(.small)
-                Text("Waiting for access…")
+            // A spinner only once there's something to wait for; before that it would
+            // suggest the app is busy rather than waiting on the user.
+            if openedSettings {
+                WaitingForAccess()
+            } else {
+                Text("Not allowed yet")
                     .font(Typography.callout)
-                    .foregroundStyle(Palette.inkSecondary)
+                    .foregroundStyle(Palette.inkTertiary)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .setupCard()
+    }
+}
+
+/// Shown after the user has gone to System Settings: the page is watching and will update.
+private struct WaitingForAccess: View {
+    var body: some View {
+        HStack(spacing: Spacing.s) {
+            ProgressView().controlSize(.small)
+            Text("Waiting for access…")
+                .font(Typography.callout)
+                .foregroundStyle(Palette.inkSecondary)
+        }
     }
 }
 
@@ -669,7 +715,7 @@ private struct ModelStep: View {
             VStack(spacing: Spacing.m) {
                 card
                 if SetupKit.progress(of: state) != nil || state == .loading {
-                    Text("You can carry on. It keeps going in the background.")
+                    Text("You can carry on. You can try it as soon as the model is ready.")
                         .font(Typography.callout)
                         .foregroundStyle(Palette.inkTertiary)
                 }
@@ -704,8 +750,13 @@ private struct ModelStep: View {
                     symbol: "exclamationmark.triangle.fill",
                     tint: Palette.warning,
                     fill: Palette.warningSoft,
-                    text: "The download stopped: \(message)"
-                )
+                    text: "The download stopped. Check your connection and try again."
+                ) {
+                    Text(message)
+                        .font(Typography.caption)
+                        .foregroundStyle(Palette.inkSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
         }
         .setupCard()
@@ -758,41 +809,61 @@ private struct ShortcutStep: View {
             VStack(spacing: Spacing.m) {
                 HStack(spacing: Spacing.m) {
                     ForEach(SetupKit.orderedKeys, id: \.self) { option in
-                        KeyOption(key: option, selected: option == key) {
-                            withAnimation(Motion.resolve(Motion.snappy, reduceMotion: reduceMotion)) {
-                                settings.pushToTalkKey = option
-                            }
-                            onChange()
-                        }
+                        KeyOption(key: option, selected: option == key) { select(option) }
                     }
                 }
-                gestures
-                if key == .fn && fnHasSystemAction {
-                    SetupKit.Callout(
-                        symbol: "globe",
-                        tint: Palette.warning,
-                        fill: Palette.warningSoft,
-                        text: "The 🌐 key also opens Emoji or Dictation. Set “Press 🌐 key to” to “Do Nothing” so only Birdtown Flow hears it."
-                    ) {
-                        Button("Open Keyboard Settings…", action: SetupKit.openKeyboardSettings)
-                            .buttonStyle(SetupKit.InlineLinkStyle())
+                // One control to VoiceOver: "Push-to-talk key", a radio group with positions.
+                .accessibilityRepresentation {
+                    Picker("Push-to-talk key", selection: Binding(get: { key }, set: { select($0) })) {
+                        ForEach(SetupKit.orderedKeys, id: \.self) { option in
+                            Text(SetupKit.name(for: option)).tag(option)
+                        }
                     }
-                } else if wisprRunning {
+                    .pickerStyle(.radioGroup)
+                }
+                gestures
+                // Both can apply at once (Wispr Flow listens on fn by default), so neither
+                // hides the other. Together they use shorter copy so the step still fits.
+                if wisprRunning {
                     SetupKit.Callout(
                         symbol: "exclamationmark.triangle.fill",
                         tint: Palette.warning,
                         fill: Palette.warningSoft,
-                        text: "Wispr Flow is running. If it uses the same key, both apps will listen at once."
+                        text: showsFnWarning
+                            ? "Wispr Flow is running. Quit it, or pick another key."
+                            : "Wispr Flow is running and may listen on the same key. Quit it, or pick a different key above."
                     )
+                }
+                if showsFnWarning {
+                    SetupKit.Callout(
+                        symbol: "globe",
+                        tint: Palette.warning,
+                        fill: Palette.warningSoft,
+                        text: wisprRunning
+                            ? "The 🌐 key also opens Emoji or Dictation. Set it to “Do Nothing”."
+                            : "The 🌐 key also opens Emoji or Dictation. Set “Press 🌐 key to” to “Do Nothing” so only Birdtown Flow hears it."
+                    ) {
+                        Button("Open Keyboard Settings…", action: SetupKit.openKeyboardSettings)
+                            .buttonStyle(SetupKit.InlineLinkStyle())
+                    }
                 }
             }
         }
     }
 
+    private var showsFnWarning: Bool { key == .fn && fnHasSystemAction }
+
+    private func select(_ option: PushToTalkKey) {
+        withAnimation(Motion.resolve(Motion.snappy, reduceMotion: reduceMotion)) {
+            settings.pushToTalkKey = option
+        }
+        onChange()
+    }
+
     private var gestures: some View {
         VStack(spacing: Spacing.s) {
             HStack(alignment: .top, spacing: 0) {
-                GestureHint(keys: [glyph], caption: "Hold to talk")
+                GestureHint(keys: [glyph], caption: "Hold to dictate")
                 switch settings.handsFreeShortcut {
                 case .doubleTap:
                     GestureHint(keys: [glyph, glyph], caption: "Double-tap for hands-free")
@@ -840,6 +911,7 @@ private struct KeyOption: View {
     let selected: Bool
     let action: () -> Void
     @State private var hovering = false
+    @FocusState private var isFocused: Bool
 
     var body: some View {
         Button(action: action) {
@@ -863,8 +935,13 @@ private struct KeyOption: View {
                     )
             )
             .contentShape(RoundedRectangle(cornerRadius: Radius.l, style: .continuous))
+            // Keyboard focus in the card's own shape, outside the selection border, like the
+            // provider and style cards.
+            .flowFocusRing(RoundedRectangle(cornerRadius: Radius.l, style: .continuous), drawn: isFocused)
         }
         .buttonStyle(.plain)
+        .focusEffectDisabled()
+        .focused($isFocused)
         .onHover { hovering = $0 }
         .accessibilityLabel(SetupKit.name(for: key))
         .accessibilityAddTraits(selected ? .isSelected : [])
@@ -877,9 +954,12 @@ private struct PracticeStep: View {
     let key: PushToTalkKey
     let phase: DictationController.Phase
     let hotkeyActive: Bool
+    let microphoneGranted: Bool
+    let modelState: ModelManager.State
     let succeeded: Bool
     let initialText: String?
     let onFixAccessibility: () -> Void
+    let onFixMicrophone: () -> Void
 
     @State private var text = ""
     @FocusState private var focused: Bool
@@ -896,8 +976,8 @@ private struct PracticeStep: View {
             done: succeeded,
             title: succeeded ? "That's it." : "Give it a try",
             message: succeeded
-                ? "Birdtown Flow works like this in every app. Hold \(keyName), speak, let go."
-                : "Click in the box, hold \(keyName), and say:"
+                ? "Birdtown Flow works like this in every app.\nHold \(keyName), speak, let go."
+                : "Hold \(keyName) and say:"
         ) {
             VStack(spacing: Spacing.m) {
                 if !succeeded {
@@ -930,7 +1010,10 @@ private struct PracticeStep: View {
                     .background(RoundedRectangle(cornerRadius: Radius.m, style: .continuous).fill(Palette.sunken))
                     .overlay(
                         RoundedRectangle(cornerRadius: Radius.m, style: .continuous)
-                            .strokeBorder(focused ? Palette.hairlineStrong : Palette.hairline)
+                            .strokeBorder(
+                                focused ? Palette.accent : Palette.hairline,
+                                lineWidth: focused ? Layout.Main.focusRing : Layout.Main.hairline
+                            )
                     )
                 status
             }
@@ -953,6 +1036,16 @@ private struct PracticeStep: View {
                     .buttonStyle(SetupKit.InlineLinkStyle())
             }
             .font(Typography.callout)
+        } else if !microphoneGranted {
+            HStack(spacing: Spacing.s) {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .foregroundStyle(Palette.warning)
+                Text("Birdtown Flow can't use the microphone yet.")
+                    .foregroundStyle(Palette.inkSecondary)
+                Button("Fix Microphone", action: onFixMicrophone)
+                    .buttonStyle(SetupKit.InlineLinkStyle())
+            }
+            .font(Typography.callout)
         } else if phase.isRecording {
             HStack(spacing: Spacing.s) {
                 SpectrumOrb(mode: .live, diameter: Layout.Orb.small, phase: orbPhase)
@@ -971,10 +1064,50 @@ private struct PracticeStep: View {
             Label("Typed by Birdtown Flow", systemImage: "checkmark.circle.fill")
                 .font(Typography.callout.weight(.medium))
                 .foregroundStyle(Palette.success)
+        } else if case .failed(let message) = phase {
+            HStack(alignment: .firstTextBaseline, spacing: Spacing.s) {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .foregroundStyle(Palette.warning)
+                    .accessibilityHidden(true)
+                Text(Self.retryHint(after: message))
+                    .foregroundStyle(Palette.inkSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .font(Typography.callout)
+        } else if modelState == .loading || SetupKit.progress(of: modelState) != nil
+                    || modelState == .downloading(progress: nil) {
+            VStack(spacing: Spacing.s) {
+                if let progress = SetupKit.progress(of: modelState) {
+                    SetupKit.ProgressBar(fraction: progress)
+                }
+                Text(modelWaitingText)
+                    .font(Typography.callout)
+                    .foregroundStyle(Palette.inkSecondary)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         } else {
             Text("Waiting for you to hold \(keyName)…")
                 .font(Typography.callout)
                 .foregroundStyle(Palette.inkTertiary)
         }
+    }
+
+    /// The model isn't ready to hear the try yet; say so instead of waiting silently.
+    private var modelWaitingText: String {
+        if modelState == .loading {
+            return "The speech model is getting ready. You can try as soon as it's ready."
+        }
+        if let progress = SetupKit.progress(of: modelState) {
+            return "The speech model is still downloading · \(SetupKit.percent(progress)). You can try as soon as it's ready."
+        }
+        return "The speech model is still downloading. You can try as soon as it's ready."
+    }
+
+    /// "Speech model is still downloading. Try again."
+    static func retryHint(after message: String) -> String {
+        let trimmed = message.trimmingCharacters(in: .whitespacesAndNewlines)
+        let ends = trimmed.last.map { ".!?…".contains($0) } ?? true
+        return trimmed + (ends ? " Try again." : ". Try again.")
     }
 }

@@ -21,7 +21,7 @@ struct EmptyState<Actions: View>: View {
                 }
             }
             .frame(width: Layout.Main.emptyStateBadge, height: Layout.Main.emptyStateBadge)
-            .background(Circle().fill(Palette.sunken))
+            .background(Circle().fill(Palette.chip))
             .padding(.bottom, Spacing.xs)
             .accessibilityHidden(true)
             Text(title)

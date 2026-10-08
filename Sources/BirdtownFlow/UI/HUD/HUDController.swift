@@ -71,6 +71,9 @@ final class HUDController {
         if phase == .listening, lastPhase != .listening {
             reposition(followMouse: true)
         }
+        if phase != lastPhase {
+            announce(phase, state: model.state)
+        }
         lastPhase = phase
 
         if wantsPanel {
@@ -82,13 +85,42 @@ final class HUDController {
         } else if panel.isVisible, hideTask == nil {
             // Let the pill finish fading before the window goes away.
             hideTask = Task { @MainActor [weak self] in
-                try? await Task.sleep(for: .milliseconds(450))
+                try? await Task.sleep(for: Motion.pillSettle)
                 guard !Task.isCancelled, let self else { return }
                 self.panel?.orderOut(nil)
                 self.hideTask = nil
             }
         }
         updateMouseTracking()
+    }
+
+    // MARK: - VoiceOver
+
+    /// The panel never takes focus, so VoiceOver never lands on it; speak how a dictation
+    /// ended instead. Only outcomes are announced: speaking while the mic is open would be
+    /// recorded, and the start sound already says listening began.
+    private func announce(_ phase: DictationController.Phase, state: HUDState) {
+        guard NSWorkspace.shared.isVoiceOverEnabled else { return }
+        let priority: NSAccessibilityPriorityLevel
+        switch phase {
+        case .failed:
+            priority = .high
+        case .done:
+            // Text that went to the clipboard instead of the field matters more than a plain "Inserted".
+            priority = state.notice == nil ? .medium : .high
+        case .cancelled:
+            priority = .medium
+        default:
+            return
+        }
+        NSAccessibility.post(
+            element: NSApplication.shared,
+            notification: .announcementRequested,
+            userInfo: [
+                .announcement: state.accessibilityDescription,
+                .priority: priority.rawValue,
+            ]
+        )
     }
 
     // MARK: - Placement

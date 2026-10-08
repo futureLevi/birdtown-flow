@@ -47,7 +47,11 @@ struct SnippetsView: View {
                             symbol: "magnifyingglass",
                             title: "No snippets match “\(trimmed)”",
                             message: "Search looks at triggers and expansions."
-                        )
+                        ) {
+                            Button("Clear Search") { query = "" }
+                                .buttonStyle(.flowSecondary)
+                        }
+                        .cardSurface()
                     } else {
                         LazyVGrid(
                             columns: [GridItem(.adaptive(minimum: Layout.Main.snippetCardMinWidth), spacing: Spacing.m)],
@@ -113,12 +117,16 @@ private struct SnippetCard: View {
                     .fill(Palette.inkTertiary)
                     .frame(width: LogoBars.groupWidth(height: Layout.Main.triggerMark), height: Layout.Main.triggerMark)
                     .accessibilityHidden(true)
+                    .opacity(dimming)
                 Text("“\(snippet.trigger)”")
                     .font(Typography.headline)
                     .foregroundStyle(Palette.ink)
                     .lineLimit(1)
+                    .help(snippet.trigger)
+                    .opacity(dimming)
                 Spacer(minLength: Spacing.s)
-                Toggle("Enabled", isOn: Binding(get: { snippet.isEnabled }, set: { onToggle($0) }))
+                // Hidden visually; VoiceOver names the switch after the snippet it controls.
+                Toggle("Snippet “\(snippet.trigger)”", isOn: Binding(get: { snippet.isEnabled }, set: { onToggle($0) }))
                     .toggleStyle(.switch)
                     .controlSize(.mini)
                     .labelsHidden()
@@ -130,12 +138,14 @@ private struct SnippetCard: View {
                 .lineSpacing(Spacing.transcriptLine)
                 .lineLimit(Layout.Main.transcriptLines)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .opacity(snippet.isEnabled ? 1 : Interaction.dimmedOpacity)
+                .help(snippet.expansion)
+                .opacity(dimming)
             Spacer(minLength: 0)
             HStack(spacing: Spacing.xxs) {
                 Text(uses == 0 ? "Not used yet" : (uses == 1 ? "Used once" : "Used \(uses) times"))
                     .font(Typography.caption)
                     .foregroundStyle(Palette.inkTertiary)
+                    .opacity(dimming)
                 Spacer(minLength: Spacing.s)
                 HStack(spacing: Spacing.xxs) {
                     IconButton(symbol: "pencil", label: "Edit") { onEdit() }
@@ -158,6 +168,19 @@ private struct SnippetCard: View {
             Divider()
             Button("Delete", systemImage: "trash", role: .destructive) { onDelete() }
         }
+        // The hover buttons are invisible (and so missing from the accessibility tree) most of
+        // the time; offer Edit and Delete as VoiceOver actions on the card.
+        .accessibilityElement(children: .contain)
+        .accessibilityActions {
+            Button("Edit") { onEdit() }
+            Button("Delete", role: .destructive) { onDelete() }
+        }
+    }
+
+    /// A turned-off snippet dims everything it says, as a dictionary row does; the switch and
+    /// the actions stay at full strength.
+    private var dimming: Double {
+        snippet.isEnabled ? 1 : Interaction.dimmedOpacity
     }
 }
 
@@ -168,6 +191,7 @@ struct SnippetEditorSheet: View {
 
     @State private var trigger: String
     @State private var expansion: String
+    @FocusState private var expansionFocused: Bool
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
 
@@ -204,21 +228,9 @@ struct SnippetEditorSheet: View {
             VStack(alignment: .leading, spacing: Spacing.xs) {
                 LabeledInput(label: "When you say", text: $trigger, prompt: "my calendly link")
                 if !trimmedTrigger.isEmpty && !triggerHasWords {
-                    HStack(alignment: .firstTextBaseline, spacing: Spacing.xs) {
-                        Image(systemName: "exclamationmark.triangle.fill")
-                            .foregroundStyle(Palette.warning)
-                        Text("A trigger needs at least one word you can say.")
-                            .foregroundStyle(Palette.inkSecondary)
-                    }
-                    .font(Typography.caption)
+                    problemRow("A trigger needs at least one word you can say.")
                 } else if hasConflict {
-                    HStack(alignment: .firstTextBaseline, spacing: Spacing.xs) {
-                        Image(systemName: "exclamationmark.triangle.fill")
-                            .foregroundStyle(Palette.warning)
-                        Text("Another snippet already uses “\(trimmedTrigger)”. Pick a different phrase.")
-                            .foregroundStyle(Palette.inkSecondary)
-                    }
-                    .font(Typography.caption)
+                    problemRow("Another snippet already uses “\(trimmedTrigger)”. Pick a different phrase.")
                 } else {
                     Text("A short phrase you wouldn't say by accident works best.")
                         .font(Typography.caption)
@@ -237,7 +249,11 @@ struct SnippetEditorSheet: View {
                     .padding(Spacing.s)
                     .frame(height: Layout.Main.expansionEditorHeight)
                     .background(shape.fill(Palette.sunken))
-                    .overlay(shape.strokeBorder(Palette.hairline, lineWidth: Layout.Main.hairline))
+                    .focused($expansionFocused)
+                    .overlay(shape.strokeBorder(
+                        expansionFocused ? Palette.accent : Palette.hairline,
+                        lineWidth: expansionFocused ? Layout.Main.focusRing : Layout.Main.hairline
+                    ))
                     .accessibilityLabel("Expansion")
             }
 
@@ -259,6 +275,18 @@ struct SnippetEditorSheet: View {
         .padding(Spacing.xxl)
         .frame(width: Layout.Main.sheetWidth)
         .background(Palette.canvas)
+    }
+
+    /// A message that blocks saving, drawn like the dictionary sheet's so it doesn't read as advice.
+    private func problemRow(_ message: LocalizedStringKey) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: Spacing.s) {
+            Image(systemName: "xmark.octagon.fill")
+                .foregroundStyle(Palette.danger)
+            Text(message)
+                .foregroundStyle(Palette.inkSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .font(Typography.callout)
     }
 
     private func save() {

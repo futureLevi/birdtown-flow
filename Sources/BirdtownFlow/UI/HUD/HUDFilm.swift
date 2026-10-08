@@ -165,14 +165,14 @@ struct HUDFilmFrame: View {
                         SpectrumOrbFrame(look: frame.orb, diameter: Layout.HUD.orb, showsHalo: true)
                             .position(x: HUDMetrics.capCentre, y: pill.size.height / 2)
                         HUDBars(heights: frame.heights, opacities: frame.opacities)
-                            .position(x: pill.size.width / 2, y: pill.size.height / 2)
+                            .position(x: HUDMetrics.listeningBarsX(width: pill.size.width), y: pill.size.height / 2)
                     }
                     .opacity(live)
-                    .scaleEffect(CGFloat(0.9 + 0.1 * live))
+                    .scaleEffect(Layout.HUD.contentEnterScale + (1 - Layout.HUD.contentEnterScale) * CGFloat(live))
 
                     HUDDrawnCheck(animated: false, fixedProgress: trim)
                         .opacity(check)
-                        .scaleEffect(CGFloat(0.9 + 0.1 * check))
+                        .scaleEffect(Layout.HUD.contentEnterScale + (1 - Layout.HUD.contentEnterScale) * CGFloat(check))
                 }
                 .frame(width: pill.size.width, height: pill.size.height)
                 .clipShape(Capsule(style: .continuous))

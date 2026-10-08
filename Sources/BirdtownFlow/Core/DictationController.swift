@@ -1053,8 +1053,8 @@ final class DictationController {
     private func modelNotReadyMessage() -> String {
         if case .downloading = models.state { return "Speech model is still downloading" }
         if case .loading = models.state { return "Speech model is still loading" }
-        if case .notDownloaded = models.state { return "Speech model isn't downloaded yet" }
-        if case .failed = models.state { return "Speech model couldn't load" }
+        if case .notDownloaded = models.state { return "Speech model not downloaded" }
+        if case .failed = models.state { return "Speech model didn't load" }
         return "Speech model isn't ready yet"
     }
 

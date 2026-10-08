@@ -46,20 +46,33 @@ struct LabView: View {
 
                 VStack(alignment: .leading, spacing: Spacing.m) {
                     SectionHeader("Configurations", detail: "\(model.lab.configurations.count)")
-                    HStack(alignment: .top, spacing: Spacing.m) {
-                        LabConfigurationList(onDelete: { deleting = $0 })
-                            .frame(width: Layout.Lab.listWidth)
-                        if let selected = bench.selected {
-                            LabEditor(configuration: selected, onDelete: { deleting = $0 }, onApplied: { applied() })
-                                // A fresh editor per configuration: no focus or scroll carried over.
-                                .id(selected.id)
-                        } else {
-                            EmptyState(
-                                symbol: "flask",
-                                title: "No configuration open",
-                                message: "Pick one on the left, or start a new one."
-                            )
-                            .cardSurface()
+                    if model.lab.configurations.isEmpty {
+                        // No list to pick from, so no empty column beside the message.
+                        EmptyState(
+                            symbol: "flask",
+                            title: "No configurations yet",
+                            message: "Start one to try polish settings on real dictations."
+                        ) {
+                            Button("New Configuration") { bench.addNew() }
+                                .buttonStyle(.flowPrimary)
+                        }
+                        .cardSurface()
+                    } else {
+                        HStack(alignment: .top, spacing: Spacing.m) {
+                            LabConfigurationList(onDelete: { deleting = $0 })
+                                .frame(width: Layout.Lab.listWidth)
+                            if let selected = bench.selected {
+                                LabEditor(configuration: selected, onDelete: { deleting = $0 }, onApplied: { applied() })
+                                    // A fresh editor per configuration: no focus or scroll carried over.
+                                    .id(selected.id)
+                            } else {
+                                EmptyState(
+                                    symbol: "flask",
+                                    title: "No configuration open",
+                                    message: "Pick a configuration on the left."
+                                )
+                                .cardSurface()
+                            }
                         }
                     }
                 }
@@ -71,7 +84,7 @@ struct LabView: View {
             .pageLayout()
         }
         .confirmationDialog(
-            "Delete “\(deleting?.name ?? "")”?",
+            "Delete “\(deleting?.displayName ?? "")”?",
             isPresented: Binding(get: { deleting != nil }, set: { if !$0 { deleting = nil } }),
             presenting: deleting
         ) { configuration in
@@ -146,7 +159,7 @@ private struct LabConfigurationRow: View {
         Button(action: action) {
             VStack(alignment: .leading, spacing: Spacing.xs) {
                 HStack(spacing: Spacing.xs) {
-                    Text(configuration.name.isEmpty ? "Untitled" : configuration.name)
+                    Text(configuration.displayName)
                         .font(Typography.headline)
                         .foregroundStyle(Palette.ink)
                         .lineLimit(1)
@@ -156,11 +169,18 @@ private struct LabConfigurationRow: View {
                             .help("Unsaved changes")
                     }
                 }
-                Text(configuration.summary)
-                    .font(Typography.caption)
-                    .foregroundStyle(Palette.inkSecondary)
-                    .lineLimit(2)
-                    .fixedSize(horizontal: false, vertical: true)
+                VStack(alignment: .leading, spacing: Spacing.xxs) {
+                    if configuration.usesModel, !configuration.model.isEmpty {
+                        Text(configuration.model)
+                            .foregroundStyle(Palette.inkSecondary)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                    }
+                    Text(configuration.providerAndEffort)
+                        .foregroundStyle(Palette.inkTertiary)
+                        .lineLimit(1)
+                }
+                .font(Typography.caption)
                 HStack(alignment: .firstTextBaseline, spacing: Spacing.xs) {
                     Image(systemName: styles.isEmpty ? "circle.dashed" : "checkmark.circle.fill")
                         .foregroundStyle(styles.isEmpty ? Palette.inkTertiary : Palette.success)
@@ -197,6 +217,7 @@ private struct LabEditor: View {
     let onApplied: () -> Void
 
     @Environment(AppModel.self) private var model
+    @FocusState private var instructionsFocused: Bool
 
     var body: some View {
         let bench = model.bench
@@ -246,11 +267,15 @@ private struct LabEditor: View {
                     }
                 }
 
-                usedFor(isDirty: isDirty)
-
                 instructions
 
                 footer(saved: saved, isDirty: isDirty)
+
+                // Outside the draft: a chip applies as soon as it's clicked, so it sits apart
+                // from the fields that wait for Save.
+                Divider()
+
+                usedFor(isDirty: isDirty)
             }
         }
     }
@@ -290,20 +315,27 @@ private struct LabEditor: View {
     private var modelField: some View {
         let suggestions = PolishConfiguration.suggestedModels(for: configuration.provider)
         let model = binding(\.model)
-        return HStack(spacing: Spacing.xs) {
-            LabTextInput("Model", text: model, prompt: PolishConfiguration.defaultModel(for: configuration.provider))
+        return LabTextInput(
+            "Model", text: model, prompt: PolishConfiguration.defaultModel(for: configuration.provider)
+        ) {
+            // Inside the well, drawn like LabPicker's chevron, so the column's right edge lines up.
             if !suggestions.isEmpty {
                 Menu {
                     ForEach(suggestions, id: \.self) { name in
                         Button(name) { model.wrappedValue = name }
                     }
                 } label: {
-                    Image(systemName: "chevron.down")
+                    Image(systemName: "chevron.up.chevron.down")
+                        .font(Typography.caption)
+                        .foregroundStyle(Palette.inkTertiary)
+                        .contentShape(Rectangle())
                 }
-                .menuStyle(.borderlessButton)
+                .menuStyle(.button)
+                .buttonStyle(.plain)
                 .menuIndicator(.hidden)
-                .frame(width: Layout.Lab.modelMenuWidth)
-                .help("Choose a model")
+                .fixedSize()
+                .accessibilityLabel("Suggested models")
+                .help("Choose a suggested model")
             }
         }
     }
@@ -315,7 +347,7 @@ private struct LabEditor: View {
         let id = configuration.id
         let assigned = lab.styles(for: id)
         return VStack(alignment: .leading, spacing: Spacing.s) {
-            Text("Use for")
+            Text("Use for · applies right away")
                 .font(Typography.caption)
                 .foregroundStyle(Palette.inkSecondary)
             HStack(spacing: Spacing.s) {
@@ -327,7 +359,7 @@ private struct LabEditor: View {
                         lab.setStyles(styles, for: id)
                         onApplied()
                     }
-                    .help(isOn ? "Stop using this for \(style.title) dictations" : "Polish \(style.title) dictations with this")
+                    .help(chipHelp(for: style, isOn: isOn))
                 }
             }
             Text(styleExplanation(assigned: assigned, isDirty: isDirty))
@@ -337,22 +369,19 @@ private struct LabEditor: View {
         }
     }
 
+    /// Which configuration owns a style is on each chip's tooltip, so this stays one line.
     private func styleExplanation(assigned: Set<WritingStyle>, isDirty: Bool) -> String {
-        var parts = [assigned.isEmpty
-            ? "Pick the styles whose dictations this should polish."
-            : "Dictations in these styles use this configuration."]
-        // The other configurations in use, each with its styles: "Casual and Very casual use
-        // “Filler words only”."
-        let others = model.lab.configurations.filter { $0.id != configuration.id }
-        for other in others {
-            let styles = WritingStyle.allCases.filter(model.lab.styles(for: other.id).contains).map(\.title)
-            guard !styles.isEmpty else { continue }
-            let verb = styles.count == 1 ? "uses" : "use"
-            parts.append("\(ListFormatter.localizedString(byJoining: styles)) \(verb) “\(other.name)”.")
-        }
+        var parts = ["Styles without a configuration follow Settings."]
         if isDirty, !assigned.isEmpty { parts.append("Until you save, they use the saved version.") }
-        parts.append("Styles without a configuration follow Settings.")
         return parts.joined(separator: " ")
+    }
+
+    private func chipHelp(for style: WritingStyle, isOn: Bool) -> String {
+        if isOn { return "Stop using this for \(style.title) dictations" }
+        if let owner = model.lab.configuration(for: style), owner.id != configuration.id {
+            return "Used by “\(owner.displayName)”. Choosing it here moves it."
+        }
+        return "Polish \(style.title) dictations with this"
     }
 
     // MARK: Instructions
@@ -360,7 +389,6 @@ private struct LabEditor: View {
     private var instructions: some View {
         let text = binding(\.instructions)
         let characters = configuration.instructions.count
-        let shape = RoundedRectangle(cornerRadius: Radius.s, style: .continuous)
         return VStack(alignment: .leading, spacing: Spacing.s) {
             HStack(alignment: .firstTextBaseline, spacing: Spacing.s) {
                 Text("Instructions")
@@ -387,8 +415,8 @@ private struct LabEditor: View {
                 .scrollContentBackground(.hidden)
                 .padding(Spacing.s)
                 .frame(height: Layout.Lab.instructionsHeight)
-                .background(shape.fill(Palette.sunken))
-                .overlay(shape.strokeBorder(Palette.hairline, lineWidth: Layout.Main.hairline))
+                .focused($instructionsFocused)
+                .labWell(isFocused: instructionsFocused)
                 .accessibilityLabel("Instructions")
             HStack(spacing: Spacing.xs) {
                 ForEach(PolishPlaceholder.allCases) { placeholder in
@@ -437,15 +465,15 @@ private struct LabEditor: View {
                 }
                 .buttonStyle(.flowSecondary)
                 .help("Keep the saved version as it is and save these changes under a new name")
+                // Only while there's something to save; clean, the footer just says when it was.
+                Button("Save") {
+                    bench.save(id)
+                    onApplied()
+                }
+                .buttonStyle(.flowPrimary)
+                .keyboardShortcut("s", modifiers: .command)
+                .help("Save (⌘S)")
             }
-            Button("Save") {
-                bench.save(id)
-                onApplied()
-            }
-            .buttonStyle(.flowSecondary)
-            .keyboardShortcut("s", modifiers: .command)
-            .disabled(!isDirty)
-            .help("Save (⌘S)")
         }
     }
 }
@@ -454,10 +482,10 @@ private struct LabEditor: View {
 
 private struct LabTestCard: View {
     @Environment(AppModel.self) private var model
+    @FocusState private var sampleFocused: Bool
 
     var body: some View {
         @Bindable var bench = model.bench
-        let shape = RoundedRectangle(cornerRadius: Radius.s, style: .continuous)
         VStack(alignment: .leading, spacing: Spacing.m) {
             SectionHeader("Test")
             Card(padding: Spacing.l) {
@@ -475,8 +503,8 @@ private struct LabTestCard: View {
                         .scrollContentBackground(.hidden)
                         .padding(Spacing.s)
                         .frame(height: Layout.Lab.sampleHeight)
-                        .background(shape.fill(Palette.sunken))
-                        .overlay(shape.strokeBorder(Palette.hairline, lineWidth: Layout.Main.hairline))
+                        .focused($sampleFocused)
+                        .labWell(isFocused: sampleFocused)
                         .accessibilityLabel("Text to polish")
                     HStack(spacing: Spacing.s) {
                         Text("Dictated as")
@@ -514,7 +542,7 @@ private struct LabTestCard: View {
                         Button("Run All") { bench.runAll() }
                             .buttonStyle(.flowSecondary)
                             .disabled(!bench.canRun || model.lab.configurations.count < 2)
-                            .help("Run every configuration on this text, one after another")
+                            .help(runAllHelp)
                         Button {
                             if let id = bench.selectedID { bench.run(id) }
                         } label: {
@@ -523,7 +551,7 @@ private struct LabTestCard: View {
                         .buttonStyle(.flowPrimary)
                         .keyboardShortcut(.return, modifiers: .command)
                         .disabled(!bench.canRun || bench.selected == nil)
-                        .help(bench.selected.map { "Run “\($0.name)” on this text (⌘↩)" } ?? "Open a configuration to run it")
+                        .help(runHelp)
                     }
                 }
             }
@@ -538,10 +566,27 @@ private struct LabTestCard: View {
         )
     }
 
+    private var sampleIsEmpty: Bool {
+        model.bench.sample.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    /// Says why Run All is off when it is, rather than promising what it won't do.
+    private var runAllHelp: String {
+        if model.lab.configurations.count < 2 { return "Add a second configuration to compare" }
+        if sampleIsEmpty { return "Type or pick some text to test" }
+        return "Run every configuration on this text, one after another"
+    }
+
+    private var runHelp: String {
+        guard let selected = model.bench.selected else { return "Open a configuration to run it" }
+        if sampleIsEmpty { return "Type or pick some text to test" }
+        return "Run “\(selected.displayName)” on this text (⌘↩)"
+    }
+
     private var runningLabel: String {
         let bench = model.bench
         guard let id = bench.runningID, let run = bench.runs.first(where: { $0.id == id }) else { return "Running…" }
-        return "Running “\(run.configuration.name)”…"
+        return "Running “\(run.configuration.displayName)”…"
     }
 }
 
@@ -617,7 +662,7 @@ private struct LabRunCard: View {
             VStack(alignment: .leading, spacing: Spacing.m) {
                 VStack(alignment: .leading, spacing: Spacing.xxs) {
                     HStack(alignment: .firstTextBaseline, spacing: Spacing.s) {
-                        Text(run.configuration.name.isEmpty ? "Untitled" : run.configuration.name)
+                        Text(run.configuration.displayName)
                             .font(Typography.headline)
                             .foregroundStyle(Palette.ink)
                             .lineLimit(1)
@@ -659,7 +704,7 @@ private struct LabRunCard: View {
             Badge(text: "Accepted", symbol: "checkmark.circle.fill", tone: .success)
         case .some(.rejected):
             Badge(text: "Original kept", symbol: "shield.lefthalf.filled", tone: .warning)
-                .help("PolishGuard refused the reply, so dictation would type the unpolished text.")
+                .help("PolishGuard refused the reply, so dictation would type the text after Birdtown Flow's own cleanup and your dictionary.")
         case .some(.failed):
             Badge(text: "Failed", symbol: "xmark.octagon.fill", tone: .danger)
         case nil:
@@ -671,19 +716,33 @@ private struct LabRunCard: View {
     private func content(_ result: PolishService.LabResult) -> some View {
         switch result.verdict {
         case .failed(let message):
-            Text(message)
-                .font(Typography.callout)
-                .foregroundStyle(Palette.ink)
-                .fixedSize(horizontal: false, vertical: true)
-                .textSelection(.enabled)
-                .padding(Spacing.m)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(RoundedRectangle(cornerRadius: Radius.s, style: .continuous).fill(Palette.dangerSoft))
+            HStack(spacing: Spacing.m) {
+                Text(message)
+                    .font(Typography.callout)
+                    .foregroundStyle(Palette.ink)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .textSelection(.enabled)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                if run.needsSettings {
+                    SettingsLink {
+                        Text("Open Settings")
+                    }
+                    .buttonStyle(.flowSecondary)
+                    .controlSize(.small)
+                }
+            }
+            .padding(Spacing.m)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(RoundedRectangle(cornerRadius: Radius.s, style: .continuous).fill(Palette.dangerSoft))
             timings(result)
         case .accepted:
             diff
             timings(result)
         case .rejected(let reply, let reason):
+            // The diff is Birdtown Flow's own cleanup and the dictionary, not the model's edit.
+            Text("Without polish, dictation would type:")
+                .font(Typography.caption)
+                .foregroundStyle(Palette.inkTertiary)
             diff
             VStack(alignment: .leading, spacing: Spacing.s) {
                 HStack(alignment: .firstTextBaseline, spacing: Spacing.xs) {
@@ -717,13 +776,32 @@ private struct LabRunCard: View {
 
     /// What was heard against what would be typed: struck-through words went, tinted ones arrived.
     private var diff: some View {
-        Text(Self.attributed(WordDiff.diff(original: run.input, revised: run.output)))
+        let segments = WordDiff.diff(original: run.input, revised: run.output)
+        return Text(Self.attributed(segments))
             .font(Typography.transcript)
             .lineSpacing(Spacing.transcriptLine)
             .fixedSize(horizontal: false, vertical: true)
             .textSelection(.enabled)
             .frame(maxWidth: .infinity, alignment: .leading)
             .accessibilityLabel(run.output)
+            .accessibilityValue(Self.spokenChanges(segments))
+    }
+
+    /// The diff in words for VoiceOver, which can't hear strikethrough or tint.
+    static func spokenChanges(_ segments: [WordDiff.Segment]) -> String {
+        var removed: [String] = []
+        var added: [String] = []
+        for segment in segments {
+            switch segment {
+            case .same: break
+            case .removed(let words): removed.append(words)
+            case .added(let words): added.append(words)
+            }
+        }
+        var parts: [String] = []
+        if !removed.isEmpty { parts.append("Removed: " + removed.joined(separator: ", ")) }
+        if !added.isEmpty { parts.append("Added: " + added.joined(separator: ", ")) }
+        return parts.isEmpty ? "No changes" : parts.joined(separator: ". ")
     }
 
     /// Spelled out per attribute: on macOS, `foregroundColor` and friends also exist for AppKit.
@@ -854,8 +932,7 @@ private struct LabPicker<Value: Hashable>: View {
             }
             .padding(.horizontal, Spacing.m)
             .frame(height: Layout.Lab.fieldHeight)
-            .background(shape.fill(Palette.sunken))
-            .overlay(shape.strokeBorder(Palette.hairline, lineWidth: Layout.Main.hairline))
+            .labWell()
             .contentShape(shape)
         }
         .menuStyle(.button)
@@ -881,33 +958,75 @@ private struct LabField<Content: View>: View {
     }
 }
 
-/// The app's inset text field (`LabeledInput`'s), without a label of its own.
-private struct LabTextInput: View {
+/// The app's inset text field (`LabeledInput`'s), without a label of its own, with room
+/// for a control at its trailing end inside the well.
+private struct LabTextInput<Accessory: View>: View {
     let title: String
     @Binding var text: String
     var prompt: String
+    let accessory: Accessory
 
     @FocusState private var isFocused: Bool
 
-    init(_ title: String, text: Binding<String>, prompt: String = "") {
+    init(_ title: String, text: Binding<String>, prompt: String = "", @ViewBuilder accessory: () -> Accessory) {
         self.title = title
         self._text = text
         self.prompt = prompt
+        self.accessory = accessory()
     }
 
     var body: some View {
+        HStack(spacing: Spacing.s) {
+            TextField(title, text: $text, prompt: Text(prompt))
+                .textFieldStyle(.plain)
+                .font(Typography.body)
+                .foregroundStyle(Palette.ink)
+                .focused($isFocused)
+            accessory
+        }
+        .padding(.horizontal, Spacing.m)
+        .frame(height: Layout.Lab.fieldHeight)
+        .labWell(isFocused: isFocused)
+    }
+}
+
+extension LabTextInput where Accessory == EmptyView {
+    init(_ title: String, text: Binding<String>, prompt: String = "") {
+        self.init(title, text: text, prompt: prompt) { EmptyView() }
+    }
+}
+
+/// The sunken well every Lab input sits in: a hairline at rest, Signal blue while it has focus.
+private struct LabWell: ViewModifier {
+    let isFocused: Bool
+
+    func body(content: Content) -> some View {
         let shape = RoundedRectangle(cornerRadius: Radius.s, style: .continuous)
-        TextField(title, text: $text, prompt: Text(prompt))
-            .textFieldStyle(.plain)
-            .font(Typography.body)
-            .foregroundStyle(Palette.ink)
-            .focused($isFocused)
-            .padding(.horizontal, Spacing.m)
-            .frame(height: Layout.Lab.fieldHeight)
+        content
             .background(shape.fill(Palette.sunken))
             .overlay(shape.strokeBorder(
                 isFocused ? Palette.accent : Palette.hairline,
                 lineWidth: isFocused ? Layout.Main.focusRing : Layout.Main.hairline
             ))
+    }
+}
+
+extension View {
+    fileprivate func labWell(isFocused: Bool = false) -> some View {
+        modifier(LabWell(isFocused: isFocused))
+    }
+}
+
+extension PolishConfiguration {
+    /// The name, or "Untitled" when it's been cleared, so copy never shows empty quotes.
+    fileprivate var displayName: String {
+        name.trimmingCharacters(in: .whitespaces).isEmpty ? "Untitled" : name
+    }
+
+    /// `summary` without the model: "Claude Code · Low effort".
+    fileprivate var providerAndEffort: String {
+        var parts = [Self.providerTitle(provider)]
+        if usesEffort { parts.append(effort == .standard ? "Default effort" : "\(effort.title) effort") }
+        return parts.joined(separator: " · ")
     }
 }

@@ -8,6 +8,8 @@ struct FilterChip: View {
     let isSelected: Bool
     let action: () -> Void
 
+    @FocusState private var isFocused: Bool
+
     var body: some View {
         Button(action: action) {
             HStack(spacing: Spacing.xs) {
@@ -23,22 +25,28 @@ struct FilterChip: View {
                 }
             }
         }
-        .buttonStyle(FilterChipStyle(isSelected: isSelected))
+        .buttonStyle(FilterChipStyle(isSelected: isSelected, isFocused: isFocused))
+        // The system ring would land on the chip's rectangular bounds and double the selected
+        // border; the style draws its own, a gap outside the pill.
+        .focusEffectDisabled()
+        .focused($isFocused)
         .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 }
 
 private struct FilterChipStyle: ButtonStyle {
     let isSelected: Bool
+    let isFocused: Bool
 
     func makeBody(configuration: Configuration) -> some View {
-        FilterChipBody(configuration: configuration, isSelected: isSelected)
+        FilterChipBody(configuration: configuration, isSelected: isSelected, isFocused: isFocused)
     }
 }
 
 private struct FilterChipBody: View {
     let configuration: ButtonStyleConfiguration
     let isSelected: Bool
+    let isFocused: Bool
 
     @State private var isHovered = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -46,6 +54,7 @@ private struct FilterChipBody: View {
     var body: some View {
         configuration.label
             .font(Typography.caption)
+            .lineLimit(1)
             .foregroundStyle(isSelected ? Palette.accent : (isHovered ? Palette.ink : Palette.inkSecondary))
             .padding(.horizontal, Spacing.m)
             .frame(height: Layout.Main.chipHeight)
@@ -53,6 +62,7 @@ private struct FilterChipBody: View {
             .overlay(Capsule().strokeBorder(isSelected ? Palette.accent : Palette.hairline,
                                                               lineWidth: Layout.Main.hairline))
             .contentShape(Capsule())
+            .flowFocusRing(Capsule(), drawn: isFocused)
             .scaleEffect(configuration.isPressed && !reduceMotion ? Interaction.pressedScale : 1)
             .onHover { isHovered = $0 }
             .animation(Motion.resolve(Motion.snappy, reduceMotion: reduceMotion), value: isSelected)

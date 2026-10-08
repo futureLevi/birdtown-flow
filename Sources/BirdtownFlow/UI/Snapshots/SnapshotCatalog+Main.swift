@@ -30,6 +30,8 @@ extension SnapshotCatalog {
             SnapshotRenderer.Shot("lab-full", size: CGSize(width: size.width, height: 2_150)) {
                 lab(records: records, preview: sample)
             },
+            // Every configuration deleted: the Lab invites a new one.
+            SnapshotRenderer.Shot("lab-empty", size: size) { labEmpty(records: records, preview: sample) },
             // The sidebar column on its own: macOS 26 hosts it in a glass panel that offscreen
             // rendering can't capture, so it gets a shot of its own (with each status state).
             SnapshotRenderer.Shot("main-sidebar", size: CGSize(width: 4 * Layout.sidebarWidth, height: 520)) {
@@ -136,6 +138,18 @@ extension SnapshotCatalog {
         model.section = .lab
         model.settings.polishProvider = .claudeCode
         model.bench.preview(selected: SampleData.labDraft.id, draft: SampleData.labDraft, runs: SampleData.labRuns())
+        return MainView()
+            .environment(model)
+            .environment(\.mainPreview, preview)
+            .transaction { $0.disablesAnimations = true }
+    }
+
+    /// The Lab with no configurations left.
+    private static func labEmpty(records: [HistoryRecord], preview: MainPreview) -> some View {
+        let model = AppModel.preview(records: records, lab: PolishLabState())
+        model.section = .lab
+        model.settings.polishProvider = .claudeCode
+        model.bench.preview(selected: nil, draft: nil, runs: [])
         return MainView()
             .environment(model)
             .environment(\.mainPreview, preview)

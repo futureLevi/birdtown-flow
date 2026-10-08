@@ -96,28 +96,30 @@ struct HUDView: View {
                 .transition(contentTransition)
                 .accessibilityHidden(true)
         case .failed:
-            HUDMessage(message: state.failureMessage ?? "", tone: .failure, animated: false)
+            let message = state.failureMessage ?? ""
+            HUDMessage(message: message, tone: .failure, animated: false,
+                       lineLimit: HUDMetrics.messageLines(message, lineLimit: Layout.HUD.failureLineLimit))
                 .transition(contentTransition)
         }
     }
 
     private var contentTransition: AnyTransition {
-        reduceMotion ? .opacity : AnyTransition(.blurReplace).combined(with: .scale(scale: 0.9))
+        reduceMotion ? .opacity : AnyTransition(.blurReplace).combined(with: .scale(scale: Layout.HUD.contentEnterScale))
     }
 
     private func opacity(for kind: HUDState.Kind) -> Double {
         switch kind {
         case .hidden: 0
         case .idle: Palette.HUD.idleOpacity
-        case .cancelled: 0.85
+        case .cancelled: Palette.HUD.cancelledOpacity
         default: 1
         }
     }
 
     private func scale(for kind: HUDState.Kind) -> CGFloat {
         switch kind {
-        case .hidden: 0.6
-        case .cancelled: 0.92
+        case .hidden: Layout.HUD.hiddenScale
+        case .cancelled: Layout.HUD.cancelledScale
         default: 1
         }
     }
@@ -139,7 +141,7 @@ struct HUDPillBody: View {
             let pill = CGRect(origin: .zero, size: canvasSize).insetBy(dx: margin, dy: margin)
             let radius = Elevation.hud.radius * shadowScale
             let drop = Elevation.hud.y * shadowScale
-            let layers = 14
+            let layers = Layout.HUD.shadowLayers
             for layer in 1...layers {
                 let fraction = CGFloat(layer) / CGFloat(layers)
                 let rect = pill
@@ -149,15 +151,17 @@ struct HUDPillBody: View {
                              with: .color(Palette.HUD.shadow.opacity(Palette.HUD.shadowLayerOpacity)))
             }
             // A tight contact shadow so the pill sits on the screen rather than floating in fog.
-            let contact = pill.insetBy(dx: -1, dy: -1).offsetBy(dx: 0, dy: 1)
+            let spread = Layout.HUD.contactShadowSpread
+            let contact = pill.insetBy(dx: -spread, dy: -spread).offsetBy(dx: 0, dy: spread)
             context.fill(Path(roundedRect: contact, cornerRadius: contact.height / 2, style: .continuous),
                          with: .color(Palette.HUD.shadow.opacity(Palette.HUD.contactShadowOpacity)))
 
             let capsule = Path(roundedRect: pill, cornerRadius: pill.height / 2, style: .continuous)
             context.fill(capsule, with: .color(Palette.HUD.fill))
-            let edge = pill.insetBy(dx: 0.5, dy: 0.5)
+            let lineWidth = Layout.HUD.strokeWidth
+            let edge = pill.insetBy(dx: lineWidth / 2, dy: lineWidth / 2)
             context.stroke(Path(roundedRect: edge, cornerRadius: edge.height / 2, style: .continuous),
-                           with: .color(stroke), lineWidth: 1)
+                           with: .color(stroke), lineWidth: lineWidth)
         }
         .padding(-Layout.HUD.shadowMargin)
         .allowsHitTesting(false)
@@ -209,7 +213,7 @@ struct HUDKeycap: View {
             )
             .overlay(
                 RoundedRectangle(cornerRadius: Radius.xs, style: .continuous)
-                    .strokeBorder(Palette.HUD.stroke, lineWidth: 1)
+                    .strokeBorder(Palette.HUD.stroke, lineWidth: Layout.HUD.strokeWidth)
             )
     }
 }
@@ -241,14 +245,16 @@ struct HUDDrawnCheck: View {
     }
 }
 
-/// One line of text beside a glyph: the failure message, or the "copied" notice beside a
-/// drawn check.
+/// Text beside a glyph: the failure message, or the "copied" notice beside a drawn check.
+/// One line unless the caller allows more (a long failure wraps rather than losing its end;
+/// `HUDMetrics.messageSize` grows the pill to match).
 struct HUDMessage: View {
     enum Tone { case success, failure }
 
     let message: String
     let tone: Tone
     let animated: Bool
+    var lineLimit = 1
 
     var body: some View {
         HStack(spacing: Spacing.s) {
@@ -269,7 +275,8 @@ struct HUDMessage: View {
             Text(message)
                 .font(Typography.hud)
                 .foregroundStyle(Palette.HUD.ink)
-                .lineLimit(1)
+                .lineLimit(lineLimit)
+                .multilineTextAlignment(.leading)
                 .truncationMode(.tail)
                 .frame(maxWidth: Layout.HUD.messageMaxWidth, alignment: .leading)
         }
@@ -283,10 +290,12 @@ struct HUDMessage: View {
 struct HUDIconButton: View {
     let symbol: String
     let label: String
+    /// The keyboard alternative, for VoiceOver ("Or press Escape").
+    let hint: String
     let isHovered: Bool
+    /// Passed down from `HUDView`, so snapshots' Reduce Motion override reaches the button too.
+    let reduceMotion: Bool
     let action: @MainActor () -> Void
-
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         Button {
@@ -302,6 +311,7 @@ struct HUDIconButton: View {
         .buttonStyle(.plain)
         .animation(Motion.resolve(Motion.snappy, reduceMotion: reduceMotion), value: isHovered)
         .accessibilityLabel(label)
+        .accessibilityHint(hint)
         .help(label)
     }
 }

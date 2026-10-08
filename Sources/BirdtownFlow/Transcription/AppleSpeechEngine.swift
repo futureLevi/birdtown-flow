@@ -152,6 +152,7 @@ actor AppleSpeechEngine: TranscriptionEngine {
                 Log.speech.info("Apple speech assets installed")
             }
         } catch {
+            Log.speech.error("Apple speech assets failed to install: \(error.localizedDescription, privacy: .public)")
             throw TranscriptionError.modelInstallFailed(error.localizedDescription)
         }
     }

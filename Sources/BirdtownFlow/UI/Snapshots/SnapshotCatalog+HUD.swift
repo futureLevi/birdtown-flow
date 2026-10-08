@@ -57,7 +57,7 @@ struct HUDPreview {
     var reduceMotion = false
 
     static let sceneSize = CGSize(width: 480, height: 160)
-    static let sheetSize = CGSize(width: 960, height: 1120)
+    static let sheetSize = CGSize(width: 960, height: 1280)
     /// Any fixed instant: animated states render deterministically at it.
     static let time: Double = 812_345_678.4
 
@@ -74,15 +74,20 @@ struct HUDPreview {
             HUDPreview(name: "handsfree-hover-stop", state: HUDState(phase: .listening, isHandsFree: true, level: 0.05,
                                                                     levels: levels(peak: 0.06), recordingStartedAt: start,
                                                                     hover: .stop)),
+            HUDPreview(name: "handsfree-hover-cancel", state: HUDState(phase: .listening, isHandsFree: true, level: 0.05,
+                                                                      levels: levels(peak: 0.06), recordingStartedAt: start,
+                                                                      hover: .cancel)),
             HUDPreview(name: "transcribing", state: HUDState(phase: .transcribing)),
             HUDPreview(name: "polishing", state: HUDState(phase: .polishing)),
             HUDPreview(name: "transcribing-reduce-motion", state: HUDState(phase: .transcribing), reduceMotion: true),
             HUDPreview(name: "done", state: HUDState(phase: .done)),
             HUDPreview(name: "done-copied", state: HUDState(phase: .done,
-                                                           notice: "Copied, since no text field was focused")),
+                                                           notice: "Copied · press ⌘V to paste")),
             HUDPreview(name: "cancelled", state: HUDState(phase: .cancelled)),
-            HUDPreview(name: "failed", state: HUDState(phase: .failed(
-                "Couldn't reach the speech model. Your recording is saved in History, so you can retry."))),
+            HUDPreview(name: "failed", state: HUDState(phase: .failed("Transcription took too long"))),
+            // The longest real engine message (ParakeetEngine): wraps to two lines, never truncates.
+            HUDPreview(name: "failed-long", state: HUDState(phase: .failed(
+                "Parakeet Ultra couldn't transcribe this recording. It's saved in History, so you can retry it."))),
         ]
     }
 
