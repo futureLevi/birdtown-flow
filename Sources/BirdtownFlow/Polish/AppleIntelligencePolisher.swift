@@ -81,9 +81,13 @@ struct AppleIntelligencePolisher: PolishClient {
     /// the instructions read while the person is talking. The text isn't known yet, and the
     /// instructions don't include it.
     static func prewarm(_ request: PolishRequest) {
-        guard unavailableReason == nil else { return }
         let instructions = PolishPrompt.system(for: request)
-        Task { await AppleIntelligenceSessions.shared.prewarm(instructions: instructions) }
+        // Off the caller's thread: this runs at key-down, and asking for the model's
+        // availability is a system call the main thread needn't wait on.
+        Task.detached(priority: .userInitiated) {
+            guard Self.unavailableReason == nil else { return }
+            await AppleIntelligenceSessions.shared.prewarm(instructions: instructions)
+        }
     }
 
     /// Roughly four characters per token; twice the input leaves room for punctuation and
