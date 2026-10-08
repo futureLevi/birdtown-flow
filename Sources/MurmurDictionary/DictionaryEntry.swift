@@ -49,6 +49,45 @@ public struct DictionaryEntry: Identifiable, Codable, Hashable, Sendable {
         let body = kind == .correction ? "\(hear) -> \(write)" : write
         return isEnabled ? body : "# off: \(body)"
     }
+
+    /// `parsed` with each entry's id taken from an identical entry in `existing`, where there
+    /// is one, so re-reading the file doesn't give every unchanged entry a fresh identity.
+    ///
+    /// Matched on content (kind, hear, write, isEnabled), each existing id used at most once —
+    /// duplicate lines are legal, and two entries sharing an id would break id-based edits.
+    /// Unmatched entries keep the id they came with. Content is never changed.
+    public static func carryingIDs(
+        from existing: [DictionaryEntry], into parsed: [DictionaryEntry]
+    ) -> [DictionaryEntry] {
+        struct Content: Hashable {
+            let kind: DictionaryEntry.Kind
+            let hear: String
+            let write: String
+            let isEnabled: Bool
+
+            init(_ entry: DictionaryEntry) {
+                kind = entry.kind
+                hear = entry.hear
+                write = entry.write
+                isEnabled = entry.isEnabled
+            }
+        }
+
+        // Unused ids per content, oldest first, so duplicates map back in their original order.
+        var available: [Content: [UUID]] = [:]
+        for entry in existing {
+            available[Content(entry), default: []].append(entry.id)
+        }
+
+        return parsed.map { entry in
+            let key = Content(entry)
+            guard var ids = available[key], !ids.isEmpty else { return entry }
+            var carried = entry
+            carried.id = ids.removeFirst()
+            available[key] = ids
+            return carried
+        }
+    }
 }
 
 /// A reason an entry looks likely to fire on text you didn't mean it to.

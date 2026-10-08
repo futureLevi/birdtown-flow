@@ -27,13 +27,16 @@ final class DictionaryStore {
 
     private(set) var entries: [DictionaryEntry] = []
 
-    /// Bumped whenever entries change, so the engine can rebuild its bias list lazily
-    /// instead of on every transcription.
+    /// Bumped whenever entries change. `corrector` and `biasPhrases` are cached against it,
+    /// so every path that changes `entries` must bump it.
     private(set) var revision = 0
 
     private var watcher: DispatchSourceFileSystemObject?
-    /// Set while we're writing, so our own save doesn't read back as an external edit.
-    private var isSaving = false
+    /// Exactly what we last wrote (or read), so our own save — which the watcher only sees
+    /// after `save()` has returned — doesn't read back as an external edit.
+    @ObservationIgnored private var lastWrittenText: String?
+    @ObservationIgnored private var cachedCorrector: (rev: Int, value: DictionaryCorrector)?
+    @ObservationIgnored private var cachedBiasPhrases: (rev: Int, value: [String])?
     /// `false` for in-memory stores (previews, snapshots), which must never touch the
     /// user's real dictionary file.
     @ObservationIgnored private var persists = true
@@ -86,21 +89,40 @@ final class DictionaryStore {
         }
     }
 
-    /// A corrector over the current entries. Rebuilt on demand — compiling a few dozen small
-    /// regexes is cheap next to transcription, and caching it invites staleness.
-    var corrector: DictionaryCorrector { DictionaryCorrector(entries: entries) }
+    /// A corrector over the current entries. Built once per `revision` rather than per
+    /// dictation — it compiles a regex per rule, on the main actor, between key-up and insert.
+    var corrector: DictionaryCorrector {
+        if let cached = cachedCorrector, cached.rev == revision { return cached.value }
+        let value = DictionaryCorrector(entries: entries)
+        cachedCorrector = (revision, value)
+        return value
+    }
 
-    var biasPhrases: [String] { DictionaryCorrector.biasPhrases(from: entries) }
+    var biasPhrases: [String] {
+        if let cached = cachedBiasPhrases, cached.rev == revision { return cached.value }
+        let value = DictionaryCorrector.biasPhrases(from: entries)
+        cachedBiasPhrases = (revision, value)
+        return value
+    }
 
     // MARK: - Persistence
 
     private func load() {
         guard let text = try? String(contentsOf: Self.fileURL, encoding: .utf8) else {
+            lastWrittenText = nil
             entries = []
             revision += 1
             return
         }
-        entries = Self.parse(text)
+        // Our own save echoing back through the watcher: nothing changed.
+        guard text != lastWrittenText else { return }
+        lastWrittenText = text
+
+        // Keep the ids of entries that didn't change, so a hand edit doesn't rebuild every row
+        // and an open edit sheet can still find its entry.
+        let parsed = DictionaryEntry.carryingIDs(from: entries, into: Self.parse(text))
+        guard parsed != entries else { return }  // e.g. only a comment changed
+        entries = parsed
         revision += 1
     }
 
@@ -133,12 +155,13 @@ final class DictionaryStore {
     private func save() {
         revision += 1
         guard persists else { return }
-        isSaving = true
-        defer { isSaving = false }
 
         let body = entries.map(\.fileLine).joined(separator: "\n")
         let text = Self.header + body + "\n"
-        try? text.write(to: Self.fileURL, atomically: true, encoding: .utf8)
+        do {
+            try text.write(to: Self.fileURL, atomically: true, encoding: .utf8)
+            lastWrittenText = text
+        } catch {}
     }
 
     private static let header = """
@@ -179,7 +202,9 @@ final class DictionaryStore {
             guard let self else { return }
             // A folder event is any file in it changing; only reload once ours exists.
             let appeared = !exists && FileManager.default.fileExists(atPath: Self.fileURL.path)
-            if !self.isSaving, exists || appeared { self.load() }
+            // `load()` ignores our own saves by content — a timing flag can't, since this
+            // handler only runs after `save()` has returned.
+            if exists || appeared { self.load() }
             if exists || appeared { self.startWatching() }
         }
         source.setCancelHandler { close(descriptor) }
