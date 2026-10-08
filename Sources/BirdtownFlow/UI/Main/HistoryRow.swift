@@ -165,8 +165,9 @@ struct HistoryRow: View {
 
     /// The transcript as the row shows it. Collapsed, an email's "Hi Priya,\n\n" would spend
     /// two of three lines on the greeting, so line breaks fold into spaces like Mail's
-    /// previews; and when a search hit sits past the first lines, the preview starts "…" just
-    /// before it. Expanded shows the text exactly as it was typed.
+    /// previews; and when a search hit sits past the first lines, the preview starts "…" far
+    /// enough before it to fill the lines above the hit. Expanded shows the text exactly as it
+    /// was typed.
     private var transcriptPreview: SearchHighlight.Preview {
         if isExpanded {
             return SearchHighlight.Preview(
@@ -178,7 +179,12 @@ struct HistoryRow: View {
         guard isLong else {
             return SearchHighlight.Preview(text: flat, ranges: SearchHighlight.ranges(of: query, in: flat))
         }
-        return SearchHighlight.preview(of: flat, query: query, budget: Self.previewBudget)
+        // Back up as far as the budget allows rather than a fixed few words, so the excerpt
+        // fills the preview up to the hit instead of starting mid-sentence one line from the
+        // end. The hit ends within the budget, leaving the last line for what follows it.
+        let hitLength = query.trimmingCharacters(in: .whitespacesAndNewlines).count
+        let lead = max(Self.minimumLead, Self.previewBudget - hitLength)
+        return SearchHighlight.preview(of: flat, query: query, budget: Self.previewBudget, lead: lead)
     }
 
     /// Characters a collapsed preview can show before a match needs an excerpt: all but the
@@ -186,6 +192,9 @@ struct HistoryRow: View {
     private static var previewBudget: Int {
         (Layout.Main.transcriptLines - 1) * Layout.Main.transcriptCharsPerLine
     }
+
+    /// The least context an excerpt keeps before its hit (`SearchHighlight`'s default).
+    private static let minimumLead = 40
 
     /// "Transcribe Again" gave nothing better, so the text above is the old one.
     private func keptNotice(_ reason: String) -> some View {
@@ -250,8 +259,12 @@ struct HistoryRow: View {
         HStack(spacing: Spacing.s) {
             // The failed layout shows progress on its Retry button; everything else here.
             if isRetrying && record.outcome != .failed {
+                // A symbol rather than ProgressView: the native spinner ignores the accent and
+                // draws a faint grey beside the blue label.
                 HStack(spacing: Spacing.xs) {
-                    ProgressView().controlSize(.mini)
+                    Image(systemName: "arrow.triangle.2.circlepath")
+                        .imageScale(.small)
+                        .symbolEffect(.rotate, options: .repeat(.continuous), isActive: !reduceMotion)
                     Text("Transcribing again…")
                 }
                 .font(Typography.caption)
@@ -562,7 +575,9 @@ struct HistoryRow: View {
         for range in ranges {
             guard let run = Range(range, in: attributed) else { continue }
             // Spelled out: AppKit's scope has a `backgroundColor` too (an NSColor).
-            attributed[run][AttributeScopes.SwiftUIAttributes.BackgroundColorAttribute.self] = Palette.searchMatch
+            attributed[run][AttributeScopes.SwiftUIAttributes.BackgroundColorAttribute.self] = Palette.historySearchMatch
+            // Weight too, so the hit doesn't rest on colour alone.
+            attributed[run].inlinePresentationIntent = .stronglyEmphasized
         }
         return attributed
     }

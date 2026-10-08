@@ -59,8 +59,11 @@ struct ShortcutRecorder: View {
     @ViewBuilder private var idle: some View {
         switch look {
         case .button(let title):
+            // Fixed so a wide control beside it (a picker showing "Double-tap Left Command")
+            // squeezes the row's description, never this label down to "…".
             Button(title, action: start)
                 .buttonStyle(SetupKit.SecondaryButtonStyle())
+                .fixedSize()
                 .help(hint)
         case .link(let title):
             Button(title, action: start)
@@ -69,10 +72,11 @@ struct ShortcutRecorder: View {
         case .field:
             Button(action: start) {
                 SetupKit.KeyCombo(keys: current?.glyphs ?? [])
-                    .contentShape(Rectangle())
             }
-            .buttonStyle(.plain)
-            .help(hint)
+            .buttonStyle(KeyFieldButtonStyle())
+            .fixedSize()
+            // The row's description no longer says to click the keys, so the tooltip does.
+            .help("Click to change. \(hint)")
             .accessibilityLabel(current.map { "\($0.spokenName). Record a new shortcut" } ?? "Record a shortcut")
         }
     }
@@ -98,6 +102,10 @@ struct ShortcutRecorder: View {
         .frame(minHeight: Layout.Setup.buttonHeight)
         .background(shape.fill(Palette.accentSoft))
         .overlay(shape.strokeBorder(Palette.accent, lineWidth: Layout.Setup.selectionStroke))
+        // Keep the keycaps, the "esc" hint and the whole stroke; the row's description wraps
+        // instead.
+        .fixedSize()
+        .layoutPriority(1)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Recording a shortcut. Press the keys, or Escape to cancel.")
         .accessibilityValue(keys.joined(separator: " "))
@@ -138,6 +146,42 @@ struct ShortcutRecorder: View {
             onVerdict(verdict)
         }
         onListeningChange(false)
+    }
+}
+
+/// The `.field` look: the current keycaps in an inset well with a border, so they read as
+/// something to click. Hover lifts the border to Signal blue, like the listening capsule the
+/// click turns it into.
+private struct KeyFieldButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        KeyFieldBody(configuration: configuration)
+    }
+}
+
+private struct KeyFieldBody: View {
+    let configuration: ButtonStyleConfiguration
+    @Environment(\.isEnabled) private var isEnabled
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var hovering = false
+
+    var body: some View {
+        let shape = RoundedRectangle(cornerRadius: Radius.m, style: .continuous)
+        let active = hovering && isEnabled
+        configuration.label
+            .padding(.horizontal, Spacing.s)
+            .frame(minHeight: Layout.Setup.buttonHeight)
+            .background(shape.fill(active ? Palette.accentSoft : Palette.sunken))
+            .overlay(
+                shape.strokeBorder(
+                    active ? Palette.accent : Palette.hairlineStrong,
+                    lineWidth: Layout.Setup.hairline
+                )
+            )
+            .contentShape(shape)
+            .opacity(isEnabled ? (configuration.isPressed ? Layout.Setup.pressedOpacity : 1) : Interaction.disabledOpacity)
+            .flowFocusRing(shape)
+            .onHover { hovering = $0 }
+            .animation(Motion.resolve(Motion.fadeFast, reduceMotion: reduceMotion), value: hovering)
     }
 }
 

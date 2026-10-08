@@ -23,14 +23,25 @@ extension SnapshotCatalog {
                     }
                 }
             },
+            // The polish note sits below all four category cards, so these render the whole
+            // page (as the Lab catalog does) rather than its first screen.
             // Polish on: the card names the provider and its button reads "Text & AI Settings…".
-            SnapshotRenderer.Shot("style-polish-on", size: size) {
+            SnapshotRenderer.Shot("style-polish-on", size: CGSize(width: size.width, height: styleFullHeight)) {
                 libraryWindow(.style, records: records, preview: preview) { model in
                     model.settings.polishProvider = .appleIntelligence
                 }
             },
+            // Polish off: the note reads "AI polish is off" with "Turn On AI Polish…".
+            SnapshotRenderer.Shot("style-polish-off", size: CGSize(width: size.width, height: styleFullHeight)) {
+                libraryWindow(.style, records: records, preview: preview) { model in
+                    model.settings.polishProvider = .off
+                }
+            },
         ]
     }
+
+    /// Tall enough for the Style page's header, four category cards and the polish note.
+    private static let styleFullHeight: CGFloat = 2_000
 
     /// The main window on `section` over an in-memory model that `prepare` puts in a state.
     private static func libraryWindow(

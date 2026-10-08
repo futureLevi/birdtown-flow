@@ -69,9 +69,17 @@ public enum ShortcutRules {
             return .caution("Holding \(key.spokenName) on its own will start dictation. Typing capitals still works.")
         }
         if key.isLeftSide {
-            return .caution("You use \(key.spokenName) in shortcuts. They keep working, but holding it on its own starts dictation.")
+            return .caution("\(key.spokenName) is also part of everyday shortcuts like \(everydayExample(for: key)). Those keep working, but holding \(key.spokenName) on its own starts dictation.")
         }
         return .accepted
+    }
+
+    /// A shortcut people use daily with this modifier, to make the caution concrete. ⌥ with a
+    /// letter types a character (⌥C is "ç"), so Option's example is a word jump instead.
+    private static func everydayExample(for key: ModifierKey) -> String {
+        if key.family == .option { return "\(key.glyph)←" }
+        if key.family == .control { return "\(key.glyph)Tab" }
+        return "\(key.glyph)C"
     }
 
     private static func check(_ chord: KeyChord) -> ShortcutVerdict {

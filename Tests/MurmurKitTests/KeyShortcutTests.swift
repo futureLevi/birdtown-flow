@@ -156,6 +156,17 @@ struct ShortcutRulesTests {
         }
     }
 
+    @Test("A left-side modifier's caution names the shortcuts it's part of")
+    func leftSideCautionCopy() {
+        #expect(ShortcutRules.check(.modifier(.leftCommand), for: .pushToTalk) == .caution(
+            "Left Command is also part of everyday shortcuts like ⌘C. Those keep working, but holding Left Command on its own starts dictation."
+        ))
+        // ⌥ with a letter types a character, so Option's example isn't a letter shortcut.
+        #expect(ShortcutRules.check(.modifier(.leftOption), for: .pushToTalk) == .caution(
+            "Left Option is also part of everyday shortcuts like ⌥←. Those keep working, but holding Left Option on its own starts dictation."
+        ))
+    }
+
     @Test("A lone modifier is only for push to talk")
     func loneModifier() {
         #expect(ShortcutRules.check(.modifier(.rightOption), for: .pushToTalk) == .accepted)

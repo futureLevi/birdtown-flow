@@ -64,7 +64,7 @@ struct GeneralSettingsPane: View {
                 }
                 notice(for: .handsFree)
                 SettingsDivider()
-                SettingsRow(title: "Paste last dictation", detail: "Pastes what you said last into any app, again. Click the keys to change them.") {
+                SettingsRow(title: "Paste last dictation", detail: "Pastes what you said last into any app, again.") {
                     HStack(spacing: Spacing.m) {
                         if settings.pasteLastShortcut != .pasteLastDefault {
                             IconButton(symbol: "arrow.uturn.backward", label: "Use \(KeyChord.pasteLastDefault.displayName) again") {

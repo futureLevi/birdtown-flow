@@ -3,15 +3,20 @@ import MurmurKit
 import SwiftUI
 
 /// A capsule floating over the bottom of a page: the undo toast and History's selection bar.
+/// Items sit `Spacing.xs` apart because the ghost buttons carry their own padding; a wider
+/// stack spacing would leave bigger gaps between two buttons than beside the label. The bar
+/// always takes its ideal width, so no button label is ever elided ("Delet…").
+/// Pages that show it inset their scroll content by `Layout.Main.floatingBarClearance`.
 struct HistoryFloatingBar<Content: View>: View {
     @ViewBuilder var content: Content
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        HStack(spacing: Spacing.m) {
+        HStack(spacing: Spacing.xs) {
             content
         }
+        .fixedSize()
         .padding(.leading, Spacing.l)
         .padding(.trailing, Spacing.s)
         .padding(.vertical, Spacing.s)
@@ -34,11 +39,13 @@ struct HistoryUndoToast: View {
         let count = model.historyDeletion.pending.count
         if count > 0 {
             HistoryFloatingBar {
-                Image(systemName: "trash")
-                    .foregroundStyle(Palette.inkSecondary)
-                Text(count == 1 ? "Dictation deleted" : "\(count) dictations deleted")
-                    .font(Typography.bodyEmphasis)
-                    .foregroundStyle(Palette.ink)
+                HStack(spacing: Spacing.s) {
+                    Image(systemName: "trash")
+                        .foregroundStyle(Palette.inkSecondary)
+                    Text(count == 1 ? "Dictation deleted" : "\(count) dictations deleted")
+                        .font(Typography.bodyEmphasis)
+                        .foregroundStyle(Palette.ink)
+                }
                 Button("Undo") { model.historyDeletion.undo() }
                     .buttonStyle(.flowGhost)
                     .controlSize(.small)

@@ -918,8 +918,8 @@ private struct LabRunCard: View {
         for segment in segments {
             switch segment {
             case .same: break
-            case .removed(let words): removed.append(words)
-            case .added(let words): added.append(words)
+            case .removed(let words): removed.append(Self.oneLine(words))
+            case .added(let words): added.append(Self.oneLine(words))
             }
         }
         var parts: [String] = []
@@ -928,30 +928,39 @@ private struct LabRunCard: View {
         return parts.isEmpty ? "No changes" : parts.joined(separator: ". ")
     }
 
+    /// Paragraph breaks read as plain gaps.
+    private static func oneLine(_ words: String) -> String {
+        words.split(whereSeparator: \.isNewline).joined(separator: " ")
+    }
+
     /// Spelled out per attribute: on macOS, `foregroundColor` and friends also exist for AppKit.
     private typealias SwiftUIAttributes = AttributeScopes.SwiftUIAttributes
 
     static func attributed(_ segments: [WordDiff.Segment]) -> AttributedString {
         var text = AttributedString()
         for (index, segment) in segments.enumerated() {
-            if index > 0 { text += AttributedString(" ") }
+            // A segment ending in a paragraph break needs no space before the next one.
+            if index > 0, text.characters.last?.isNewline != true { text += AttributedString(" ") }
+            let words: String
             switch segment {
-            case .same(let words):
-                var part = AttributedString(words)
+            case .same(let w), .removed(let w), .added(let w): words = w
+            }
+            // The trailing break goes in unstyled, so a tint or strike doesn't run across it.
+            let body = String(words.reversed().drop(while: \.isNewline).reversed())
+            var part = AttributedString(body)
+            switch segment {
+            case .same:
                 part[SwiftUIAttributes.ForegroundColorAttribute.self] = Palette.ink
-                text += part
-            case .removed(let words):
-                var part = AttributedString(words)
+            case .removed:
                 part[SwiftUIAttributes.ForegroundColorAttribute.self] = Palette.danger
                 part[SwiftUIAttributes.BackgroundColorAttribute.self] = Palette.dangerSoft
                 part[SwiftUIAttributes.StrikethroughStyleAttribute.self] = Text.LineStyle(pattern: .solid, color: Palette.danger)
-                text += part
-            case .added(let words):
-                var part = AttributedString(words)
+            case .added:
                 part[SwiftUIAttributes.ForegroundColorAttribute.self] = Palette.success
                 part[SwiftUIAttributes.BackgroundColorAttribute.self] = Palette.successSoft
-                text += part
             }
+            text += part
+            text += AttributedString(String(words.dropFirst(body.count)))
         }
         return text
     }

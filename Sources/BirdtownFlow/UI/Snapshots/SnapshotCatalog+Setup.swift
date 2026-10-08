@@ -60,7 +60,7 @@ extension SnapshotCatalog {
         // Trying before the download finishes: Apple Speech stands in, so the try isn't held up.
         let practiceWaiting = shortcut
         var practiceFailed = shortcut
-        practiceFailed.phase = .failed("Didn't catch any words · it's saved in History")
+        practiceFailed.phase = .failed(DictationFeedback.noWordsMessage(audioSaved: true))
 
         var listening = shortcut
         listening.modelState = .ready

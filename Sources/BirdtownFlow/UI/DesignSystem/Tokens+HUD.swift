@@ -5,6 +5,10 @@ import SwiftUI
 extension Palette.HUD {
     /// The cancelled pill steps back a little before it fades away.
     static let cancelledOpacity: Double = 0.85
+    /// A clickable message pill under the pointer: a light wash over the whole pill and a
+    /// brighter edge, so it reads as one button rather than only its chevron changing.
+    static let linkHoverWash = Color.white.opacity(0.08)
+    static let linkHoverStroke = Color.white.opacity(0.28)
 }
 
 extension Layout.HUD {

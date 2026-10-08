@@ -226,6 +226,18 @@ struct WordDiffTests {
         #expect(WordDiff.counts(original: "I'm here", revised: "I\u{2019}m here") == (0, 0))
     }
 
+    @Test("Paragraph breaks in the polished text are kept")
+    func paragraphs() {
+        let segments = WordDiff.diff(
+            original: "hi dana um just checking in thanks",
+            revised: "Hi Dana,\n\nJust checking in.\n\nThanks\n")
+        #expect(segments == [
+            .same("Hi Dana,\n\n"), .removed("um"), .same("Just checking in.\n\nThanks"),
+        ])
+        #expect(WordDiff.counts(original: "hi dana", revised: "Hi\nDana,\n\nthere") == (0, 1))
+        #expect(WordDiff.diff(original: "", revised: "One.\n\nTwo.") == [.added("One.\n\nTwo.")])
+    }
+
     @Test("Empty sides")
     func empty() {
         #expect(WordDiff.diff(original: "", revised: "") == [])

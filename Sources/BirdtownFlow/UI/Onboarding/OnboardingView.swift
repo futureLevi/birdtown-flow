@@ -766,7 +766,7 @@ private struct ModelStep: View {
             return "You can start dictating now. \(standIn) writes it down until \(engine.displayName) is ready, then Birdtown Flow switches by itself."
         }
         if let standIn, SetupKit.isFailed(state) {
-            return "Dictation still works: \(standIn) writes it down until \(engine.displayName) is ready."
+            return "Dictation still works: \(standIn) writes it down in the meantime. Try Again to get \(engine.displayName)."
         }
         if isPreparing {
             return "You can carry on. You can try it as soon as the model is ready."
@@ -861,7 +861,8 @@ private struct ShortcutStep: View {
             title: "Choose your shortcut",
             message: "Hold it while you talk. Let go, and your words appear."
         ) {
-            VStack(spacing: Spacing.m) {
+            // Both warnings plus the recorder row only fit the fixed window with tighter gaps.
+            VStack(spacing: crowded ? Spacing.s : Spacing.m) {
                 HStack(spacing: Spacing.m) {
                     ForEach(SetupKit.orderedKeys, id: \.self) { option in
                         KeyOption(key: option, selected: option == key) { select(option) }
@@ -912,6 +913,10 @@ private struct ShortcutStep: View {
 
     private var showsFnWarning: Bool { key == .fn && fnHasSystemAction }
 
+    /// Both warnings show at once: the step drops its secondary hint and tightens its gaps so
+    /// the footer stays where it is on every other step.
+    private var crowded: Bool { wisprRunning && showsFnWarning }
+
     /// Any other key or combination, through the recorder. Once one is chosen it shows here,
     /// selected, since none of the tiles above is.
     @ViewBuilder private var otherKey: some View {
@@ -935,8 +940,9 @@ private struct ShortcutStep: View {
             }
             .padding(.horizontal, Spacing.m)
             .padding(.vertical, Spacing.xs)
-            .background(Capsule(style: .continuous).fill(Palette.accentSoft))
-            .overlay(Capsule(style: .continuous).strokeBorder(Palette.accent, lineWidth: Layout.Setup.selectionStroke))
+            // Circular capsule: a continuous one inset by `strokeBorder` renders flat-ended.
+            .background(Capsule().fill(Palette.accentSoft))
+            .overlay(Capsule().strokeBorder(Palette.accent, lineWidth: Layout.Setup.selectionStroke))
             .accessibilityElement(children: .contain)
             .accessibilityLabel("Your shortcut: \(key.spokenName)")
         }
@@ -976,7 +982,7 @@ private struct ShortcutStep: View {
                 Text("Press \(SetupKit.handsFreeName(settings)) again to finish.")
                     .font(Typography.caption)
                     .foregroundStyle(Palette.inkTertiary)
-            } else if settings.handsFreeShortcut == .doubleTap {
+            } else if settings.handsFreeShortcut == .doubleTap && !crowded {
                 Text("Or hold \(SetupKit.name(for: key)) and press Space. Tap it again to finish.")
                     .font(Typography.caption)
                     .foregroundStyle(Palette.inkTertiary)
@@ -1201,7 +1207,10 @@ private struct PracticeStep: View {
                     .font(Typography.callout)
                     .foregroundStyle(Palette.inkTertiary)
                 // The download doesn't hold the try up; just say which engine will hear it.
-                if let note = SetupKit.standInNote(standIn, for: engine, state: modelState) {
+                if SetupKit.isFailed(modelState), let standIn {
+                    // A stopped download won't become ready by itself; don't promise it will.
+                    engineCaption("\(standIn) will write it down. \(engine.displayName)'s download stopped.")
+                } else if let note = SetupKit.standInNote(standIn, for: engine, state: modelState) {
                     engineCaption(note)
                 }
             }
@@ -1224,6 +1233,9 @@ private struct PracticeStep: View {
         if modelState == .ready {
             return "Written with \(standIn). \(engine.displayName) is ready now and takes over from here."
         }
+        if SetupKit.isFailed(modelState) {
+            return "Written with \(standIn). \(engine.displayName)'s download stopped. Go back to the speech model step to try it again."
+        }
         let note = "Written with \(standIn) until \(engine.displayName) is ready"
         guard let progress = SetupKit.progress(of: modelState) else { return note }
         return "\(note) · \(SetupKit.percent(progress))"
@@ -1242,6 +1254,10 @@ private struct PracticeStep: View {
 
     /// "Speech model is still downloading. Try again."
     static func retryHint(after message: String) -> String {
+        // The HUD's no-words message points at History, which can't be reached mid-setup.
+        if message.hasPrefix(DictationFeedback.noWordsPlain) {
+            return "Didn't catch any words. Try again, speaking a little closer to the mic."
+        }
         let trimmed = message.trimmingCharacters(in: .whitespacesAndNewlines)
         let ends = trimmed.last.map { ".!?…".contains($0) } ?? true
         return trimmed + (ends ? " Try again." : ". Try again.")

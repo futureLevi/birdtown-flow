@@ -87,13 +87,15 @@ struct DictionaryView: View {
                 fileNote
             }
             .pageLayout()
+            // Room for the toast, so the last row can scroll clear of it.
+            .padding(.bottom, undoMessage == nil ? 0 : Layout.Main.floatingBarClearance)
         }
         .overlay(alignment: .bottom) {
             UndoToast(message: undoMessage) { model.dictionary.undoDeletion() }
         }
         .animation(Motion.resolve(Motion.smooth, reduceMotion: reduceMotion), value: store.deletion.pending)
-        // The toast lives on this page: leaving it makes the delete final.
-        .onDisappear { model.dictionary.commitDeletion() }
+        // As in History, leaving the page doesn't make a delete final: it stays undoable for
+        // the rest of its window (the store commits it then, or at quit).
         .sheet(isPresented: $isAdding) {
             DictionaryEditorSheet(original: nil) { model.dictionary.add($0) }
                 .environment(model)
@@ -155,19 +157,25 @@ struct DictionaryView: View {
     private func delete(_ entry: DictionaryEntry) {
         if editing?.id == entry.id { editing = nil }
         model.dictionary.delete(ids: [entry.id], undoWindow: Motion.undoWindow)
-        UndoToast.announce("\(Self.name(of: entry)) deleted")
+        // VoiceOver hears which entry went; the toast stays short, as History's does.
+        let detail = entry.kind == .correction ? "“\(entry.hear) → \(entry.write)”" : "“\(entry.write)”"
+        UndoToast.announce("\(Self.noun(for: entry.kind)) \(detail) deleted")
     }
 
-    /// "“cloud code → Claude Code” deleted", while a delete can still be undone.
+    /// "Replacement deleted" (or "Word deleted"), worded like History's "Dictation deleted",
+    /// while a delete can still be undone.
     private var undoMessage: String? {
         let store = model.dictionary
         let pending = store.entries.filter { store.deletion.isPending($0.id) }
         guard let first = pending.first else { return nil }
-        return pending.count == 1 ? "\(Self.name(of: first)) deleted" : "\(pending.count) entries deleted"
+        if pending.count == 1 { return "\(Self.noun(for: first.kind)) deleted" }
+        let kinds = Set(pending.map(\.kind))
+        let noun = kinds.count == 1 ? (first.kind == .correction ? "replacements" : "words") : "entries"
+        return "\(pending.count) \(noun) deleted"
     }
 
-    private static func name(of entry: DictionaryEntry) -> String {
-        entry.kind == .correction ? "“\(entry.hear) → \(entry.write)”" : "“\(entry.write)”"
+    private static func noun(for kind: DictionaryEntry.Kind) -> String {
+        kind == .correction ? "Replacement" : "Word"
     }
 }
 

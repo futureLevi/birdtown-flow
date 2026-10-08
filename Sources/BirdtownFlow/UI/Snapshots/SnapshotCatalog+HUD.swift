@@ -94,7 +94,7 @@ struct HUDPreview {
                                                                          actionLabel: "Open Accessibility settings")),
             // Inserted, but polish fell back: says why, and links to the History row.
             HUDPreview(name: "done-unpolished", state: HUDState(phase: .done,
-                                                               notice: "Inserted without polish · Timed out",
+                                                               notice: "Inserted without polish · timed out",
                                                                actionLabel: "Show in History")),
             HUDPreview(name: "cancelled", state: HUDState(phase: .cancelled)),
             HUDPreview(name: "failed", state: HUDState(phase: .failed("Transcription took too long"))),

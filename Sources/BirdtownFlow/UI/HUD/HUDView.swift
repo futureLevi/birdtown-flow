@@ -51,8 +51,13 @@ struct HUDView: View {
             // At rest the whole pill is faded, so its edge needs more light to stay findable
             // on dark content.
             let resting = kind == .idle || kind == .hidden
-            HUDPillBody(stroke: resting ? Palette.HUD.idleStroke : Palette.HUD.stroke,
+            // A message that opens something lights its edge under the pointer, with the wash
+            // `HUDMessage` lays over its content.
+            let linkHovered = link?.isHovered == true
+            HUDPillBody(stroke: resting ? Palette.HUD.idleStroke
+                            : linkHovered ? Palette.HUD.linkHoverStroke : Palette.HUD.stroke,
                         shadowScale: resting ? Palette.HUD.idleShadowScale : 1)
+                .animation(Motion.resolve(Motion.snappy, reduceMotion: reduceMotion), value: linkHovered)
             content(size: size, kind: kind)
                 .frame(width: size.width, height: size.height)
                 .clipShape(Capsule(style: .continuous))
@@ -288,7 +293,15 @@ struct HUDMessage: View {
                 link.action()
             } label: {
                 content
+                    .background(
+                        // The whole pill is the button, so the whole pill answers the pointer.
+                        // The parent clips content to the pill's capsule.
+                        Capsule(style: .continuous)
+                            .fill(Palette.HUD.linkHoverWash)
+                            .opacity(link.isHovered ? 1 : 0)
+                    )
                     .contentShape(Capsule(style: .continuous))
+                    .animation(Motion.resolve(Motion.snappy, reduceMotion: link.reduceMotion), value: link.isHovered)
             }
             .buttonStyle(.plain)
             .accessibilityLabel(Text(message))

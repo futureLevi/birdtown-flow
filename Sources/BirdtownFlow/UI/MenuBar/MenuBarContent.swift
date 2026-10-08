@@ -103,12 +103,23 @@ struct MenuBarContent: View {
                         .contentTransition(.opacity)
                 }
                 if let standInDetail {
-                    Text(standInDetail)
-                        .font(Typography.caption)
-                        .foregroundStyle(Palette.inkTertiary)
-                        .lineLimit(2)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .contentTransition(.numericText())
+                    // The percentage sits apart from the note so it stays at the end of the
+                    // first line however the note wraps, instead of orphaning on the second.
+                    HStack(alignment: .firstTextBaseline, spacing: Spacing.xs) {
+                        Text(standInDetail)
+                            .font(Typography.caption)
+                            .foregroundStyle(Palette.inkTertiary)
+                            .lineLimit(2)
+                            .fixedSize(horizontal: false, vertical: true)
+                        if let progress = SetupKit.progress(of: modelState) {
+                            Text(SetupKit.percent(progress))
+                                .font(Typography.caption)
+                                .monospacedDigit()
+                                .foregroundStyle(Palette.inkSecondary)
+                                .contentTransition(.numericText())
+                                .layoutPriority(1)
+                        }
+                    }
                 }
             }
             Spacer(minLength: 0)
@@ -168,15 +179,17 @@ struct MenuBarContent: View {
         return ("Ready · Hold \(keyName) to dictate", .dot(Palette.success))
     }
 
-    /// "Using Apple Speech until Parakeet Ultra is ready · 42%", under the status while the
-    /// selected model downloads or loads, so it's clear what's transcribing. Hidden while a
-    /// dictation is on screen, and when the status already names a problem.
+    /// "Using Apple Speech until Parakeet Ultra is ready", under the status while the selected
+    /// model downloads or loads, so it's clear what's transcribing; the header adds the
+    /// download's percentage beside it. Hidden while a dictation is on screen, and when the
+    /// status already names a problem.
     private var standInDetail: String? {
         guard phase == .idle, issue == nil else { return nil }
         guard modelState == .loading || modelState == .downloading(progress: nil)
                 || SetupKit.progress(of: modelState) != nil
         else { return nil }
-        return SetupKit.standInNote(standIn, for: model.settings.engine, state: modelState)
+        guard let standIn else { return nil }
+        return EngineFallback.note(standIn: standIn, selected: model.settings.engine.displayName)
     }
 
     // MARK: Fix
@@ -190,7 +203,8 @@ struct MenuBarContent: View {
     @ViewBuilder
     private func fixRows(for issue: ReadinessIssue) -> some View {
         let badge = Self.badge(for: issue)
-        VStack(spacing: 0) {
+        // A little air between rows, so a second action doesn't read as the first one's caption.
+        VStack(alignment: .leading, spacing: Spacing.xxs) {
             switch issue {
             case .microphone:
                 MenuRow(title: "Allow Microphone Access…", badge: badge) {
@@ -240,7 +254,7 @@ struct MenuBarContent: View {
                 }
                 // When trying again can't help (no space, an unsupported Mac), another
                 // model can.
-                MenuRow(title: "Speech Settings…") {
+                MenuRow(title: "Speech Settings…", alignsWithBadge: true) {
                     guard preview == nil else { return }
                     model.requestSettings(.audio)
                     NSApp.activate()
@@ -429,15 +443,26 @@ private struct MenuRow: View {
     var detail: String?
     var shortcut: String?
     var badge: Color?
+    /// Leaves the badge's space empty, so a secondary row lines up with a badged one above it.
+    var alignsWithBadge = false
     let action: () -> Void
     @Environment(\.isEnabled) private var isEnabled
     @FocusState private var isFocused: Bool
 
     var body: some View {
         Button(action: action) {
-            HStack(spacing: Spacing.s) {
-                if let badge {
-                    SetupKit.StatusDot(color: badge)
+            // Baseline-aligned, so the dot and the shortcut sit on the title's line rather than
+            // centring on a title-and-detail block.
+            HStack(alignment: .firstTextBaseline, spacing: Spacing.s) {
+                if badge != nil || alignsWithBadge {
+                    // A hidden line of title text carries the baseline; the dot centres on it.
+                    Text(verbatim: " ")
+                        .font(Typography.body)
+                        .frame(width: Layout.Main.statusDot)
+                        .hidden()
+                        .overlay {
+                            if let badge { SetupKit.StatusDot(color: badge) }
+                        }
                 }
                 VStack(alignment: .leading, spacing: Spacing.xxs) {
                     Text(title)

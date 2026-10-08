@@ -79,13 +79,15 @@ struct SnippetsView: View {
                 }
             }
             .pageLayout()
+            // Room for the toast, so the last card's footer can scroll clear of it.
+            .padding(.bottom, undoMessage == nil ? 0 : Layout.Main.floatingBarClearance)
         }
         .overlay(alignment: .bottom) {
             UndoToast(message: undoMessage) { model.snippets.undoDeletion() }
         }
         .animation(Motion.resolve(Motion.smooth, reduceMotion: reduceMotion), value: store.deletion.pending)
-        // The toast lives on this page: leaving it makes the delete final.
-        .onDisappear { model.snippets.commitDeletion() }
+        // As in History, leaving the page doesn't make a delete final: it stays undoable for
+        // the rest of its window (the store commits it then, or at quit).
         .sheet(isPresented: $isAdding) {
             SnippetEditorSheet(original: nil) { model.snippets.add($0) }
                 .environment(model)
@@ -100,15 +102,17 @@ struct SnippetsView: View {
     private func delete(_ snippet: Snippet) {
         if editing?.id == snippet.id { editing = nil }
         model.snippets.delete(ids: [snippet.id], undoWindow: Motion.undoWindow)
+        // VoiceOver hears which snippet went; the toast stays short, as History's does.
         UndoToast.announce("Snippet “\(snippet.trigger)” deleted")
     }
 
-    /// "Snippet “my address” deleted", while a delete can still be undone.
+    /// "Snippet deleted", worded like History's "Dictation deleted", while a delete can
+    /// still be undone.
     private var undoMessage: String? {
         let store = model.snippets
-        let pending = store.snippets.filter { store.deletion.isPending($0.id) }
-        guard let first = pending.first else { return nil }
-        return pending.count == 1 ? "Snippet “\(first.trigger)” deleted" : "\(pending.count) snippets deleted"
+        let count = store.snippets.filter { store.deletion.isPending($0.id) }.count
+        guard count > 0 else { return nil }
+        return count == 1 ? "Snippet deleted" : "\(count) snippets deleted"
     }
 }
 

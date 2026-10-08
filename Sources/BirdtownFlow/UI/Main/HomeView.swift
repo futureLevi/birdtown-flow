@@ -51,6 +51,8 @@ struct HomeView: View {
             }
             .pageLayout()
         }
+        // Room to scroll the last row clear of the undo toast while it's up.
+        .contentMargins(.bottom, pending.isEmpty ? 0 : Layout.Main.floatingBarClearance, for: .scrollContent)
         // The same Undo as History's, so a delete from Recent can be taken back (⌘Z too).
         .overlay(alignment: .bottom) { HistoryUndoToast() }
         .animation(Motion.resolve(Motion.smooth, reduceMotion: reduceMotion), value: model.historyDeletion.pending)

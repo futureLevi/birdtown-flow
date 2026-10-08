@@ -6,7 +6,7 @@ import Observation
 ///
 /// A delete hides the items at once and only removes them when the undo window closes,
 /// when another delete starts (Undo always means "the last delete"), or when `commit()` is
-/// called (leaving the page, quitting). Until then the items are still in their store, so
+/// called (at quit). Until then the items are still in their store, so
 /// Undo needs nothing more than forgetting them here.
 @MainActor
 @Observable

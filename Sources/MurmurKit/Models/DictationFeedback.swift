@@ -53,8 +53,12 @@ public enum DictationFeedback {
     /// The engine heard sound but recognised no words. Points at History only while the
     /// recording is still there to play or retry ("Keep no audio" drops it at once).
     public static func noWordsMessage(audioSaved: Bool) -> String {
-        audioSaved ? "Didn't catch any words · it's saved in History" : "Didn't catch any words"
+        audioSaved ? noWordsPlain + " · it's saved in History" : noWordsPlain
     }
+
+    /// The no-words message without the History pointer, for places History can't be reached
+    /// (the onboarding practice).
+    public static let noWordsPlain = "Didn't catch any words"
 
     /// The HUD notice for text inserted without its AI polish, from the fallback note
     /// `PolishService` writes to History ("timed out", "No API key").
@@ -66,8 +70,24 @@ public enum DictationFeedback {
         guard var note = note?.trimmingCharacters(in: .whitespacesAndNewlines), !note.isEmpty else { return nil }
         if note.lowercased().hasPrefix(guardRejectionPrefix) { return nil }
         while note.hasSuffix(".") { note.removeLast() }
-        guard let first = note.first else { return nil }
-        return "Inserted without polish · " + first.uppercased() + String(note.dropFirst())
+        guard !note.isEmpty else { return nil }
+        return "Inserted without polish · " + clauseCase(note)
+    }
+
+    /// Text after a "·" reads as a continuation, so it starts lowercase ("timed out",
+    /// "no API key"), like every other notice. An acronym ("API key missing") or a name that
+    /// opens the note ("Apple Intelligence failed", "Claude Code isn't installed") keeps its
+    /// capitals: a first word in all caps, or two leading Capitalised words, means a name.
+    static func clauseCase(_ text: String) -> String {
+        let words = text.split(separator: " ")
+        guard let first = words.first else { return text }
+        if first == first.uppercased() { return text }
+        if words.count > 1 {
+            let second = words[1]
+            let isTitleCase = second.first?.isUppercase == true && second != second.uppercased()
+            if isTitleCase { return text }
+        }
+        return text.prefix(1).lowercased() + text.dropFirst()
     }
 
     /// How `PolishService` begins the note for a rewrite `PolishGuard` turned down.

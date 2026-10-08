@@ -55,12 +55,18 @@ struct DictationFeedbackTests {
     func noWords() {
         #expect(DictationFeedback.noWordsMessage(audioSaved: true) == "Didn't catch any words · it's saved in History")
         #expect(DictationFeedback.noWordsMessage(audioSaved: false) == "Didn't catch any words")
+        #expect(DictationFeedback.noWordsMessage(audioSaved: false) == DictationFeedback.noWordsPlain)
+        #expect(DictationFeedback.noWordsMessage(audioSaved: true).hasPrefix(DictationFeedback.noWordsPlain))
     }
 
     @Test("Polish fallbacks become a notice")
     func polishNotice() {
-        #expect(DictationFeedback.polishNotice(for: "timed out") == "Inserted without polish · Timed out")
-        #expect(DictationFeedback.polishNotice(for: "No API key") == "Inserted without polish · No API key")
+        #expect(DictationFeedback.polishNotice(for: "timed out") == "Inserted without polish · timed out")
+        #expect(DictationFeedback.polishNotice(for: "No API key") == "Inserted without polish · no API key")
+        #expect(DictationFeedback.polishNotice(for: "Claude Code isn't installed")
+            == "Inserted without polish · Claude Code isn't installed")
+        #expect(DictationFeedback.polishNotice(for: "Language not supported by Apple Intelligence")
+            == "Inserted without polish · language not supported by Apple Intelligence")
         #expect(DictationFeedback.polishNotice(for: "Apple Intelligence failed.")
             == "Inserted without polish · Apple Intelligence failed")
     }

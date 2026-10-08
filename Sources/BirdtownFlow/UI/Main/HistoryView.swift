@@ -145,6 +145,8 @@ struct HistoryView: View {
                 }
                 .pageLayout()
             }
+            // The floating bar covers the bottom of the list; room to scroll the last row clear.
+            .contentMargins(.bottom, showsBottomBar(order: order) ? Layout.Main.floatingBarClearance : 0, for: .scrollContent)
             .focusable()
             .focusEffectDisabled()
             .focused($listFocused)
@@ -346,6 +348,11 @@ struct HistoryView: View {
     }
 
     // MARK: - Bottom bar
+
+    /// Whether `bottomBar` shows anything: the undo toast or the selection bar.
+    private func showsBottomBar(order: [UUID]) -> Bool {
+        !model.historyDeletion.pending.isEmpty || selection.ordered(in: order).count > 1
+    }
 
     /// The undo toast while a delete can be undone; otherwise, with several rows selected,
     /// what can be done to them all.
