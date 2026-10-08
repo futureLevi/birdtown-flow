@@ -102,11 +102,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             HUDController.shared.attach(to: model)
             if !model.settings.hasCompletedOnboarding {
                 OnboardingWindowController.shared.show(model: model)
-            } else if Self.launchedAsLoginItem {
+            } else if Self.launchedAsLoginItem, model.controller.isHotkeyActive,
+                      model.permissions.microphone {
                 // Settings promises a quiet start at login: don't keep the main window (and
                 // its History stats) alive while the model loads. Reopen, ⌘O and the menu bar
                 // bring it back. If the window isn't up yet or the flag isn't readable,
-                // launch behaves as before.
+                // launch behaves as before. A broken setup (a lost Accessibility grant after a
+                // rebuild, no microphone) keeps the window, the only place that says so.
                 Task { @MainActor in
                     NSApp.windows.first(where: { $0.identifier?.rawValue == "main" })?.close()
                 }
