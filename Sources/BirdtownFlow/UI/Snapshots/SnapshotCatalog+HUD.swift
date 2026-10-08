@@ -57,7 +57,10 @@ struct HUDPreview {
     var reduceMotion = false
 
     static let sceneSize = CGSize(width: 480, height: 160)
-    static let sheetSize = CGSize(width: 960, height: 1280)
+    /// Two columns, as many rows as there are states.
+    static var sheetSize: CGSize {
+        CGSize(width: sceneSize.width * 2, height: sceneSize.height * CGFloat((all.count + 1) / 2))
+    }
     /// Any fixed instant: animated states render deterministically at it.
     static let time: Double = 812_345_678.4
 
@@ -78,16 +81,41 @@ struct HUDPreview {
                                                                       levels: levels(peak: 0.06), recordingStartedAt: start,
                                                                       hover: .cancel)),
             HUDPreview(name: "transcribing", state: HUDState(phase: .transcribing)),
+            // Polishing rises into a taller, flatter plateau than transcribing's low dome.
             HUDPreview(name: "polishing", state: HUDState(phase: .polishing)),
             HUDPreview(name: "transcribing-reduce-motion", state: HUDState(phase: .transcribing), reduceMotion: true),
+            HUDPreview(name: "polishing-reduce-motion", state: HUDState(phase: .polishing), reduceMotion: true),
             HUDPreview(name: "done", state: HUDState(phase: .done)),
             HUDPreview(name: "done-copied", state: HUDState(phase: .done,
                                                            notice: "Copied · press ⌘V to paste")),
+            // Copied because Accessibility is off: the pill links to the Accessibility pane.
+            HUDPreview(name: "done-copied-accessibility", state: HUDState(phase: .done,
+                                                                         notice: "Copied · press ⌘V, or allow Accessibility",
+                                                                         actionLabel: "Open Accessibility settings")),
+            // Inserted, but polish fell back: says why, and links to the History row.
+            HUDPreview(name: "done-unpolished", state: HUDState(phase: .done,
+                                                               notice: "Inserted without polish · Timed out",
+                                                               actionLabel: "Show in History")),
             HUDPreview(name: "cancelled", state: HUDState(phase: .cancelled)),
             HUDPreview(name: "failed", state: HUDState(phase: .failed("Transcription took too long"))),
+            // A failure with a next step: a chevron, lit while the pointer is on the pill.
+            HUDPreview(name: "failed-actionable", state: HUDState(phase: .failed("Transcription took too long"),
+                                                                 actionLabel: "Show in History")),
+            HUDPreview(name: "failed-actionable-hover", state: HUDState(phase: .failed("Transcription took too long"),
+                                                                       hover: .pill, actionLabel: "Show in History")),
+            // Held the key and spoke, but the mic heard nothing (muted, or the wrong input).
+            HUDPreview(name: "failed-no-speech", state: HUDState(phase: .failed(
+                "Didn't hear anything · check MacBook Pro Microphone"), actionLabel: "Choose a microphone")),
+            HUDPreview(name: "failed-no-words", state: HUDState(phase: .failed(
+                "Didn't catch any words · it's saved in History"), actionLabel: "Show in History")),
+            HUDPreview(name: "failed-mic-denied", state: HUDState(phase: .failed("Birdtown Flow needs microphone access"),
+                                                                 actionLabel: "Open Microphone settings")),
             // The longest real engine message (ParakeetEngine): wraps to two lines, never truncates.
             HUDPreview(name: "failed-long", state: HUDState(phase: .failed(
                 "Parakeet Ultra couldn't transcribe this recording. It's saved in History, so you can retry it."))),
+            HUDPreview(name: "failed-long-actionable", state: HUDState(phase: .failed(
+                "Parakeet Ultra couldn't transcribe this recording. It's saved in History, so you can retry it."),
+                actionLabel: "Show in History")),
         ]
     }
 

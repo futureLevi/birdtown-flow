@@ -1,3 +1,4 @@
+import Accessibility
 import AppKit
 import MurmurDictionary
 import MurmurKit
@@ -13,7 +14,9 @@ struct HistoryRow: View {
     let player: AudioPlayback
     var isSelected: Bool
     var isHighlighted: Bool
-    var onSelect: ((_ additive: Bool) -> Void)?
+    /// The History search, so the row can mark where it matched.
+    var query: String
+    var onSelect: ((ListSelection<UUID>.Click) -> Void)?
     let onDelete: () -> Void
 
     @State private var isHovered = false
@@ -34,13 +37,15 @@ struct HistoryRow: View {
         isSelected: Bool = false,
         isHighlighted: Bool = false,
         showsOriginal: Bool = false,
-        onSelect: ((_ additive: Bool) -> Void)? = nil,
+        query: String = "",
+        onSelect: ((ListSelection<UUID>.Click) -> Void)? = nil,
         onDelete: @escaping () -> Void
     ) {
         self.record = record
         self.player = player
         self.isSelected = isSelected
         self.isHighlighted = isHighlighted
+        self.query = query
         self.onSelect = onSelect
         self.onDelete = onDelete
         _showsOriginal = State(initialValue: showsOriginal)
@@ -54,7 +59,7 @@ struct HistoryRow: View {
                 content
                 footer
                 if showsOriginal {
-                    OriginalPanel(record: record)
+                    OriginalPanel(record: record, query: query)
                         .transition(.opacity)
                 }
             }
@@ -65,7 +70,8 @@ struct HistoryRow: View {
         .contentShape(Rectangle())
         .onHover { isHovered = $0 }
         .onTapGesture {
-            onSelect?(NSEvent.modifierFlags.contains(.command))
+            let flags = NSEvent.modifierFlags
+            onSelect?(flags.contains(.shift) ? .extend : flags.contains(.command) ? .toggle : .plain)
         }
         .contextMenu { menuItems }
         .sheet(isPresented: $isAddingWord) {
@@ -88,7 +94,7 @@ struct HistoryRow: View {
 
     private var header: some View {
         HStack(alignment: .center, spacing: Spacing.s) {
-            Text(appTitle)
+            Text(Self.highlighted(appTitle, query: query))
                 .font(Typography.headline)
                 .foregroundStyle(Palette.ink)
                 .lineLimit(1)
@@ -112,7 +118,7 @@ struct HistoryRow: View {
         case .failed:
             VStack(alignment: .leading, spacing: Spacing.s) {
                 if record.hasText || !record.rawText.isEmpty {
-                    Text(record.hasText ? record.finalText : record.rawText)
+                    Text(Self.highlighted(record.hasText ? record.finalText : record.rawText, query: query))
                         .font(Typography.transcript)
                         .foregroundStyle(Palette.inkSecondary)
                         .lineSpacing(Spacing.transcriptLine)
@@ -131,24 +137,85 @@ struct HistoryRow: View {
                 .foregroundStyle(Palette.inkTertiary)
         case .inserted, .copied:
             VStack(alignment: .leading, spacing: Spacing.xs) {
-                // Collapsed, an email's "Hi Priya,\n\n" would spend two of three lines on the
-                // greeting; fold line breaks into spaces like Mail's previews. Expanded shows
-                // the text exactly as it was typed.
-                Text(isExpanded ? record.finalText : Self.flattened(record.finalText))
+                let preview = transcriptPreview
+                Text(Self.highlighted(preview.text, ranges: preview.ranges))
                     .font(Typography.transcript)
                     .foregroundStyle(Palette.ink)
                     .lineSpacing(Spacing.transcriptLine)
                     .lineLimit(isExpanded ? nil : Layout.Main.transcriptLines)
                     .fixedSize(horizontal: false, vertical: true)
                     .textSelection(.enabled)
+                    // The old text stays readable but recedes while new text is on its way.
+                    .opacity(isRetrying ? Interaction.dimmedOpacity : 1)
                 if isLong {
                     Button(isExpanded ? "Show less" : "Show more") { isExpanded.toggle() }
                         .buttonStyle(RowLinkButtonStyle())
                         .padding(.top, Spacing.xxs)
                         .accessibilityLabel(isExpanded ? "Show less of this dictation" : "Show all of this dictation")
                 }
+                if let reason = keptReason {
+                    keptNotice(reason)
+                }
             }
         }
+        if matchedOnlyInHeard {
+            heardMatchNotice
+        }
+    }
+
+    /// The transcript as the row shows it. Collapsed, an email's "Hi Priya,\n\n" would spend
+    /// two of three lines on the greeting, so line breaks fold into spaces like Mail's
+    /// previews; and when a search hit sits past the first lines, the preview starts "…" just
+    /// before it. Expanded shows the text exactly as it was typed.
+    private var transcriptPreview: SearchHighlight.Preview {
+        if isExpanded {
+            return SearchHighlight.Preview(
+                text: record.finalText,
+                ranges: SearchHighlight.ranges(of: query, in: record.finalText)
+            )
+        }
+        let flat = Self.flattened(record.finalText)
+        guard isLong else {
+            return SearchHighlight.Preview(text: flat, ranges: SearchHighlight.ranges(of: query, in: flat))
+        }
+        return SearchHighlight.preview(of: flat, query: query, budget: Self.previewBudget)
+    }
+
+    /// Characters a collapsed preview can show before a match needs an excerpt: all but the
+    /// last line, so the hit lands with some of its sentence after it.
+    private static var previewBudget: Int {
+        (Layout.Main.transcriptLines - 1) * Layout.Main.transcriptCharsPerLine
+    }
+
+    /// "Transcribe Again" gave nothing better, so the text above is the old one.
+    private func keptNotice(_ reason: String) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: Spacing.s) {
+            Image(systemName: "exclamationmark.circle")
+                .foregroundStyle(Palette.warning)
+            Text("Couldn't transcribe this again: \(reason) Your text is unchanged.")
+                .foregroundStyle(Palette.inkSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+            Button("Dismiss") { model.retries.dismissReason(record.id) }
+                .buttonStyle(RowLinkButtonStyle())
+        }
+        .font(Typography.callout)
+        .padding(.top, Spacing.xxs)
+    }
+
+    /// The search only matched what the engine heard (before cleanup and polish), which is
+    /// out of sight until Show Original.
+    private var heardMatchNotice: some View {
+        HStack(spacing: Spacing.s) {
+            Image(systemName: "text.magnifyingglass")
+                .foregroundStyle(Palette.inkTertiary)
+            Text("Matches what was heard, before cleanup")
+                .foregroundStyle(Palette.inkSecondary)
+            if !showsOriginal {
+                Button("Show Original") { showsOriginal = true }
+                    .buttonStyle(RowLinkButtonStyle())
+            }
+        }
+        .font(Typography.callout)
     }
 
     /// Retry, and whether the audio is there to retry with. One disk check per pass.
@@ -181,6 +248,23 @@ struct HistoryRow: View {
 
     private var footer: some View {
         HStack(spacing: Spacing.s) {
+            // The failed layout shows progress on its Retry button; everything else here.
+            if isRetrying && record.outcome != .failed {
+                HStack(spacing: Spacing.xs) {
+                    ProgressView().controlSize(.mini)
+                    Text("Transcribing again…")
+                }
+                .font(Typography.caption)
+                .foregroundStyle(Palette.accent)
+                .fixedSize()
+                .accessibilityElement(children: .combine)
+            }
+            if !isRetrying, model.retries.replaced[record.id] != nil {
+                Button("Restore earlier text") { restoreEarlierText() }
+                    .buttonStyle(RowLinkButtonStyle())
+                    .fixedSize()
+                    .help("Put back the text from before you transcribed this again")
+            }
             if let polisher = record.polishedBy, polisher != .off {
                 // A Lab configuration names itself; Settings' provider names the provider.
                 Badge(text: "Polished · \(record.polishConfiguration ?? polisher.title)", symbol: "sparkles")
@@ -280,8 +364,12 @@ struct HistoryRow: View {
         }
         .disabled(!hasAudio)
         Divider()
-        Button("Retry Transcription", systemImage: "arrow.clockwise") { retry() }
+        Button(retryTitle, systemImage: "arrow.clockwise") { retry() }
             .disabled(!hasAudio || isRetrying)
+        if model.retries.replaced[record.id] != nil {
+            Button("Restore Earlier Text", systemImage: "arrow.uturn.backward") { restoreEarlierText() }
+                .disabled(isRetrying)
+        }
         Button(showsOriginal ? "Hide Original" : "Show Original", systemImage: "text.magnifyingglass") {
             showsOriginal.toggle()
         }
@@ -305,8 +393,11 @@ struct HistoryRow: View {
                 player.toggle(record.id, url: audioURL)
             }
             if !isRetrying {
-                Button("Retry Transcription") { retry() }
+                Button(retryTitle) { retry() }
             }
+        }
+        if !isRetrying, model.retries.replaced[record.id] != nil {
+            Button("Restore Earlier Text") { restoreEarlierText() }
         }
         Button(showsOriginal ? "Hide Original" : "Show Original") { showsOriginal.toggle() }
         Button("Delete", role: .destructive) { onDelete() }
@@ -332,7 +423,22 @@ struct HistoryRow: View {
 
     private var audioURL: URL? { model.history.audioURL(for: record) }
 
-    private var isRetrying: Bool { RetryTracker.shared.isRetrying(record.id) }
+    private var isRetrying: Bool { model.retries.isRetrying(record.id) }
+
+    /// A failed dictation is retried; one that worked is transcribed again, keeping its text
+    /// if the new attempt does worse than fail to improve it.
+    private var retryTitle: String {
+        Retranscription.hasGoodText(record) ? "Transcribe Again" : "Retry Transcription"
+    }
+
+    private var keptReason: String? { model.retries.keptReasons[record.id] }
+
+    private var matchedOnlyInHeard: Bool {
+        // Failed rows already show the heard text when there's nothing else.
+        guard record.outcome == .inserted || record.outcome == .copied else { return false }
+        let fields = SearchHighlight.fields(of: record, matching: query)
+        return fields.contains(.heard) && !fields.contains(.text) && !fields.contains(.app)
+    }
 
     private var correctionCount: Int { record.corrections.reduce(0) { $0 + $1.count } }
 
@@ -415,12 +521,50 @@ struct HistoryRow: View {
 
     private func retry() {
         guard !isRetrying else { return }
-        let id = record.id
+        let record = record
+        AccessibilityNotification.Announcement("Transcribing again").post()
         Task {
-            await RetryTracker.shared.retry(record, using: model.controller)
-            // A successful retry puts the text on the clipboard; say so where the user looked.
-            if model.history.record(id: id)?.outcome == .copied { flashCopied() }
+            let resolution = await model.retries.retry(
+                record, controller: model.controller, history: model.history
+            )
+            switch resolution {
+            case .keptPrevious?:
+                let reason = model.retries.keptReasons[record.id] ?? ""
+                AccessibilityNotification.Announcement(
+                    "Couldn't transcribe this again: \(reason) Your text is unchanged."
+                ).post()
+            case .some:
+                // New text goes to the clipboard; say so where the user looked.
+                if model.history.record(id: record.id)?.outcome == .copied {
+                    flashCopied()
+                    AccessibilityNotification.Announcement("Transcribed again and copied").post()
+                }
+            case nil:
+                break
+            }
         }
+    }
+
+    private func restoreEarlierText() {
+        model.retries.restore(record.id, in: model.history)
+        AccessibilityNotification.Announcement("Earlier text restored").post()
+    }
+
+    // MARK: - Search highlighting
+
+    static func highlighted(_ text: String, query: String) -> AttributedString {
+        highlighted(text, ranges: SearchHighlight.ranges(of: query, in: text))
+    }
+
+    /// `text` with each search match washed in the find-highlight colour.
+    static func highlighted(_ text: String, ranges: [Range<String.Index>]) -> AttributedString {
+        var attributed = AttributedString(text)
+        for range in ranges {
+            guard let run = Range(range, in: attributed) else { continue }
+            // Spelled out: AppKit's scope has a `backgroundColor` too (an NSColor).
+            attributed[run][AttributeScopes.SwiftUIAttributes.BackgroundColorAttribute.self] = Palette.searchMatch
+        }
+        return attributed
     }
 }
 
@@ -453,12 +597,15 @@ private struct RowLinkBody: View {
 /// What the engine heard versus what was written, and what changed in between.
 struct OriginalPanel: View {
     let record: HistoryRecord
+    var query: String = ""
 
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.m) {
             VStack(alignment: .leading, spacing: Spacing.xs) {
                 Text("Heard").eyebrowStyle()
-                Text(record.rawText.isEmpty ? "Nothing was recognized." : record.rawText)
+                Text(record.rawText.isEmpty
+                     ? AttributedString("Nothing was recognized.")
+                     : HistoryRow.highlighted(record.rawText, query: query))
                     .font(Typography.transcript)
                     .foregroundStyle(Palette.inkSecondary)
                     .lineSpacing(Spacing.transcriptLine)

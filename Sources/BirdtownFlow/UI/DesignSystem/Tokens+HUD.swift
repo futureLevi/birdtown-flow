@@ -26,6 +26,15 @@ extension Layout.HUD {
     static let contactShadowSpread: CGFloat = 1
     /// The pill's edge and the keycap's border.
     static let strokeWidth: CGFloat = 1
+    /// The disc behind the chevron on a message that links somewhere (a failure's History
+    /// row, a permission to grant). Lights up with `Palette.HUD.controlHover` under the pointer.
+    static let actionDisc: CGFloat = 18
+    /// While polishing, the bars rise higher than `thinkingLift` into a flatter plateau, so
+    /// a slow polish reads differently from transcription even with Reduce Motion on.
+    static let polishingLift: CGFloat = 5.5
+    /// How much the dome falls away toward its edges (0 is flat, 1 drops the edges to rest).
+    static let thinkingDomeFalloff: Double = 0.55
+    static let polishingDomeFalloff: Double = 0.18
 }
 
 extension Motion {

@@ -233,3 +233,41 @@ struct WordDiffTests {
         #expect(WordDiff.diff(original: "", revised: "hi") == [.added("hi")])
     }
 }
+
+@Suite("Lab page")
+struct PolishLabPageTests {
+    @Test("↑ and ↓ move one row and stop at the ends")
+    func neighbor() {
+        let order = ["a", "b", "c"]
+        #expect(PolishLabNavigation.neighbor(of: "a", step: 1, in: order) == "b")
+        #expect(PolishLabNavigation.neighbor(of: "b", step: -1, in: order) == "a")
+        #expect(PolishLabNavigation.neighbor(of: "c", step: 1, in: order) == nil)
+        #expect(PolishLabNavigation.neighbor(of: "a", step: -1, in: order) == nil)
+        #expect(PolishLabNavigation.neighbor(of: "a", step: 0, in: order) == nil)
+    }
+
+    @Test("With nothing selected, ↓ starts at the top and ↑ at the bottom")
+    func neighborFromNothing() {
+        let order = ["a", "b", "c"]
+        #expect(PolishLabNavigation.neighbor(of: nil, step: 1, in: order) == "a")
+        #expect(PolishLabNavigation.neighbor(of: nil, step: -1, in: order) == "c")
+        #expect(PolishLabNavigation.neighbor(of: "gone", step: 1, in: order) == "a")
+        #expect(PolishLabNavigation.neighbor(of: nil as String?, step: 1, in: []) == nil)
+    }
+
+    @Test("Runs group with their neighbours on the same text, keeping time order")
+    func groups() {
+        let runs = [("x", 1), ("x", 2), ("y", 3), ("x", 4)]
+        let groups = PolishLabResults.consecutiveGroups(runs) { $0.0 }
+        #expect(groups.map { group in group.map { $0.1 } } == [[1, 2], [3], [4]])
+        #expect(PolishLabResults.consecutiveGroups([(String, Int)]()) { $0.0 }.isEmpty)
+    }
+
+    @Test("Excerpts are one line, cut at a word count")
+    func excerpt() {
+        #expect(PolishLabResults.excerpt("um so\nI was   thinking", maxWords: 8) == "um so I was thinking")
+        #expect(PolishLabResults.excerpt("one two three four", maxWords: 2) == "one two…")
+        #expect(PolishLabResults.excerpt("one two", maxWords: 2) == "one two")
+        #expect(PolishLabResults.excerpt("   ", maxWords: 3) == "")
+    }
+}

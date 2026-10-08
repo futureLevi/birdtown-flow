@@ -36,6 +36,9 @@ struct OnboardingView: View {
     /// earlier `lastRecord` (or one finishing from a previous step) can't fake a success.
     @State private var practiceStartedAt: Date?
     @State private var practiceDone = false
+    /// The engine History recorded for the successful try ("Apple Speech" while Parakeet
+    /// downloads).
+    @State private var practiceEngine: String?
     /// Bumped whenever Birdtown Flow becomes active again, e.g. back from System Settings.
     @State private var activations = 0
     /// The permission step whose Open System Settings the user has clicked, so a step only says
@@ -62,6 +65,18 @@ struct OnboardingView: View {
     private var accessibilityGranted: Bool { preview?.accessibility ?? model.permissions.accessibility }
     private var hotkeyActive: Bool { preview?.hotkeyActive ?? model.controller.isHotkeyActive }
     private var modelState: ModelManager.State { preview?.modelState ?? model.models.state }
+    /// What transcribes while the selected model isn't ready (usually Apple Speech).
+    private var standIn: String? {
+        if let preview { return SetupKit.standIn(for: model.settings.engine, state: preview.modelState) }
+        return model.models.standInName
+    }
+    /// The stand-in that wrote the successful try, if it wasn't the selected engine.
+    private var practiceStandIn: String? {
+        guard let engine = preview?.practiceEngine ?? practiceEngine,
+              EngineFallback.ranOnStandIn(recordEngine: engine, selected: model.settings.engine.displayName)
+        else { return nil }
+        return engine
+    }
     private var phase: DictationController.Phase { preview?.phase ?? model.controller.phase }
     private var practiceSucceeded: Bool { preview?.practiceSucceeded ?? practiceDone }
     private var needsRelaunch: Bool { accessibilityGranted && !hotkeyActive }
@@ -126,7 +141,7 @@ struct OnboardingView: View {
             )
             .padding(.bottom, Layout.Setup.footerHeight)
         case .model:
-            ModelStep(engine: model.settings.engine, state: modelState)
+            ModelStep(engine: model.settings.engine, state: modelState, standIn: standIn)
                 .padding(.bottom, Layout.Setup.footerHeight)
                 .onAppear(perform: prepareModel)
         case .shortcut:
@@ -134,7 +149,16 @@ struct OnboardingView: View {
                 settings: model.settings,
                 fnHasSystemAction: fnHasSystemAction,
                 wisprRunning: wisprRunning,
-                onChange: { model.controller.reloadShortcuts() }
+                onChange: { model.controller.reloadShortcuts() },
+                onRecording: { listening in
+                    // The event tap would hear the keys being recorded first: pause it.
+                    guard preview == nil else { return }
+                    if listening {
+                        model.controller.deactivate()
+                    } else {
+                        model.controller.activate()
+                    }
+                }
             )
             .padding(.bottom, Layout.Setup.footerHeight)
         case .practice:
@@ -143,7 +167,10 @@ struct OnboardingView: View {
                 phase: phase,
                 hotkeyActive: hotkeyActive,
                 microphoneGranted: microphone == .granted,
+                engine: model.settings.engine,
                 modelState: modelState,
+                standIn: standIn,
+                typedWith: practiceStandIn,
                 succeeded: practiceSucceeded,
                 initialText: preview?.practiceText,
                 onFixAccessibility: { go(to: .accessibility) },
@@ -328,6 +355,7 @@ struct OnboardingView: View {
               record.outcome == .inserted || record.outcome == .copied,
               record.hasText
         else { return }
+        practiceEngine = record.engine
         withAnimation(Motion.resolve(Motion.confirm, reduceMotion: reduceMotion)) {
             practiceDone = true
         }
@@ -465,7 +493,7 @@ private struct WelcomeStep: View {
                 Button("Get Started", action: onStart)
                     .buttonStyle(SetupKit.PrimaryButtonStyle(large: true))
                     .keyboardShortcut(.defaultAction)
-                Text("Two permissions and a one-time download. You can carry on while it finishes.")
+                Text("Two permissions and a one-time download. You can dictate while it finishes.")
                     .font(Typography.caption)
                     .foregroundStyle(Palette.inkTertiary)
             }
@@ -704,6 +732,8 @@ private struct InstructionLine: View {
 private struct ModelStep: View {
     let engine: SpeechEngineChoice
     let state: ModelManager.State
+    /// What transcribes until `engine` is ready; `nil` when it's ready or nothing can.
+    let standIn: String?
 
     var body: some View {
         StepScaffold(
@@ -714,13 +744,34 @@ private struct ModelStep: View {
         ) {
             VStack(spacing: Spacing.m) {
                 card
-                if SetupKit.progress(of: state) != nil || state == .loading {
-                    Text("You can carry on. You can try it as soon as the model is ready.")
+                if let note = carryOnNote {
+                    Text(note)
                         .font(Typography.callout)
                         .foregroundStyle(Palette.inkTertiary)
+                        .multilineTextAlignment(.center)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
         }
+    }
+
+    private var isPreparing: Bool {
+        SetupKit.progress(of: state) != nil || state == .loading || state == .downloading(progress: nil)
+    }
+
+    /// Dictation doesn't wait for the download: say what does the work meanwhile, and that
+    /// the switch is automatic.
+    private var carryOnNote: String? {
+        if let standIn, isPreparing {
+            return "You can start dictating now. \(standIn) writes it down until \(engine.displayName) is ready, then Birdtown Flow switches by itself."
+        }
+        if let standIn, SetupKit.isFailed(state) {
+            return "Dictation still works: \(standIn) writes it down until \(engine.displayName) is ready."
+        }
+        if isPreparing {
+            return "You can carry on. You can try it as soon as the model is ready."
+        }
+        return nil
     }
 
     private var card: some View {
@@ -796,10 +847,14 @@ private struct ShortcutStep: View {
     let fnHasSystemAction: Bool
     let wisprRunning: Bool
     let onChange: () -> Void
+    /// Pauses (`true`) and resumes Birdtown Flow's shortcuts while the recorder listens.
+    var onRecording: (Bool) -> Void = { _ in }
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var notice: ShortcutVerdict?
 
     private var key: PushToTalkKey { settings.pushToTalkKey }
     private var glyph: String { SetupKit.glyph(for: key) }
+    private var keys: [String] { SetupKit.keys(for: key) }
 
     var body: some View {
         StepScaffold(
@@ -815,11 +870,15 @@ private struct ShortcutStep: View {
                 // One control to VoiceOver: "Push-to-talk key", a radio group with positions.
                 .accessibilityRepresentation {
                     Picker("Push-to-talk key", selection: Binding(get: { key }, set: { select($0) })) {
-                        ForEach(SetupKit.orderedKeys, id: \.self) { option in
+                        ForEach(SetupKit.pickerKeys(including: key), id: \.self) { option in
                             Text(SetupKit.name(for: option)).tag(option)
                         }
                     }
                     .pickerStyle(.radioGroup)
+                }
+                otherKey
+                if let notice, notice != .accepted {
+                    ShortcutNotice(verdict: notice)
                 }
                 gestures
                 // Both can apply at once (Wispr Flow listens on fn by default), so neither
@@ -853,7 +912,38 @@ private struct ShortcutStep: View {
 
     private var showsFnWarning: Bool { key == .fn && fnHasSystemAction }
 
+    /// Any other key or combination, through the recorder. Once one is chosen it shows here,
+    /// selected, since none of the tiles above is.
+    @ViewBuilder private var otherKey: some View {
+        let recorder = ShortcutRecorder(
+            role: .pushToTalk,
+            look: .link(key.isQuickPick ? "Use a different key or combination…" : "Change…"),
+            inUse: settings.shortcutsInUse,
+            onListeningChange: onRecording,
+            onVerdict: { notice = $0 },
+            onRecord: { select($0) }
+        )
+        if key.isQuickPick {
+            recorder
+        } else {
+            HStack(spacing: Spacing.s) {
+                Text("Your shortcut")
+                    .font(Typography.callout.weight(.medium))
+                    .foregroundStyle(Palette.ink)
+                SetupKit.KeyCombo(keys: keys)
+                recorder
+            }
+            .padding(.horizontal, Spacing.m)
+            .padding(.vertical, Spacing.xs)
+            .background(Capsule(style: .continuous).fill(Palette.accentSoft))
+            .overlay(Capsule(style: .continuous).strokeBorder(Palette.accent, lineWidth: Layout.Setup.selectionStroke))
+            .accessibilityElement(children: .contain)
+            .accessibilityLabel("Your shortcut: \(key.spokenName)")
+        }
+    }
+
     private func select(_ option: PushToTalkKey) {
+        if option.isQuickPick { notice = nil }
         withAnimation(Motion.resolve(Motion.snappy, reduceMotion: reduceMotion)) {
             settings.pushToTalkKey = option
         }
@@ -863,19 +953,27 @@ private struct ShortcutStep: View {
     private var gestures: some View {
         VStack(spacing: Spacing.s) {
             HStack(alignment: .top, spacing: 0) {
-                GestureHint(keys: [glyph], caption: "Hold to dictate")
+                GestureHint(keys: keys, caption: "Hold to dictate")
                 switch settings.handsFreeShortcut {
                 case .doubleTap:
-                    GestureHint(keys: [glyph, glyph], caption: "Double-tap for hands-free")
+                    // A chord's keycaps twice over would crowd the row.
+                    if keys.count == 1 {
+                        GestureHint(keys: [glyph, glyph], caption: "Double-tap for hands-free")
+                    } else {
+                        GestureHint(keys: keys, caption: "Press twice for hands-free")
+                    }
                 case .controlOption:
-                    GestureHint(keys: ["⌃", "⌥"], caption: "Together for hands-free")
+                    GestureHint(
+                        keys: SetupKit.handsFreeKeys(settings),
+                        caption: settings.handsFreeChord == nil ? "Together for hands-free" : "Hands-free"
+                    )
                 case .off:
                     EmptyView()
                 }
                 GestureHint(keys: ["esc"], caption: "Cancel")
             }
             if settings.handsFreeShortcut == .controlOption {
-                Text("Press ⌃⌥ again to finish.")
+                Text("Press \(SetupKit.handsFreeName(settings)) again to finish.")
                     .font(Typography.caption)
                     .foregroundStyle(Palette.inkTertiary)
             } else if settings.handsFreeShortcut == .doubleTap {
@@ -955,7 +1053,12 @@ private struct PracticeStep: View {
     let phase: DictationController.Phase
     let hotkeyActive: Bool
     let microphoneGranted: Bool
+    let engine: SpeechEngineChoice
     let modelState: ModelManager.State
+    /// What transcribes until the selected model is ready (usually Apple Speech).
+    let standIn: String?
+    /// The stand-in that wrote the successful try, when it wasn't the selected engine.
+    let typedWith: String?
     let succeeded: Bool
     let initialText: String?
     let onFixAccessibility: () -> Void
@@ -1061,9 +1164,14 @@ private struct PracticeStep: View {
             }
             .font(Typography.callout)
         } else if succeeded {
-            Label("Typed by Birdtown Flow", systemImage: "checkmark.circle.fill")
-                .font(Typography.callout.weight(.medium))
-                .foregroundStyle(Palette.success)
+            VStack(spacing: Spacing.xs) {
+                Label("Typed by Birdtown Flow", systemImage: "checkmark.circle.fill")
+                    .font(Typography.callout.weight(.medium))
+                    .foregroundStyle(Palette.success)
+                if let typedWith {
+                    engineCaption(typedWithText(typedWith))
+                }
+            }
         } else if case .failed(let message) = phase {
             HStack(alignment: .firstTextBaseline, spacing: Spacing.s) {
                 Image(systemName: "exclamationmark.triangle.fill")
@@ -1074,8 +1182,9 @@ private struct PracticeStep: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
             .font(Typography.callout)
-        } else if modelState == .loading || SetupKit.progress(of: modelState) != nil
+        } else if standIn == nil, modelState == .loading || SetupKit.progress(of: modelState) != nil
                     || modelState == .downloading(progress: nil) {
+            // Nothing can stand in (Apple Speech itself is getting ready): the try has to wait.
             VStack(spacing: Spacing.s) {
                 if let progress = SetupKit.progress(of: modelState) {
                     SetupKit.ProgressBar(fraction: progress)
@@ -1087,10 +1196,37 @@ private struct PracticeStep: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
         } else {
-            Text("Waiting for you to hold \(keyName)…")
-                .font(Typography.callout)
-                .foregroundStyle(Palette.inkTertiary)
+            VStack(spacing: Spacing.xs) {
+                Text("Waiting for you to hold \(keyName)…")
+                    .font(Typography.callout)
+                    .foregroundStyle(Palette.inkTertiary)
+                // The download doesn't hold the try up; just say which engine will hear it.
+                if let note = SetupKit.standInNote(standIn, for: engine, state: modelState) {
+                    engineCaption(note)
+                }
+            }
         }
+    }
+
+    /// A quiet line naming the engine: present, never the headline.
+    private func engineCaption(_ text: String) -> some View {
+        Text(text)
+            .font(Typography.caption)
+            .foregroundStyle(Palette.inkTertiary)
+            .multilineTextAlignment(.center)
+            .fixedSize(horizontal: false, vertical: true)
+            .contentTransition(.numericText())
+    }
+
+    /// "Written with Apple Speech until Parakeet Ultra is ready", or, once it is, that the
+    /// next dictation uses it.
+    private func typedWithText(_ standIn: String) -> String {
+        if modelState == .ready {
+            return "Written with \(standIn). \(engine.displayName) is ready now and takes over from here."
+        }
+        let note = "Written with \(standIn) until \(engine.displayName) is ready"
+        guard let progress = SetupKit.progress(of: modelState) else { return note }
+        return "\(note) · \(SetupKit.percent(progress))"
     }
 
     /// The model isn't ready to hear the try yet; say so instead of waiting silently.

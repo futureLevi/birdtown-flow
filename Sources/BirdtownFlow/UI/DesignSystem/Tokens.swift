@@ -61,6 +61,9 @@ enum Palette {
     static let warningSoft = Color.adaptive(light: 0xB7791F, lightAlpha: 0.10, dark: 0xF0B04A, darkAlpha: 0.15)
     static let danger = Color.adaptive(light: 0xD03A4E, dark: 0xFF6B7A)
     static let dangerSoft = Color.adaptive(light: 0xD03A4E, lightAlpha: 0.09, dark: 0xFF6B7A, darkAlpha: 0.15)
+    /// Where a History search matched: amber like the system's find highlight, strong enough
+    /// to read on a selected row's Signal blue wash.
+    static let searchMatch = Color.adaptive(light: 0xB7791F, lightAlpha: 0.22, dark: 0xF0B04A, darkAlpha: 0.28)
 
     /// The pill is always dark, whatever the appearance: it floats over arbitrary content.
     /// Its navy is the logo tile's.

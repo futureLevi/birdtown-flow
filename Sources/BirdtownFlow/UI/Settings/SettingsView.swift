@@ -31,7 +31,12 @@ enum SettingsTab: String, CaseIterable, Identifiable {
 }
 
 /// The Settings window (⌘,): toolbar tabs, each a column of grouped rows.
+///
+/// Opens on General, or on the tab something asked for through `AppModel.requestSettings(_:)`
+/// (Style's "Turn On AI Polish…" lands on Text & AI). The request is read whether Settings is
+/// opening fresh or already open, then cleared, so ⌘, later doesn't jump tabs again.
 struct SettingsView: View {
+    @Environment(AppModel.self) private var model
     @State private var tab: SettingsTab = .general
 
     var body: some View {
@@ -46,6 +51,11 @@ struct SettingsView: View {
         // Settings is its own window, outside the main window's tint: switches, pickers and
         // steppers take Signal blue here too rather than the system accent.
         .tint(Palette.accent)
+        .onChange(of: model.requestedSettingsTab, initial: true) { _, requested in
+            guard let requested else { return }
+            tab = requested
+            model.requestedSettingsTab = nil
+        }
     }
 
     @ViewBuilder

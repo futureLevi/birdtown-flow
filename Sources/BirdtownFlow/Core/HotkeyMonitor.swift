@@ -3,66 +3,32 @@ import Carbon.HIToolbox
 import Foundation
 import MurmurKit
 
-/// Which modifier key holds the mic open.
-enum PushToTalkKey: String, CaseIterable, Sendable {
-    case rightOption
-    case fn
-    case rightCommand
-    case rightControl
+/// What holds the mic open: one modifier key (fn, Right ⌥, Left ⌘…) or a key with
+/// modifiers (⌃⌥D, F5). The four classic choices are `KeyShortcut.quickPicks`; anything else
+/// comes from the shortcut recorder. Values saved before custom shortcuts still load.
+typealias PushToTalkKey = KeyShortcut
 
-    var keyCode: Int64 {
-        switch self {
-        case .rightOption: Int64(kVK_RightOption)   // 61
-        case .fn: Int64(kVK_Function)               // 63
-        case .rightCommand: Int64(kVK_RightCommand) // 54
-        case .rightControl: Int64(kVK_RightControl) // 62
-        }
-    }
-
+extension ModifierKey {
     /// Device-*dependent* bit for this specific physical key.
     ///
     /// `CGEventFlags.maskAlternate` is the union mask — it's set whenever *either* Option
     /// key is down. Using it means: hold Left ⌥, tap Right ⌥, and the release is invisible
     /// (the union bit is still set by the left key), so `onRelease` never fires. The mic
     /// stays open, the HUD stays up, and the next press is swallowed too.
-    ///
-    /// These raw values are the NX_DEVICE* masks from IOKit's event system; they carry the
-    /// left/right distinction that the public `CGEventFlags` constants discard.
-    var flag: CGEventFlags {
-        switch self {
-        case .rightOption: CGEventFlags(rawValue: 0x40)    // NX_DEVICERALTKEYMASK
-        case .rightCommand: CGEventFlags(rawValue: 0x10)   // NX_DEVICERCMDKEYMASK
-        case .rightControl: CGEventFlags(rawValue: 0x2000) // NX_DEVICERCTLKEYMASK
-        case .fn: .maskSecondaryFn                         // no left/right variant exists
-        }
-    }
+    var flag: CGEventFlags { CGEventFlags(rawValue: deviceFlag) }
 
     /// The device-independent flag. Only used to confirm a release we may have missed: if
     /// even the union bit is clear, the key is certainly up.
-    var unionFlag: CGEventFlags {
-        switch self {
-        case .rightOption: .maskAlternate
-        case .rightCommand: .maskCommand
-        case .rightControl: .maskControl
-        case .fn: .maskSecondaryFn
-        }
-    }
+    var cgUnionFlag: CGEventFlags { CGEventFlags(rawValue: unionFlag) }
 
-    var displayName: String {
-        switch self {
-        case .rightOption: "Right ⌥"
-        case .fn: "fn"
-        case .rightCommand: "Right ⌘"
-        case .rightControl: "Right ⌃"
-        }
-    }
-
-    /// Swallowing `fn` would break fn+arrow, fn+delete and the emoji picker, so we let it
-    /// through. Dedicated right-hand modifiers are safe to consume.
-    var shouldConsumeEvent: Bool { self != .fn }
+    /// Swallowing `fn` would break fn+arrow, fn+delete and the emoji picker, and left-hand
+    /// modifiers and Shift are part of everyday shortcuts and typing, so we let those through.
+    /// Dedicated right-hand ⌥ ⌘ ⌃ are safe to consume.
+    var shouldConsumeEvent: Bool { isRightSide && family != .shift }
 }
 
-/// Watches the push-to-talk key, plus the keys that matter while it's held, using a `CGEventTap`.
+/// Watches the push-to-talk key (or chord), plus the keys that matter while it's held, using a
+/// `CGEventTap`.
 ///
 /// A tap is required rather than `NSEvent.addGlobalMonitor` because `fn` and left/right
 /// modifier discrimination don't surface through the higher-level APIs, and because Space
@@ -72,12 +38,16 @@ enum PushToTalkKey: String, CaseIterable, Sendable {
 /// The monitor only reports raw gestures; `DictationController` decides what they mean. The
 /// callback runs for every keystroke on the system, so it does no work beyond a few compares
 /// unless the push-to-talk key is involved.
+///
+/// A modifier key is held and released through flags-changed events. A chord (⌃⌥D, F5) is
+/// held from its key-down with exactly its modifiers until that key comes up; both events are
+/// swallowed so the key never types, and the modifiers may be let go first.
 @MainActor
 final class HotkeyMonitor {
     enum Event {
-        /// The push-to-talk key went down.
+        /// The push-to-talk key (or chord) went down.
         case keyDown
-        /// The push-to-talk key came up.
+        /// The push-to-talk key (or the chord's key) came up.
         case keyUp
         /// Another key or modifier was pressed while the push-to-talk key was held: the user
         /// is typing a shortcut (fn+←, ⌥+letter), not dictating.
@@ -86,8 +56,9 @@ final class HotkeyMonitor {
         case space
         /// Esc pressed. Return `true` to take it (only while dictating).
         case escape
-        /// Control and Option pressed together and let go, with nothing else pressed in
-        /// between: the hands-free shortcut, when `watchesControlOption` is on.
+        /// The hands-free shortcut, when `watchesControlOption` is on: Control and Option
+        /// pressed together and let go with nothing else in between, or a press of
+        /// `handsFreeChord` when one is set.
         case controlOptionTap
     }
 
@@ -97,7 +68,7 @@ final class HotkeyMonitor {
     private static let escapeKeyCode = Int64(kVK_Escape)
     private static let spaceKeyCode = Int64(kVK_Space)
     /// All NX_DEVICE* modifier bits: both shifts, controls, options and commands.
-    private static let deviceModifierMask: UInt64 = 0x01 | 0x02 | 0x04 | 0x08 | 0x10 | 0x20 | 0x40 | 0x2000
+    private static let deviceModifierMask = ModifierKey.deviceMask
 
     private var tap: CFMachPort?
     private var runLoopSource: CFRunLoopSource?
@@ -117,9 +88,15 @@ final class HotkeyMonitor {
     private var controlOptionRecognizer = ModifierPairTap()
 
     var key: PushToTalkKey = .fn
-    /// Report ⌃⌥ taps as `.controlOptionTap`. Only on when that's the hands-free shortcut.
+    /// Report the hands-free shortcut as `.controlOptionTap`. Only on when hands-free has a
+    /// shortcut of its own (`HandsFreeShortcut.controlOption`).
     var watchesControlOption = false {
         didSet { if watchesControlOption != oldValue { resetControlOption() } }
+    }
+    /// The recorded hands-free chord (⌃⇧Space…), swallowed and reported as
+    /// `.controlOptionTap` on its key-down. `nil` listens for the ⌃⌥ tap instead.
+    var handsFreeChord: KeyChord? {
+        didSet { if handsFreeChord != oldValue { resetControlOption() } }
     }
     /// Receives every gesture. The return value only matters for `.space` and `.escape`.
     var handler: ((Event) -> Bool)?
@@ -225,6 +202,12 @@ final class HotkeyMonitor {
         case .keyDown:
             return keyDown(keyCode: keyCode, flags: flags, isRepeat: isRepeat)
         case .keyUp:
+            if isPressed, let chord = key.chord, keyCode == Int64(chord.keyCode) {
+                isPressed = false
+                stopReleaseWatch()
+                _ = handler?(.keyUp)
+                return true
+            }
             return swallowed.remove(keyCode) != nil
         default:
             return false
@@ -235,25 +218,27 @@ final class HotkeyMonitor {
         let consume = pushToTalkModifiersChanged(keyCode: keyCode, flags: flags)
         // After the push-to-talk key has had its say: when that key is ⌃ or ⌥ itself, its
         // release has already dropped the short hold before a ⌃⌥ tap starts hands-free.
-        if watchesControlOption { trackControlOption(flags: flags) }
+        if watchesControlOption, handsFreeChord == nil { trackControlOption(flags: flags) }
         return consume
     }
 
     private func pushToTalkModifiersChanged(keyCode: Int64, flags: CGEventFlags) -> Bool {
-        let held = flags.rawValue & Self.deviceModifierMask & ~key.flag.rawValue
+        let ownFlag = key.modifierKey?.deviceFlag ?? 0
+        let held = flags.rawValue & Self.deviceModifierMask & ~ownFlag
 
-        if keyCode == key.keyCode {
-            let nowPressed = flags.contains(key.flag)
+        if let modifier = key.modifierKey, keyCode == Int64(modifier.keyCode) {
+            let nowPressed = flags.contains(modifier.flag)
             if nowPressed != isPressed {
                 isPressed = nowPressed
                 knownModifiers = held
                 if nowPressed { startReleaseWatch() } else { stopReleaseWatch() }
                 _ = handler?(nowPressed ? .keyDown : .keyUp)
             }
-            return key.shouldConsumeEvent
+            return modifier.shouldConsumeEvent
         }
 
-        // Another modifier while ours is held: fn+⌘, Right ⌥+⇧… a shortcut, not dictation.
+        // Another modifier while ours is held: fn+⌘, Right ⌥+⇧… a shortcut, not dictation. A
+        // chord's own modifiers were known when it went down, and letting them go is fine.
         if isPressed {
             if held & ~knownModifiers != 0 { _ = handler?(.chord) }
             knownModifiers = held
@@ -262,8 +247,31 @@ final class HotkeyMonitor {
     }
 
     private func keyDown(keyCode: Int64, flags: CGEventFlags, isRepeat: Bool) -> Bool {
+        let code = UInt16(truncatingIfNeeded: keyCode)
         if watchesControlOption {
-            controlOptionRecognizer.keyDown(pairHeld: flags.contains(.maskControl) || flags.contains(.maskAlternate))
+            if let chord = handsFreeChord {
+                if chord.matches(keyCode: code, eventFlags: flags.rawValue) {
+                    // Taken whole, auto-repeats too, so the key never types.
+                    if !isRepeat { _ = handler?(.controlOptionTap) }
+                    swallowed.insert(keyCode)
+                    return true
+                }
+            } else {
+                controlOptionRecognizer.keyDown(pairHeld: flags.contains(.maskControl) || flags.contains(.maskAlternate))
+            }
+        }
+
+        if let chord = key.chord, code == chord.keyCode {
+            // Its auto-repeats while held never reach the app.
+            if isPressed { return true }
+            if !isRepeat, chord.matches(keyCode: code, eventFlags: flags.rawValue) {
+                swallowed.remove(keyCode)
+                isPressed = true
+                knownModifiers = flags.rawValue & Self.deviceModifierMask
+                startReleaseWatch()
+                _ = handler?(.keyDown)
+                return true
+            }
         }
 
         if swallowed.contains(keyCode) {
@@ -321,10 +329,21 @@ final class HotkeyMonitor {
         swallowed.removeAll()
         resetControlOption()
         guard isPressed else { return }
-        if !CGEventSource.flagsState(.combinedSessionState).contains(key.unionFlag) {
+        if !isKeyStillDown {
             isPressed = false
             stopReleaseWatch()
             _ = handler?(.keyUp)
+        }
+    }
+
+    /// What the window server says about the push-to-talk key right now, for releases the tap
+    /// may have missed. A modifier is checked by its union flag, a chord by its key.
+    private var isKeyStillDown: Bool {
+        switch key {
+        case .modifier(let modifier):
+            CGEventSource.flagsState(.combinedSessionState).contains(modifier.cgUnionFlag)
+        case .keys(let chord):
+            CGEventSource.keyState(.combinedSessionState, key: CGKeyCode(chord.keyCode))
         }
     }
 
@@ -361,7 +380,7 @@ final class HotkeyMonitor {
             missedReleaseReadings = 0
             return
         }
-        if CGEventSource.flagsState(.combinedSessionState).contains(key.unionFlag) {
+        if isKeyStillDown {
             missedReleaseReadings = 0
             return
         }

@@ -1,4 +1,5 @@
 import MurmurDictionary
+import MurmurKit
 import Foundation
 import Observation
 
@@ -31,6 +32,15 @@ final class DictionaryStore {
     /// so every path that changes `entries` must bump it.
     private(set) var revision = 0
 
+    /// Keys each replacement had before it was edited, so History's uses of the old wording
+    /// still count toward it (see `LibraryUsage`). Saved beside the dictionary, keyed by the
+    /// replacement's current key: the text file has no ids to keep.
+    private(set) var aliases = UsageAliases()
+
+    /// Deletes still inside their undo window. `entries` keeps them until the window
+    /// closes; the page hides them and dictation ignores them.
+    let deletion: UndoableDeletion
+
     private var watcher: DispatchSourceFileSystemObject?
     /// Exactly what we last wrote (or read), so our own save — which the watcher only sees
     /// after `save()` has returned — doesn't read back as an external edit.
@@ -45,13 +55,20 @@ final class DictionaryStore {
         AppPaths.support.appendingPathComponent("dictionary.txt")
     }
 
+    static var aliasesURL: URL {
+        AppPaths.support.appendingPathComponent("dictionary-usage.json")
+    }
+
     private init() {
+        deletion = UndoableDeletion()
         load()
+        aliases = UsageAliases.load(from: Self.aliasesURL)
         startWatching()
     }
 
     /// In-memory only — for previews and snapshots. Never reads, writes or watches the file.
     init(preview entries: [DictionaryEntry]) {
+        deletion = UndoableDeletion()
         persists = false
         self.entries = entries
         revision = 1
@@ -60,49 +77,129 @@ final class DictionaryStore {
     // MARK: - Editing
 
     func add(_ entry: DictionaryEntry) {
+        // Adding moves on from a delete, and may reuse its wording: make that delete final.
+        deletion.commit()
         entries.append(entry)
         save()
     }
 
     func update(_ entry: DictionaryEntry) {
+        // Taking the wording of an entry waiting out its delete makes that delete final, so
+        // Undo can't bring back a duplicate (the editor ignores pending entries when it
+        // checks for clashes).
+        if entries.contains(where: { $0.id != entry.id && deletion.isPending($0.id) && Self.clashes($0, entry) }) {
+            deletion.commit()
+        }
         guard let index = entries.firstIndex(where: { $0.id == entry.id }) else { return }
+        let previous = entries[index]
         entries[index] = entry
+        recordRename(from: previous, to: entry)
         save()
     }
 
+    /// Removes an entry for good, at once. The page uses `delete(ids:undoWindow:)`.
     func delete(_ entry: DictionaryEntry) {
-        entries.removeAll { $0.id == entry.id }
-        save()
+        delete(ids: [entry.id])
     }
 
+    /// Removes entries for good, at once.
     func delete(ids: Set<UUID>) {
+        for entry in entries where ids.contains(entry.id) && entry.kind == .correction {
+            aliases.remove(owner: Self.usageKey(entry))
+        }
         entries.removeAll { ids.contains($0.id) }
+        saveAliases()
         save()
     }
 
-    /// Case- and diacritic-insensitive search across both sides of an entry.
+    /// Hides `ids` now and deletes them once `undoWindow` passes, unless `undoDeletion()`
+    /// brings them back first. A delete already waiting is committed first.
+    func delete(ids: Set<UUID>, undoWindow: Duration) {
+        let ids = ids.filter { id in entries.contains { $0.id == id } }
+        guard !ids.isEmpty else { return }
+        deletion.delete(ids, after: undoWindow) { [weak self] in self?.delete(ids: $0) }
+        revision += 1
+    }
+
+    /// Brings back the last delete, if its undo window is still open.
+    func undoDeletion() {
+        guard !deletion.pending.isEmpty else { return }
+        deletion.undo()
+        revision += 1
+    }
+
+    /// Finishes a delete still waiting out its undo window.
+    func commitDeletion() {
+        deletion.commit()
+    }
+
+    /// Every entry except those waiting out a delete's undo window, in order.
+    var visible: [DictionaryEntry] { deletion.visible(entries) }
+
+    /// Case- and diacritic-insensitive search across both sides of an entry. Entries waiting
+    /// out a delete's undo window are left out.
     func filtered(by query: String) -> [DictionaryEntry] {
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return entries }
-        return entries.filter {
+        guard !trimmed.isEmpty else { return visible }
+        return visible.filter {
             $0.write.localizedStandardContains(trimmed) || $0.hear.localizedStandardContains(trimmed)
         }
     }
 
-    /// A corrector over the current entries. Built once per `revision` rather than per
-    /// dictation — it compiles a regex per rule, on the main actor, between key-up and insert.
+    /// A corrector over the current entries, leaving out those waiting out a delete's undo
+    /// window. Built once per `revision` rather than per dictation — it compiles a regex per
+    /// rule, on the main actor, between key-up and insert. A pending delete, an undo and the
+    /// final removal all bump `revision`, so the cache never sees a stale set of entries.
     var corrector: DictionaryCorrector {
         if let cached = cachedCorrector, cached.rev == revision { return cached.value }
-        let value = DictionaryCorrector(entries: entries)
+        let value = DictionaryCorrector(entries: visible)
         cachedCorrector = (revision, value)
         return value
     }
 
+    /// Vocabulary for the engine, leaving out entries waiting out a delete. Cached per `revision`.
     var biasPhrases: [String] {
         if let cached = cachedBiasPhrases, cached.rev == revision { return cached.value }
-        let value = DictionaryCorrector.biasPhrases(from: entries)
+        let value = DictionaryCorrector.biasPhrases(from: visible)
         cachedBiasPhrases = (revision, value)
         return value
+    }
+
+    // MARK: - Usage
+
+    /// How many times each replacement has changed a dictation in `records`, by entry id.
+    func usageCounts(in records: [HistoryRecord]) -> [UUID: Int] {
+        LibraryUsage.correctionCounts(entries: entries, aliases: aliases, records: records)
+    }
+
+    /// The key History's corrections are matched against; only replacements have one.
+    private static func usageKey(_ entry: DictionaryEntry) -> String {
+        LibraryUsage.correctionKey(hear: entry.hear, write: entry.write)
+    }
+
+    /// The clashes the editor refuses: the same term twice, or two replacements for the same
+    /// heard text.
+    private static func clashes(_ a: DictionaryEntry, _ b: DictionaryEntry) -> Bool {
+        guard a.kind == b.kind else { return false }
+        switch a.kind {
+        case .term: return a.write.caseInsensitiveCompare(b.write) == .orderedSame
+        case .correction: return a.hear.caseInsensitiveCompare(b.hear) == .orderedSame
+        }
+    }
+
+    /// Carries a replacement's history across an edit to either side.
+    private func recordRename(from previous: DictionaryEntry, to entry: DictionaryEntry) {
+        guard previous.kind == .correction else { return }
+        let oldKey = Self.usageKey(previous)
+        guard entry.kind == .correction else {
+            aliases.remove(owner: oldKey)
+            saveAliases()
+            return
+        }
+        let newKey = Self.usageKey(entry)
+        guard oldKey != newKey else { return }
+        aliases.renamed(owner: oldKey, from: oldKey, to: newKey, newOwner: newKey)
+        saveAliases()
     }
 
     // MARK: - Persistence
@@ -119,11 +216,35 @@ final class DictionaryStore {
         lastWrittenText = text
 
         // Keep the ids of entries that didn't change, so a hand edit doesn't rebuild every row
-        // and an open edit sheet can still find its entry.
-        let parsed = DictionaryEntry.carryingIDs(from: entries, into: Self.parse(text))
+        // and an open editor, a pending delete or a selection can still find its entry.
+        let parsed = Self.keepingIDs(of: entries, in: Self.parse(text))
         guard parsed != entries else { return }  // e.g. only a comment changed
         entries = parsed
         revision += 1
+    }
+
+    /// The file has no ids, so every read makes new ones. An entry that's still there after
+    /// a reload keeps the id it had, so an open editor, a pending delete or a selection
+    /// still finds it.
+    static func keepingIDs(of old: [DictionaryEntry], in new: [DictionaryEntry]) -> [DictionaryEntry] {
+        guard !old.isEmpty else { return new }
+        var available: [String: [UUID]] = [:]
+        for entry in old {
+            available[identity(entry), default: []].append(entry.id)
+        }
+        return new.map { entry in
+            var entry = entry
+            let key = identity(entry)
+            if var ids = available[key], !ids.isEmpty {
+                entry.id = ids.removeFirst()
+                available[key] = ids
+            }
+            return entry
+        }
+    }
+
+    private static func identity(_ entry: DictionaryEntry) -> String {
+        "\(entry.kind.rawValue)\u{1F}\(entry.hear)\u{1F}\(entry.write)"
     }
 
     static func parse(_ text: String) -> [DictionaryEntry] {
@@ -162,6 +283,15 @@ final class DictionaryStore {
             try text.write(to: Self.fileURL, atomically: true, encoding: .utf8)
             lastWrittenText = text
         } catch {}
+    }
+
+    /// Writes the aliases, dropping any whose replacement is gone (edited or deleted in the
+    /// text file, where no rename can be seen).
+    private func saveAliases() {
+        let owners = Set(entries.filter { $0.kind == .correction }.map(Self.usageKey))
+        aliases.prune(keeping: owners)
+        guard persists else { return }
+        aliases.save(to: Self.aliasesURL)
     }
 
     private static let header = """

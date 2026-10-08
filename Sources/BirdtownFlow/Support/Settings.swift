@@ -51,8 +51,11 @@ enum SpeechEngineChoice: String, CaseIterable, Identifiable, Sendable {
 enum HandsFreeShortcut: String, CaseIterable, Identifiable, Sendable {
     /// Double-tap the push-to-talk key, or press Space while holding it.
     case doubleTap
-    /// Press Control and Option together, and again to finish. For a 🌐 key that macOS also
+    /// A shortcut of its own: a tap of Control and Option together, or the chord recorded in
+    /// `Settings.handsFreeChord`. Press it again to finish. For a 🌐 key that macOS also
     /// answers (a quick tap opens the emoji picker), or to match Wispr Flow.
+    ///
+    /// The name and saved value predate recorded chords and are kept so saved choices load.
     case controlOption
     case off
 
@@ -61,9 +64,14 @@ enum HandsFreeShortcut: String, CaseIterable, Identifiable, Sendable {
     /// `keyName` is the push-to-talk key as the UI spells it (`SetupKit.name(for:)`), so the
     /// hands-free picker names the key the same way as the push-to-talk picker above it.
     func title(keyName: String) -> String {
+        title(keyName: keyName, chord: nil)
+    }
+
+    /// `chord` is the recorded hands-free chord, which `.controlOption` uses instead of ⌃⌥.
+    func title(keyName: String, chord: KeyChord?) -> String {
         switch self {
         case .doubleTap: "Double-tap \(keyName)"
-        case .controlOption: "Control + Option"
+        case .controlOption: chord?.displayName ?? "Control + Option"
         case .off: "Off"
         }
     }
@@ -96,9 +104,9 @@ final class Settings {
 
     // MARK: Shortcuts
 
-    /// Hold to talk.
+    /// Hold to talk: one of the quick picks, or any modifier key or chord from the recorder.
     var pushToTalkKey: PushToTalkKey {
-        didSet { defaults.set(pushToTalkKey.rawValue, forKey: Keys.pushToTalkKey) }
+        didSet { defaults.set(pushToTalkKey.storageValue, forKey: Keys.pushToTalkKey) }
     }
     /// Starts a recording that keeps going without holding the key, until the same gesture
     /// (or a tap of the key) finishes it.
@@ -106,9 +114,37 @@ final class Settings {
         didSet { defaults.set(handsFreeShortcut.rawValue, forKey: Keys.handsFreeShortcut) }
     }
     var handsFreeEnabled: Bool { handsFreeShortcut != .off }
-    /// ⌃⌥V pastes the most recent dictation again.
+    /// The recorded hands-free chord (⌃⇧Space…), used when `handsFreeShortcut` is
+    /// `.controlOption`. `nil` means a tap of ⌃⌥. Kept while another hands-free option is
+    /// chosen, so switching back is one click.
+    var handsFreeChord: KeyChord? {
+        didSet { defaults.set(handsFreeChord?.storageValue, forKey: Keys.handsFreeChord) }
+    }
+    /// What `HotkeyMonitor.handsFreeChord` should be: the recorded chord while hands-free uses
+    /// its own shortcut, else `nil`.
+    var activeHandsFreeChord: KeyChord? {
+        handsFreeShortcut == .controlOption ? handsFreeChord : nil
+    }
+    /// Pastes the most recent dictation again.
     var pasteLastShortcutEnabled: Bool {
         didSet { defaults.set(pasteLastShortcutEnabled, forKey: Keys.pasteLastShortcutEnabled) }
+    }
+    /// The paste-last chord, ⌃⌥V unless the user recorded another.
+    var pasteLastShortcut: KeyChord {
+        didSet { defaults.set(pasteLastShortcut.storageValue, forKey: Keys.pasteLastShortcut) }
+    }
+
+    /// The shortcuts each action has, for `ShortcutRules.check(_:for:inUse:)`. A saved chord
+    /// counts even while its action is off or set to another gesture, since switching back
+    /// is one click and would otherwise bring back a clash. The ⌃⌥ tap and double-tap aren't
+    /// chords, so they can't collide and aren't listed.
+    var shortcutsInUse: [ShortcutRole: KeyShortcut] {
+        var inUse: [ShortcutRole: KeyShortcut] = [
+            .pushToTalk: pushToTalkKey,
+            .pasteLast: .keys(pasteLastShortcut),
+        ]
+        if let handsFreeChord { inUse[.handsFree] = .keys(handsFreeChord) }
+        return inUse
     }
 
     // MARK: Feedback
@@ -227,7 +263,9 @@ final class Settings {
         /// Before the shortcut could be chosen: hands-free on (double-tap) or off.
         static let handsFreeEnabled = "handsFreeEnabled"
         static let handsFreeShortcut = "handsFreeShortcut"
+        static let handsFreeChord = "handsFreeChord"
         static let pasteLastShortcutEnabled = "pasteLastShortcutEnabled"
+        static let pasteLastShortcut = "pasteLastShortcut"
         static let soundEnabled = "soundEnabled"
         static let showIdlePill = "showIdlePill"
         static let duckAudioWhileRecording = "duckAudioWhileRecording"
@@ -252,14 +290,17 @@ final class Settings {
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
-        pushToTalkKey = PushToTalkKey(rawValue: defaults.string(forKey: Keys.pushToTalkKey) ?? "") ?? .fn
+        // Saved values from before recorded shortcuts ("fn", "rightOption"…) load unchanged.
+        pushToTalkKey = PushToTalkKey(storageValue: defaults.string(forKey: Keys.pushToTalkKey) ?? "") ?? .fn
         if let saved = HandsFreeShortcut(rawValue: defaults.string(forKey: Keys.handsFreeShortcut) ?? "") {
             handsFreeShortcut = saved
         } else {
             let wasOn = defaults.object(forKey: Keys.handsFreeEnabled) as? Bool ?? true
             handsFreeShortcut = wasOn ? .doubleTap : .off
         }
+        handsFreeChord = KeyChord(storageValue: defaults.string(forKey: Keys.handsFreeChord) ?? "")
         pasteLastShortcutEnabled = defaults.object(forKey: Keys.pasteLastShortcutEnabled) as? Bool ?? true
+        pasteLastShortcut = KeyChord(storageValue: defaults.string(forKey: Keys.pasteLastShortcut) ?? "") ?? .pasteLastDefault
         soundEnabled = defaults.object(forKey: Keys.soundEnabled) as? Bool ?? true
         showIdlePill = defaults.object(forKey: Keys.showIdlePill) as? Bool ?? true
         duckAudioWhileRecording = defaults.object(forKey: Keys.duckAudioWhileRecording) as? Bool ?? false

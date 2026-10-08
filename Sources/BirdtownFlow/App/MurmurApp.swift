@@ -45,13 +45,22 @@ struct MurmurCommands: Commands {
             .keyboardShortcut("o", modifiers: .command)
         }
         CommandGroup(after: .pasteboard) {
+            // Shows ⌃⌥V only while that is the paste-last shortcut. A recorded chord is still
+            // honoured by the global hot key; the menu just shows no key for it.
             Button("Paste Last Dictation") { AppModel.shared.controller.pasteLast() }
-                .keyboardShortcut("v", modifiers: [.control, .option])
+                .keyboardShortcut(Self.pasteLastMenuShortcut)
             // Hands-free from the keyboard while the app is in front, now that the toolbar
             // has no Dictate button.
             Button("Start or Stop Dictating") { AppModel.shared.controller.toggleRecording() }
                 .keyboardShortcut("d", modifiers: [.command, .shift])
         }
+    }
+
+    @MainActor
+    private static var pasteLastMenuShortcut: KeyboardShortcut? {
+        let settings = Settings.shared
+        guard settings.pasteLastShortcutEnabled, settings.pasteLastShortcut == .pasteLastDefault else { return nil }
+        return KeyboardShortcut("v", modifiers: [.control, .option])
     }
 }
 

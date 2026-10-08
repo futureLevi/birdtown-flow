@@ -3,85 +3,94 @@ import MurmurKit
 import SwiftUI
 
 /// The Lab: named polish configurations (provider, model, effort, instructions), tried on the
-/// same text side by side, then handed the writing styles they should polish. Styles without
-/// one keep following Settings, so nothing changes for everyday dictation until you say so.
+/// same text and compared under one header per text, then handed the writing styles they
+/// should polish. Styles without one keep following Settings, so nothing changes for everyday
+/// dictation until you say so.
 struct LabView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.mainPreview) private var preview
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var deleting: PolishConfiguration?
 
     var body: some View {
         let bench = model.bench
-        ScrollView {
-            VStack(alignment: .leading, spacing: Spacing.xxl) {
-                PageHeader(
-                    title: "Lab",
-                    subtitle: "Tune polish configurations on real dictations, then pick the styles each one polishes. "
-                        + "Styles without one follow Settings."
-                ) {
-                    Button {
-                        bench.addNew()
-                    } label: {
-                        Label("New Configuration", systemImage: "plus")
-                    }
-                    .buttonStyle(.flowSecondary)
-                    .keyboardShortcut("n", modifiers: .command)
-                    .help("Start a new configuration (⌘N)")
-                }
-
-                if model.settings.polishProvider == .off {
-                    Banner(
-                        symbol: "sparkles",
-                        title: "AI polish is off",
-                        message: "Configurations still run here, but dictation won't use them until AI polish is on.",
-                        tone: .info
+        ScrollViewReader { proxy in
+            ScrollView {
+                VStack(alignment: .leading, spacing: Spacing.xxl) {
+                    PageHeader(
+                        title: "Lab",
+                        subtitle: "Tune polish configurations on real dictations, then pick the styles each one polishes. "
+                            + "Styles without one follow Settings."
                     ) {
-                        SettingsLink {
-                            Text("Open Settings")
+                        Button {
+                            bench.addNew()
+                        } label: {
+                            Label("New Configuration", systemImage: "plus")
                         }
                         .buttonStyle(.flowSecondary)
-                        .controlSize(.small)
+                        .keyboardShortcut("n", modifiers: .command)
+                        .help("Start a new configuration (⌘N)")
                     }
-                }
 
-                VStack(alignment: .leading, spacing: Spacing.m) {
-                    SectionHeader("Configurations", detail: "\(model.lab.configurations.count)")
-                    if model.lab.configurations.isEmpty {
-                        // No list to pick from, so no empty column beside the message.
-                        EmptyState(
-                            symbol: "flask",
-                            title: "No configurations yet",
-                            message: "Start one to try polish settings on real dictations."
+                    if model.settings.polishProvider == .off {
+                        Banner(
+                            symbol: "sparkles",
+                            title: "AI polish is off",
+                            message: "Configurations still run here, but dictation won't use them until AI polish is on.",
+                            tone: .info
                         ) {
-                            Button("New Configuration") { bench.addNew() }
-                                .buttonStyle(.flowPrimary)
+                            SettingsLink {
+                                Text("Open Settings")
+                            }
+                            .buttonStyle(.flowSecondary)
+                            .controlSize(.small)
                         }
-                        .cardSurface()
-                    } else {
-                        HStack(alignment: .top, spacing: Spacing.m) {
-                            LabConfigurationList(onDelete: { deleting = $0 })
+                    }
+
+                    VStack(alignment: .leading, spacing: Spacing.m) {
+                        SectionHeader("Configurations", detail: "\(model.lab.configurations.count)")
+                        if model.lab.configurations.isEmpty {
+                            // No list to pick from, so no empty column beside the message.
+                            EmptyState(
+                                symbol: "flask",
+                                title: "No configurations yet",
+                                message: "Start one to try polish settings on real dictations."
+                            ) {
+                                Button("New Configuration") { bench.addNew() }
+                                    .buttonStyle(.flowPrimary)
+                            }
+                            .cardSurface()
+                        } else {
+                            HStack(alignment: .top, spacing: Spacing.m) {
+                                LabConfigurationList(onDelete: { deleting = $0 }) { id in
+                                    // No anchor: scroll only as far as it takes to bring the row into view.
+                                    withAnimation(Motion.resolve(Motion.snappy, reduceMotion: reduceMotion)) {
+                                        proxy.scrollTo(LabRowAnchor(id: id))
+                                    }
+                                }
                                 .frame(width: Layout.Lab.listWidth)
-                            if let selected = bench.selected {
-                                LabEditor(configuration: selected, onDelete: { deleting = $0 }, onApplied: { applied() })
-                                    // A fresh editor per configuration: no focus or scroll carried over.
-                                    .id(selected.id)
-                            } else {
-                                EmptyState(
-                                    symbol: "flask",
-                                    title: "No configuration open",
-                                    message: "Pick a configuration on the left."
-                                )
-                                .cardSurface()
+                                if let selected = bench.selected {
+                                    LabEditor(configuration: selected, onDelete: { deleting = $0 }, onApplied: { applied() })
+                                        // A fresh editor per configuration: no focus or scroll carried over.
+                                        .id(selected.id)
+                                } else {
+                                    EmptyState(
+                                        symbol: "flask",
+                                        title: "No configuration open",
+                                        message: "Pick a configuration on the left."
+                                    )
+                                    .cardSurface()
+                                }
                             }
                         }
                     }
+
+                    LabTestCard()
+
+                    LabResults()
                 }
-
-                LabTestCard()
-
-                LabResults()
+                .pageLayout()
             }
-            .pageLayout()
         }
         .confirmationDialog(
             "Delete “\(deleting?.displayName ?? "")”?",
@@ -120,22 +129,33 @@ struct LabView: View {
 
 // MARK: - Configurations
 
+/// Behaves like a Mail list once it has focus (a click on a row, or Tab): ↑/↓ open the
+/// configuration above or below, Delete asks to delete the open one, and the open row wears
+/// the Signal blue focus ring. ⌘D (Duplicate) lives on the editor's button.
 private struct LabConfigurationList: View {
     let onDelete: (PolishConfiguration) -> Void
+    /// Scrolls the page so a row reached from the keyboard is on screen.
+    let reveal: (UUID) -> Void
     @Environment(AppModel.self) private var model
+    @FocusState private var listFocused: Bool
 
     var body: some View {
         let bench = model.bench
+        let order = model.lab.configurations.map(\.id)
         VStack(spacing: Spacing.s) {
             ForEach(model.lab.configurations) { saved in
                 LabConfigurationRow(
                     configuration: bench.version(of: saved.id) ?? saved,
                     styles: model.lab.styles(for: saved.id),
                     isSelected: bench.selectedID == saved.id,
+                    hasFocusRing: listFocused && bench.selectedID == saved.id,
                     hasUnsavedChanges: bench.hasUnsavedChanges(saved.id)
                 ) {
                     bench.selectedID = saved.id
+                    // So ↑/↓ and Delete work straight after a click, as in any Mac list.
+                    listFocused = true
                 }
+                .id(LabRowAnchor(id: saved.id))
                 .contextMenu {
                     Button("Duplicate") { bench.duplicate(saved.id) }
                     Divider()
@@ -143,13 +163,42 @@ private struct LabConfigurationList: View {
                 }
             }
         }
+        .focusable()
+        .focusEffectDisabled()
+        .focused($listFocused)
+        .onKeyPress(keys: [.upArrow, .downArrow]) { press in
+            move(press.key == .upArrow ? -1 : 1, order: order)
+        }
+        .onDeleteCommand {
+            guard let id = bench.selectedID, let saved = model.lab.configuration(id: id) else { return }
+            onDelete(saved)
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Configurations")
     }
+
+    private func move(_ step: Int, order: [UUID]) -> KeyPress.Result {
+        let bench = model.bench
+        guard let target = PolishLabNavigation.neighbor(of: bench.selectedID, step: step, in: order) else {
+            return .ignored
+        }
+        bench.selectedID = target
+        reveal(target)
+        return .handled
+    }
+}
+
+/// A list row's scroll target, apart from the editor's `.id`, which is the same configuration id.
+private struct LabRowAnchor: Hashable {
+    let id: UUID
 }
 
 private struct LabConfigurationRow: View {
     let configuration: PolishConfiguration
     let styles: Set<WritingStyle>
     let isSelected: Bool
+    /// The list has keyboard focus and this is the open row.
+    let hasFocusRing: Bool
     let hasUnsavedChanges: Bool
     let action: () -> Void
 
@@ -196,7 +245,10 @@ private struct LabConfigurationRow: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        // The list takes focus as a whole; a row never does on its own.
+        .focusable(false)
         .cardSurface(isSelected: isSelected, isHovered: isHovered && !isSelected, radius: Radius.m)
+        .flowFocusRing(RoundedRectangle(cornerRadius: Radius.m, style: .continuous), drawn: hasFocusRing)
         .onHover { isHovered = $0 }
         .accessibilityAddTraits(isSelected ? .isSelected : [])
         .accessibilityHint(hasUnsavedChanges ? "Has unsaved changes" : "")
@@ -232,6 +284,7 @@ private struct LabEditor: View {
                     }
                     HStack(spacing: Spacing.xxs) {
                         IconButton(symbol: "plus.square.on.square", label: "Duplicate") { bench.duplicate(id) }
+                            .keyboardShortcut("d", modifiers: .command)
                         IconButton(symbol: "trash", label: "Delete…") { onDelete(saved ?? configuration) }
                     }
                     .padding(.bottom, Spacing.xxs)
@@ -616,8 +669,7 @@ private struct LabRecentMenu: View {
     }
 
     private static func menuTitle(for record: HistoryRecord) -> String {
-        let words = record.rawText.split(whereSeparator: \.isWhitespace)
-        let excerpt = words.prefix(9).joined(separator: " ") + (words.count > 9 ? "…" : "")
+        let excerpt = PolishLabResults.excerpt(record.rawText, maxWords: 9)
         let app = record.context?.appName ?? record.context?.category.title ?? "Dictation"
         return "\(app): \(excerpt)"
     }
@@ -638,14 +690,86 @@ private struct LabResults: View {
                         .controlSize(.small)
                         .disabled(bench.isRunning)
                 }
-                ForEach(bench.runs) { run in
-                    LabRunCard(run: run, timeLimit: model.settings.polishTimeout)
+                // Runs on the same text, style and app sit under one header naming the text, so a
+                // Run All batch reads as one comparison and older tests stay apart from it.
+                VStack(alignment: .leading, spacing: Spacing.xxl) {
+                    ForEach(LabRunGroup.groups(bench.runs)) { group in
+                        VStack(alignment: .leading, spacing: Spacing.m) {
+                            LabRunGroupHeader(group: group)
+                            ForEach(group.runs) { run in
+                                LabRunCard(run: run, timeLimit: model.settings.polishTimeout)
+                            }
+                        }
+                    }
                 }
                 Text("Results and unsaved edits are kept until Birdtown Flow quits.")
                     .font(Typography.caption)
                     .foregroundStyle(Palette.inkTertiary)
             }
         }
+    }
+}
+
+/// Neighbouring runs on the same test input, newest first.
+private struct LabRunGroup: Identifiable {
+    let runs: [LabBench.Run]
+
+    /// The oldest run's: new runs join at the top, so the group keeps its identity (and its
+    /// cards their state) while a Run All batch fills in.
+    var id: UUID { runs[runs.count - 1].id }
+    var input: LabBench.TestInput { runs[0].testInput }
+
+    static func groups(_ runs: [LabBench.Run]) -> [LabRunGroup] {
+        PolishLabResults.consecutiveGroups(runs) { $0.testInput }.map(LabRunGroup.init(runs:))
+    }
+}
+
+/// Names the text a group of results ran on, with the style and app it stood in for. A group
+/// from an earlier test says so and can put its text back in the test card.
+private struct LabRunGroupHeader: View {
+    let group: LabRunGroup
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        let bench = model.bench
+        let input = group.input
+        let isCurrent = input == bench.currentTestInput
+        HStack(alignment: .center, spacing: Spacing.m) {
+            VStack(alignment: .leading, spacing: Spacing.xxs) {
+                Text("“\(PolishLabResults.excerpt(input.text, maxWords: Self.excerptWords))”")
+                    .font(Typography.callout)
+                    .foregroundStyle(isCurrent ? Palette.inkSecondary : Palette.inkTertiary)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                    .help(input.text)
+                Text(detail(input, isCurrent: isCurrent))
+                    .font(Typography.caption)
+                    .foregroundStyle(Palette.inkTertiary)
+                    .lineLimit(1)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            // The text and its details read as one header; the button stays its own control.
+            .accessibilityElement(children: .combine)
+            .accessibilityAddTraits(.isHeader)
+            if !isCurrent {
+                Button("Use This Text") { bench.useTestInput(of: group.runs[0]) }
+                    .buttonStyle(.flowGhost)
+                    .controlSize(.small)
+                    .disabled(bench.isRunning)
+                    .help("Put this text, style and app back in Test, to run it again")
+            }
+        }
+    }
+
+    /// Enough to recognise a text; the full text is on the tooltip.
+    private static let excerptWords = 24
+
+    private func detail(_ input: LabBench.TestInput, isCurrent: Bool) -> String {
+        let count = group.runs.count
+        var parts = [input.style.title, input.appName ?? input.category.title,
+                     count == 1 ? "1 result" : "\(count) results"]
+        if !isCurrent { parts.append("Earlier text") }
+        return parts.joined(separator: " · ")
     }
 }
 
@@ -691,10 +815,10 @@ private struct LabRunCard: View {
         }
     }
 
+    /// The text, style and app are on the group's header above.
     private var contextLine: String {
-        let destination = run.appName ?? run.category.title
         let time = run.ranAt.formatted(date: .omitted, time: .shortened)
-        return [run.configuration.summary, run.style.title, destination, time].joined(separator: " · ")
+        return [run.configuration.summary, time].joined(separator: " · ")
     }
 
     @ViewBuilder

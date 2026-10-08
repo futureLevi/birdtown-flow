@@ -13,6 +13,14 @@ extension SnapshotCatalog {
         search.historyQuery = "migration"
         var original = sample
         original.originalRecordID = records.first { !$0.corrections.isEmpty }?.id
+        // Only what the engine heard says "whisper"; the text says "Wispr".
+        var heardSearch = sample
+        heardSearch.historyQuery = "whisper"
+        // The hit is at the end of a long email, past the collapsed preview.
+        var excerptSearch = sample
+        excerptSearch.historyQuery = "afternoon"
+        var selected = sample
+        selected.historySelection = Array(records.filter(\.hasText).prefix(3).map(\.id))
 
         return [
             SnapshotRenderer.Shot("home", size: size) { window(.home, records: records, preview: sample) },
@@ -21,6 +29,28 @@ extension SnapshotCatalog {
             SnapshotRenderer.Shot("history-search", size: size) { window(.history, records: records, preview: search) },
             SnapshotRenderer.Shot("history-expanded-original", size: size) {
                 window(.history, records: records, preview: original)
+            },
+            SnapshotRenderer.Shot("history-search-heard", size: size) {
+                window(.history, records: records, preview: heardSearch)
+            },
+            SnapshotRenderer.Shot("history-search-excerpt", size: size) {
+                window(.history, records: records, preview: excerptSearch)
+            },
+            // ⌘-clicked or ⌘A: the bar that says how many and offers Copy and Delete.
+            SnapshotRenderer.Shot("history-selection", size: size) {
+                window(.history, records: records, preview: selected)
+            },
+            // A delete from Recent, still undoable: Home shows the same toast as History.
+            SnapshotRenderer.Shot("home-undo-delete", size: size) {
+                undoDelete(.home, records: records, preview: sample)
+            },
+            SnapshotRenderer.Shot("history-undo-delete", size: size) {
+                undoDelete(.history, records: records, preview: sample)
+            },
+            // Transcribe Again on dictations that worked: one in flight, one whose new attempt
+            // failed (old text kept), one replaced (Restore earlier text).
+            SnapshotRenderer.Shot("history-transcribe-again", size: size) {
+                transcribeAgain(records: records, preview: sample)
             },
             SnapshotRenderer.Shot("dictionary", size: size) { window(.dictionary, records: records, preview: sample) },
             SnapshotRenderer.Shot("snippets", size: size) { window(.snippets, records: records, preview: sample) },
@@ -42,7 +72,7 @@ extension SnapshotCatalog {
             SnapshotRenderer.Shot("main-components", size: CGSize(width: 760, height: 470)) {
                 components(records: records)
             },
-        ]
+        ] + library(size: size, records: records, preview: sample)  // SnapshotCatalog+Library.swift
     }
 
     /// A fixed moment in the live orb's turn, so recording states render identically.
@@ -181,6 +211,41 @@ extension SnapshotCatalog {
         let model = AppModel.preview(records: records)
         model.section = section
         return model
+    }
+
+    /// `section` with the newest dictation that has text just deleted, inside its undo window.
+    private static func undoDelete(_ section: SidebarSection, records: [HistoryRecord], preview: MainPreview) -> some View {
+        let model = previewModel(records: records, section: section)
+        if let first = records.sorted(by: { $0.createdAt > $1.createdAt }).first(where: \.hasText) {
+            // Every shot is built before any renders: hold the undo window open past them all.
+            model.historyDeletion.delete([first.id], window: .seconds(3600))
+        }
+        return MainView()
+            .environment(model)
+            .environment(\.mainPreview, preview)
+            .transaction { $0.disablesAnimations = true }
+    }
+
+    /// History with the first three dictations that have text mid-"Transcribe Again", kept
+    /// after a failed attempt, and replaced.
+    private static func transcribeAgain(records: [HistoryRecord], preview: MainPreview) -> some View {
+        let model = previewModel(records: records, section: .history)
+        let tracker = RetryTracker()
+        let good = records.sorted(by: { $0.createdAt > $1.createdAt }).filter(Retranscription.hasGoodText)
+        if good.count >= 3 {
+            var earlier = good[2]
+            earlier.finalText = "An earlier attempt at this dictation."
+            tracker.preview(
+                inFlight: [good[0].id],
+                replaced: [good[2].id: earlier],
+                keptReasons: [good[1].id: "No speech was heard this time."]
+            )
+        }
+        model.retries = tracker
+        return MainView()
+            .environment(model)
+            .environment(\.mainPreview, preview)
+            .transaction { $0.disablesAnimations = true }
     }
 
     /// The main window on `section`, backed by an in-memory model. Animations are disabled

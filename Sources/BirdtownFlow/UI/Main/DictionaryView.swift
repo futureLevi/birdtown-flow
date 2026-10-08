@@ -10,13 +10,24 @@ struct DictionaryView: View {
     @State private var query = ""
     @State private var isAdding = false
     @State private var editing: DictionaryEntry?
-    /// Fired counts only change with history, not with each keystroke in the search field.
-    @State private var firedMemo = ViewMemo<[HistoryRecord], [String: Int]>()
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// Usage counts only change with history or the dictionary (entries and their aliases,
+    /// which only change alongside a `revision` bump), not with each keystroke in the search.
+    @State private var firedMemo = ViewMemo<FiredKey, [UUID: Int]>()
+
+    private struct FiredKey: Equatable {
+        // Cheapest comparison first.
+        let revision: Int
+        let records: [HistoryRecord]
+    }
 
     var body: some View {
         let store = model.dictionary
+        // Entries waiting out a delete's undo window are already left out.
         let entries = store.filtered(by: query)
-        let fired = firedMemo.value(for: model.history.records) { Self.firedCounts(in: $0) }
+        let fired = firedMemo.value(for: FiredKey(revision: store.revision, records: model.history.records)) {
+            store.usageCounts(in: $0.records)
+        }
         ScrollView {
             VStack(alignment: .leading, spacing: Spacing.xxl) {
                 PageHeader(
@@ -33,7 +44,7 @@ struct DictionaryView: View {
                     .help("Add a word or a replacement (⌘N)")
                 }
 
-                if store.entries.isEmpty {
+                if store.visible.isEmpty {
                     EmptyState(
                         symbol: "character.book.closed",
                         title: "Start with a word Birdtown Flow gets wrong",
@@ -77,6 +88,12 @@ struct DictionaryView: View {
             }
             .pageLayout()
         }
+        .overlay(alignment: .bottom) {
+            UndoToast(message: undoMessage) { model.dictionary.undoDeletion() }
+        }
+        .animation(Motion.resolve(Motion.smooth, reduceMotion: reduceMotion), value: store.deletion.pending)
+        // The toast lives on this page: leaving it makes the delete final.
+        .onDisappear { model.dictionary.commitDeletion() }
         .sheet(isPresented: $isAdding) {
             DictionaryEditorSheet(original: nil) { model.dictionary.add($0) }
                 .environment(model)
@@ -88,7 +105,7 @@ struct DictionaryView: View {
     }
 
     @ViewBuilder
-    private func group(title: String, explainer: String, entries: [DictionaryEntry], fired: [String: Int]) -> some View {
+    private func group(title: String, explainer: String, entries: [DictionaryEntry], fired: [UUID: Int]) -> some View {
         if !entries.isEmpty {
             VStack(alignment: .leading, spacing: Spacing.m) {
                 VStack(alignment: .leading, spacing: Spacing.xs) {
@@ -102,14 +119,14 @@ struct DictionaryView: View {
                         if index > 0 { RowDivider(leadingInset: Spacing.l) }
                         DictionaryRow(
                             entry: entry,
-                            firedCount: entry.kind == .correction ? fired[entry.write.lowercased()] ?? 0 : 0,
+                            firedCount: entry.kind == .correction ? fired[entry.id] ?? 0 : 0,
                             onToggle: { isOn in
                                 var updated = entry
                                 updated.isEnabled = isOn
                                 model.dictionary.update(updated)
                             },
                             onEdit: { editing = entry },
-                            onDelete: { model.dictionary.delete(entry) }
+                            onDelete: { delete(entry) }
                         )
                     }
                 }
@@ -134,15 +151,23 @@ struct DictionaryView: View {
         }
     }
 
-    /// How often each replacement has fired, keyed by what it writes (lowercased).
-    static func firedCounts(in records: [HistoryRecord]) -> [String: Int] {
-        var counts: [String: Int] = [:]
-        for record in records {
-            for correction in record.corrections {
-                counts[correction.to.lowercased(), default: 0] += correction.count
-            }
-        }
-        return counts
+    /// Deletes at once, with Undo (and ⌘Z) for `Motion.undoWindow`, as History does.
+    private func delete(_ entry: DictionaryEntry) {
+        if editing?.id == entry.id { editing = nil }
+        model.dictionary.delete(ids: [entry.id], undoWindow: Motion.undoWindow)
+        UndoToast.announce("\(Self.name(of: entry)) deleted")
+    }
+
+    /// "“cloud code → Claude Code” deleted", while a delete can still be undone.
+    private var undoMessage: String? {
+        let store = model.dictionary
+        let pending = store.entries.filter { store.deletion.isPending($0.id) }
+        guard let first = pending.first else { return nil }
+        return pending.count == 1 ? "\(Self.name(of: first)) deleted" : "\(pending.count) entries deleted"
+    }
+
+    private static func name(of entry: DictionaryEntry) -> String {
+        entry.kind == .correction ? "“\(entry.hear) → \(entry.write)”" : "“\(entry.write)”"
     }
 }
 
@@ -299,7 +324,8 @@ struct DictionaryEditorSheet: View {
         if fields.contains(where: { $0.contains(where: \.isNewline) }) {
             return "Each entry has to fit on one line."
         }
-        let others = model.dictionary.entries.filter { $0.id != entry.id }
+        // An entry waiting out its delete doesn't count: saving this one makes that delete final.
+        let others = model.dictionary.visible.filter { $0.id != entry.id }
         switch kind {
         case .term:
             guard !entry.write.isEmpty else { return nil }

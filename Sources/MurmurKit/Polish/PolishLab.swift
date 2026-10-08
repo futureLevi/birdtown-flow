@@ -416,3 +416,53 @@ public enum WordDiff {
         return trimmed.isEmpty ? straight : trimmed
     }
 }
+
+// MARK: - Lab page helpers
+
+/// Moving through the Lab's configuration list from the keyboard, like a Mail list: ↑ and ↓
+/// stop at the ends rather than wrapping.
+public enum PolishLabNavigation {
+    /// The id `step` rows from `current` in `order`, clamped to the ends. With nothing (or
+    /// something no longer listed) selected, ↓ starts at the top and ↑ at the bottom. `nil`
+    /// when there's nowhere to go: an empty list, no step, or already at that end.
+    public static func neighbor<ID: Equatable>(of current: ID?, step: Int, in order: [ID]) -> ID? {
+        guard !order.isEmpty, step != 0 else { return nil }
+        guard let current, let index = order.firstIndex(of: current) else {
+            return step > 0 ? order.first : order.last
+        }
+        let target = order[min(max(index + step, 0), order.count - 1)]
+        return target == current ? nil : target
+    }
+}
+
+/// How the Lab lays out its results: runs on the same text, in the same style and app, sit
+/// together under one header naming the text, so a Run All batch reads as one comparison and
+/// older runs on other text don't look like they belong to it.
+public enum PolishLabResults {
+    /// Neighbouring items with equal keys, in their original order. Items with the same key
+    /// that aren't next to each other stay in separate groups, so time order is kept.
+    public static func consecutiveGroups<Item, Key: Equatable>(
+        _ items: [Item], by key: (Item) -> Key
+    ) -> [[Item]] {
+        var groups: [[Item]] = []
+        var lastKey: Key?
+        for item in items {
+            let itemKey = key(item)
+            if let lastKey, lastKey == itemKey, !groups.isEmpty {
+                groups[groups.count - 1].append(item)
+            } else {
+                groups.append([item])
+            }
+            lastKey = itemKey
+        }
+        return groups
+    }
+
+    /// The text on one line: whitespace and line breaks collapsed, cut to `maxWords` words
+    /// with an ellipsis when there were more.
+    public static func excerpt(_ text: String, maxWords: Int) -> String {
+        let words = text.split(whereSeparator: { $0.isWhitespace || $0.isNewline })
+        let kept = words.prefix(max(maxWords, 0)).joined(separator: " ")
+        return words.count > maxWords ? kept + "…" : kept
+    }
+}

@@ -46,9 +46,21 @@ final class PermissionsMonitor {
         }
     }
 
-    /// Starts polling (≈ every second) until `stopPolling()`.
-    func startPolling() {
+    /// Who's watching. Polling runs while anyone is, so the menu bar closing doesn't stop
+    /// onboarding's polling or the other way round.
+    enum Watcher: Hashable {
+        /// Onboarding's permission steps.
+        case setup
+        /// The menu bar window, while it shows a permission to fix.
+        case menuBar
+    }
+
+    @ObservationIgnored private var watchers: Set<Watcher> = []
+
+    /// Starts polling (≈ every second) until every watcher has called `stopPolling(_:)`.
+    func startPolling(_ watcher: Watcher = .setup) {
         refresh()
+        watchers.insert(watcher)
         guard timer == nil else { return }
         let timer = Timer(timeInterval: 1, repeats: true) { [weak self] _ in
             Task { @MainActor in self?.refresh() }
@@ -59,7 +71,10 @@ final class PermissionsMonitor {
         self.timer = timer
     }
 
-    func stopPolling() {
+    /// Ends `watcher`'s interest. Safe to call more than once.
+    func stopPolling(_ watcher: Watcher = .setup) {
+        watchers.remove(watcher)
+        guard watchers.isEmpty else { return }
         timer?.invalidate()
         timer = nil
     }

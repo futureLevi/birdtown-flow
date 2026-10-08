@@ -57,10 +57,10 @@ extension SnapshotCatalog {
         var shortcutWispr = shortcut
         shortcutWispr.wisprRunning = true
 
-        // Trying before the download finishes.
+        // Trying before the download finishes: Apple Speech stands in, so the try isn't held up.
         let practiceWaiting = shortcut
         var practiceFailed = shortcut
-        practiceFailed.phase = .failed("Speech model is still downloading")
+        practiceFailed.phase = .failed("Didn't catch any words · it's saved in History")
 
         var listening = shortcut
         listening.modelState = .ready
@@ -70,6 +70,11 @@ extension SnapshotCatalog {
         done.phase = .idle
         done.practiceSucceeded = true
         done.practiceText = "Birdtown Flow is my new favourite way to write."
+
+        // The try worked while Parakeet was still downloading: Apple Speech wrote it.
+        var doneStandIn = done
+        doneStandIn.modelState = .downloading(progress: 0.42)
+        doneStandIn.practiceEngine = "Apple Speech"
 
         return [
             shot("1-welcome", .welcome, fresh),
@@ -89,6 +94,7 @@ extension SnapshotCatalog {
             shot("6-practice-failed", .practice, practiceFailed),
             shot("6-practice-listening", .practice, listening),
             shot("6-practice-done", .practice, done),
+            shot("6-practice-done-stand-in", .practice, doneStandIn),
         ]
     }
 

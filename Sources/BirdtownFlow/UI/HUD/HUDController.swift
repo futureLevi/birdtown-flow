@@ -17,10 +17,17 @@ final class HUDController {
     private var hideTask: Task<Void, Never>?
     private var mouseMonitors: [Any] = []
     private var screenObserver: NSObjectProtocol?
+    /// Whether the pointer has moved since the current state appeared. A message only holds
+    /// itself open for a pointer that came to it: one that happened to be resting where the
+    /// pill appeared (bottom centre, while the user types) must not keep it up forever.
+    private var pointerMovedSinceShown = false
 
     func attach(to app: AppModel) {
         guard panel == nil else { return }
-        let model = HUDModel(controller: app.controller, settings: app.settings)
+        let model = HUDModel(controller: app.controller, settings: app.settings) { [weak app] followUp in
+            guard let app else { return }
+            Self.perform(followUp, in: app)
+        }
         let panel = HUDPanel(size: Layout.HUD.panelSize)
         let hosting = HUDHostingView(rootView: HUDRootView(model: model))
         // The panel's size is fixed; never let SwiftUI's ideal size resize it.
@@ -51,6 +58,8 @@ final class HUDController {
         withObservationTracking {
             _ = model.controller.phase
             _ = model.controller.isHandsFree
+            _ = model.controller.notice
+            _ = model.controller.followUp
             _ = model.settings.showIdlePill
         } onChange: { [weak self] in
             // `onChange` fires before the new value lands; hop to the main actor (which runs
@@ -73,6 +82,7 @@ final class HUDController {
         }
         if phase != lastPhase {
             announce(phase, state: model.state)
+            pointerMovedSinceShown = false
         }
         lastPhase = phase
 
@@ -156,10 +166,10 @@ final class HUDController {
             // Hop to the main actor rather than asserting we're on it: a wrong assumption
             // there would crash the app, and a hop per mouse move costs nothing.
             let global = NSEvent.addGlobalMonitorForEvents(matching: [.mouseMoved, .leftMouseDragged]) { [weak self] _ in
-                Task { @MainActor [weak self] in self?.updateHover() }
+                Task { @MainActor [weak self] in self?.pointerMoved() }
             }
             let local = NSEvent.addLocalMonitorForEvents(matching: [.mouseMoved, .leftMouseDragged]) { [weak self] event in
-                Task { @MainActor [weak self] in self?.updateHover() }
+                Task { @MainActor [weak self] in self?.pointerMoved() }
                 return event
             }
             mouseMonitors = [global, local].compactMap { $0 }
@@ -169,6 +179,11 @@ final class HUDController {
             }
             mouseMonitors.removeAll()
         }
+        updateHover()
+    }
+
+    private func pointerMoved() {
+        pointerMovedSinceShown = true
         updateHover()
     }
 
@@ -187,12 +202,58 @@ final class HUDController {
             let point = CGPoint(x: mouse.x - panel.frame.minX, y: mouse.y - panel.frame.minY)
             hover = HUDMetrics.hitTest(point, state: state)
         }
+        // A message pill takes the pointer only once the pointer has moved: one that was
+        // already resting where the pill appeared (over a chat box near the Dock) must not
+        // turn the user's next click into "open History" and pull focus from their app.
+        if state.hasAction, !pointerMovedSinceShown {
+            hover = nil
+        }
         if model.hover != hover {
             model.hover = hover
+        }
+        // A message with a next step stays while the pointer rests on it, and lingers a
+        // moment after it leaves, so it can be read and clicked.
+        if state.hasAction {
+            model.controller.holdFeedback(hover != nil)
         }
         let ignores = hover == nil
         if panel.ignoresMouseEvents != ignores {
             panel.ignoresMouseEvents = ignores
+        }
+    }
+
+    // MARK: - Follow-ups
+
+    /// Takes a message's next step. The HUD itself never activates; the window or pane this
+    /// opens does, which is the point: the user asked to go there.
+    private static func perform(_ followUp: DictationController.FollowUp, in app: AppModel) {
+        app.controller.dismissFeedback()
+        switch followUp {
+        case .record(let id):
+            // Reopens the main window if it was closed, then scrolls to and flashes the row.
+            app.showHistory(revealing: id)
+        case .microphoneAccess:
+            Permissions.openMicrophoneSettings()
+        case .accessibilityAccess:
+            Permissions.openAccessibilitySettings()
+        case .inputDevice:
+            app.requestSettings(.audio)
+            openAppSettings()
+        }
+    }
+
+    /// The Settings window, through its own ⌘, menu item: SwiftUI opens the Settings scene
+    /// only through `openSettings`, which needs a view's environment the HUD doesn't have.
+    private static func openAppSettings() {
+        NSApp.activate()
+        for top in NSApp.mainMenu?.items ?? [] {
+            guard let menu = top.submenu,
+                  let index = menu.items.firstIndex(where: {
+                      $0.keyEquivalent == "," && $0.keyEquivalentModifierMask == .command && $0.isEnabled
+                  })
+            else { continue }
+            menu.performActionForItem(at: index)
+            return
         }
     }
 }
@@ -206,10 +267,16 @@ final class HUDModel {
     let controller: DictationController
     let settings: Settings
     var hover: HUDHover?
+    private let onFollowUp: @MainActor (DictationController.FollowUp) -> Void
 
-    init(controller: DictationController, settings: Settings) {
+    init(
+        controller: DictationController,
+        settings: Settings,
+        onFollowUp: @escaping @MainActor (DictationController.FollowUp) -> Void = { _ in }
+    ) {
         self.controller = controller
         self.settings = settings
+        self.onFollowUp = onFollowUp
     }
 
     /// Everything but the audio levels. Those change ~30 times a second, so the live content
@@ -223,7 +290,8 @@ final class HUDModel {
             hover: hover,
             keyName: settings.pushToTalkKey.displayName,
             appName: controller.context?.appName,
-            notice: controller.notice
+            notice: controller.notice,
+            actionLabel: controller.followUp.map { Self.label(for: $0) }
         )
     }
 
@@ -234,6 +302,20 @@ final class HUDModel {
     func stop() { controller.stopRecording() }
     func cancel() { controller.cancel() }
     func activate() { controller.toggleRecording() }
+    func followUp() {
+        guard let followUp = controller.followUp else { return }
+        onFollowUp(followUp)
+    }
+
+    /// What clicking the message does, for VoiceOver and the tooltip.
+    static func label(for followUp: DictationController.FollowUp) -> String {
+        switch followUp {
+        case .record: "Show in History"
+        case .microphoneAccess: "Open Microphone settings"
+        case .accessibilityAccess: "Open Accessibility settings"
+        case .inputDevice: "Choose a microphone"
+        }
+    }
 }
 
 extension HUDState.Phase {
@@ -259,7 +341,8 @@ struct HUDRootView: View {
             actions: HUDActions(
                 stop: { model.stop() },
                 cancel: { model.cancel() },
-                activate: { model.activate() }
+                activate: { model.activate() },
+                followUp: { model.followUp() }
             ),
             liveLevels: { model.liveLevels }
         )
