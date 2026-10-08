@@ -64,6 +64,8 @@ final class AudioRecorder: @unchecked Sendable {
     private var engineDevice: AudioDeviceID?
     private var configObserver: (any NSObjectProtocol)?
     private var sink: CaptureSink?
+    /// The device setting from the last `prewarm` or `start`, so an idle rebuild picks the same one.
+    private var lastDeviceUID: String?
 
     private let handlerLock = NSLock()
     private var handler: (@Sendable (Event) -> Void)?
@@ -78,6 +80,7 @@ final class AudioRecorder: @unchecked Sendable {
     /// microphone access is granted.
     func prewarm(deviceUID: String?) {
         queue.async {
+            self.lastDeviceUID = deviceUID
             guard self.sink == nil else { return }
             _ = self.preparedEngine(for: AudioDevices.resolveInputDevice(uid: deviceUID))
         }
@@ -89,9 +92,25 @@ final class AudioRecorder: @unchecked Sendable {
     }
 
     /// Closes the microphone and returns everything captured since `start`.
+    ///
+    /// The samples are handed over before `engine.stop()`: stopping the device's I/O can take a
+    /// while (longer on Bluetooth and USB inputs) and the captured audio doesn't depend on it.
+    /// The stop still runs on `queue` right after, so a following `start` waits for it.
     func stop() async -> CapturedAudio {
         await withCheckedContinuation { continuation in
-            queue.async { continuation.resume(returning: self.finishCapture()) }
+            queue.async {
+                guard let sink = self.sink else {
+                    continuation.resume(returning: CapturedAudio(samples: [], peakLevel: 0))
+                    return
+                }
+                self.sink = nil
+                // Tap off before closing, so no trailing buffer is dropped between the two.
+                self.engine?.inputNode.removeTap(onBus: 0)
+                let audio = sink.close()
+                continuation.resume(returning: audio)
+                self.engine?.stop()
+                Log.audio.info("capture stopped — \(audio.duration, format: .fixed(precision: 2))s")
+            }
         }
     }
 
@@ -104,6 +123,7 @@ final class AudioRecorder: @unchecked Sendable {
 
     private func startOnQueue(deviceUID: String?, generation: Int) {
         _ = finishCapture()
+        lastDeviceUID = deviceUID
 
         let engine = preparedEngine(for: AudioDevices.resolveInputDevice(uid: deviceUID))
         let input = engine.inputNode
@@ -216,7 +236,23 @@ final class AudioRecorder: @unchecked Sendable {
             emit(.interrupted(.deviceChanged, generation: sink.generation))
         }
         // The sink stays: `stop()` still collects its samples. Only the engine is rebuilt.
+        let previousDevice = engineDevice
         discardEngine()
+        if sink == nil { rebuildWhenSettled(replacing: previousDevice) }
+    }
+
+    /// While idle, re-prewarm for the device now in effect (AirPods became the default input),
+    /// so the next key-down doesn't build an engine from cold. Waits briefly for the hardware to
+    /// settle. Skipped when the device is unchanged: that notification may be our own device
+    /// selection, and rebuilding for it could repeat forever; key-down builds lazily as before.
+    private func rebuildWhenSettled(replacing previousDevice: AudioDeviceID?) {
+        queue.asyncAfter(deadline: .now() + 0.5) {
+            guard self.sink == nil, self.engine == nil else { return }
+            let device = AudioDevices.resolveInputDevice(uid: self.lastDeviceUID)
+            guard device != previousDevice else { return }
+            Log.audio.info("input device changed while idle — prewarming the new one")
+            _ = self.preparedEngine(for: device)
+        }
     }
 
     private func emit(_ event: Event) {
