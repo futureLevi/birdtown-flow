@@ -39,8 +39,10 @@ jobs:
           path: |
             .build
             ~/Library/Caches/org.swift.swiftpm
-          key: spm-${{ runner.os }}-${{ hashFiles('Package.swift') }}-v2
-          restore-keys: spm-${{ runner.os }}-
+          # The workspace path is baked into .build's module cache, so a cache from another
+          # checkout path (e.g. before the repo rename) can't be reused.
+          key: spm-${{ runner.os }}-${{ github.event.repository.name }}-${{ hashFiles('Package.swift') }}-v2
+          restore-keys: spm-${{ runner.os }}-${{ github.event.repository.name }}-
 
       - name: Build
         id: build
