@@ -289,12 +289,12 @@ struct SidebarStatusView: View {
         case .notDownloaded:
             HStack(spacing: Spacing.s) {
                 StatusDot(color: Palette.inkTertiary)
-                Text("No model yet")
+                Text("Not downloaded")
                     .font(Typography.caption)
                     .foregroundStyle(Palette.inkSecondary)
                     .lineLimit(1)
                 Spacer(minLength: 0)
-                Button("Get") { Task { await model.models.prepare() } }
+                Button("Download") { Task { await model.models.prepare() } }
                     .buttonStyle(.flowGhost)
                     .controlSize(.small)
                     .help("Download \(status.engineName) (\(status.engineDownloadSize))")
@@ -302,13 +302,13 @@ struct SidebarStatusView: View {
         case .failed(let message):
             HStack(spacing: Spacing.s) {
                 StatusDot(color: Palette.danger)
-                Text("Model failed")
+                Text("Model didn't load")
                     .font(Typography.caption)
                     .foregroundStyle(Palette.inkSecondary)
                     .lineLimit(1)
                     .help(message)
                 Spacer(minLength: 0)
-                Button("Retry") { Task { await model.models.prepare() } }
+                Button("Try Again") { Task { await model.models.prepare() } }
                     .buttonStyle(.flowGhost)
                     .controlSize(.small)
             }

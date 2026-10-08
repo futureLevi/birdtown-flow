@@ -41,7 +41,7 @@ struct StyleView: View {
                 .font(Typography.bodyEmphasis)
                 .foregroundStyle(Palette.inkSecondary)
                 .frame(width: Layout.Main.bannerIcon, height: Layout.Main.bannerIcon)
-                .background(Circle().fill(Palette.sunken))
+                .background(Circle().fill(Palette.chip))
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: Spacing.xxs) {
                 Text(provider == .off ? "AI polish is off" : "AI polish is on · \(provider.title)")
@@ -83,7 +83,7 @@ private struct CategoryStyleCard: View {
                         .font(Typography.bodyEmphasis)
                         .foregroundStyle(Palette.inkSecondary)
                         .frame(width: Layout.Main.categoryIcon, height: Layout.Main.categoryIcon)
-                        .background(RoundedRectangle(cornerRadius: Radius.s, style: .continuous).fill(Palette.sunken))
+                        .background(RoundedRectangle(cornerRadius: Radius.s, style: .continuous).fill(Palette.chip))
                         .accessibilityHidden(true)
                     VStack(alignment: .leading, spacing: Spacing.xxs) {
                         Text(category.title)
@@ -112,7 +112,8 @@ private struct CategoryStyleCard: View {
             }
         }
         .accessibilityElement(children: .contain)
-        .accessibilityLabel(category.title)
+        .accessibilityLabel("\(category.title) style")
+        .accessibilityValue(selected.title)
     }
 }
 
@@ -124,6 +125,7 @@ private struct StyleBubble: View {
     let action: () -> Void
 
     @State private var isHovered = false
+    @FocusState private var isFocused: Bool
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
@@ -176,12 +178,17 @@ private struct StyleBubble: View {
                 lineWidth: isSelected ? Layout.Main.selectionRing : Layout.Main.hairline
             ))
             .contentShape(frame)
+            // Keyboard focus in the card's own shape, outside the selection ring.
+            .flowFocusRing(frame, drawn: isFocused)
         }
         .buttonStyle(.plain)
+        .focusEffectDisabled()
+        .focused($isFocused)
         .onHover { isHovered = $0 }
         .animation(Motion.resolve(Motion.snappy, reduceMotion: reduceMotion), value: isSelected)
         .animation(Motion.resolve(Motion.fadeFast, reduceMotion: reduceMotion), value: isHovered)
         .accessibilityLabel("\(style.title). \(sample)")
+        .accessibilityHint(style.summary)
         .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 }

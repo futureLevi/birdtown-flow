@@ -108,9 +108,9 @@ struct MenuBarContent: View {
         if modelState == .loading || modelState == .downloading(progress: nil) {
             return ("Preparing speech model…", .dot(Palette.inkTertiary))
         }
-        if SetupKit.isFailed(modelState) { return ("Speech model unavailable", .dot(Palette.danger)) }
+        if SetupKit.isFailed(modelState) { return ("Speech model didn't load", .dot(Palette.danger)) }
         if modelState == .notDownloaded { return ("Speech model not downloaded", .dot(Palette.warning)) }
-        return ("Ready · Hold \(keyName) to talk", .dot(Palette.success))
+        return ("Ready · Hold \(keyName) to dictate", .dot(Palette.success))
     }
 
     // MARK: Record
@@ -123,7 +123,7 @@ struct MenuBarContent: View {
             HStack(spacing: Spacing.s) {
                 Image(systemName: phase.isRecording ? "stop.fill" : "mic.fill")
                     .contentTransition(.symbolEffect(.replace))
-                Text(phase.isRecording ? "Stop Dictation" : "Start Dictation")
+                Text(phase.isRecording ? "Stop Dictating" : "Start Dictating")
             }
             .frame(minHeight: Layout.Setup.menuButtonHeight)
         }
@@ -169,7 +169,11 @@ struct MenuBarContent: View {
                     OnboardingWindowController.shared.show(model: model)
                 }
             }
-            MenuRow(title: "Paste Last Dictation", shortcut: "⌃⌥V") {
+            // Only advertise the shortcut while it's switched on in Settings.
+            MenuRow(
+                title: "Paste Last Dictation",
+                shortcut: model.settings.pasteLastShortcutEnabled ? SetupKit.pasteLastKeys.joined() : nil
+            ) {
                 guard preview == nil else { return }
                 model.controller.pasteLast()
             }
@@ -217,7 +221,7 @@ private struct RecentRow: View {
     let record: HistoryRecord
     let copied: Bool
     let action: () -> Void
-    @State private var hovering = false
+    @FocusState private var isFocused: Bool
 
     var body: some View {
         Button(action: action) {
@@ -241,14 +245,11 @@ private struct RecentRow: View {
             }
             .padding(.horizontal, Spacing.s)
             .padding(.vertical, Spacing.s)
-            .background(
-                RoundedRectangle(cornerRadius: Radius.s, style: .continuous)
-                    .fill(hovering ? Palette.surfaceHover : Color.clear)
-            )
-            .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
-        .onHover { hovering = $0 }
+        .buttonStyle(MenuRowButtonStyle(drawsFocusRing: isFocused))
+        // The style draws a Signal blue focus ring in the row's own shape.
+        .focusEffectDisabled()
+        .focused($isFocused)
         .help("Copy to the clipboard")
         .accessibilityLabel(record.finalText)
         .accessibilityHint(copied ? "Copied" : "Copies to the clipboard")
@@ -267,7 +268,7 @@ private struct MenuRow: View {
     var badge: Color?
     let action: () -> Void
     @Environment(\.isEnabled) private var isEnabled
-    @State private var hovering = false
+    @FocusState private var isFocused: Bool
 
     var body: some View {
         Button(action: action) {
@@ -287,14 +288,48 @@ private struct MenuRow: View {
             }
             .padding(.horizontal, Spacing.s)
             .frame(minHeight: Layout.rowMinHeight - Spacing.l)
-            .background(
-                RoundedRectangle(cornerRadius: Radius.s, style: .continuous)
-                    .fill(hovering && isEnabled ? Palette.surfaceHover : Color.clear)
-            )
-            .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
-        .onHover { hovering = $0 }
+        .buttonStyle(MenuRowButtonStyle(drawsFocusRing: isFocused))
+        // The style draws a Signal blue focus ring in the row's own shape.
+        .focusEffectDisabled()
+        .focused($isFocused)
+    }
+}
+
+/// A menu window row: a well on hover that deepens while pressed, like a native menu item,
+/// and a Signal blue ring in the row's shape under keyboard focus. Pass the button's own
+/// focus as `drawsFocusRing` and put `.focusEffectDisabled()` on the button.
+private struct MenuRowButtonStyle: ButtonStyle {
+    var drawsFocusRing = false
+
+    func makeBody(configuration: Configuration) -> some View {
+        MenuRowButtonBody(configuration: configuration, drawsFocusRing: drawsFocusRing)
+    }
+}
+
+private struct MenuRowButtonBody: View {
+    let configuration: ButtonStyleConfiguration
+    let drawsFocusRing: Bool
+
+    @State private var hovering = false
+    @Environment(\.isEnabled) private var isEnabled
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        let shape = RoundedRectangle(cornerRadius: Radius.s, style: .continuous)
+        configuration.label
+            .background(shape.fill(fill))
+            .contentShape(shape)
+            .flowFocusRing(shape, drawn: drawsFocusRing)
+            .onHover { hovering = $0 }
+            .animation(Motion.resolve(Motion.fadeFast, reduceMotion: reduceMotion), value: hovering)
+            .animation(Motion.resolve(Motion.fadeFast, reduceMotion: reduceMotion), value: configuration.isPressed)
+    }
+
+    private var fill: Color {
+        guard isEnabled else { return .clear }
+        if configuration.isPressed { return Palette.surfacePressed }
+        return hovering ? Palette.surfaceHover : .clear
     }
 }
 

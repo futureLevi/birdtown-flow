@@ -8,6 +8,12 @@ import SwiftUI
 //
 // Every style follows `controlSize` (.small, .regular, .large), dims when disabled, and
 // gives hover and press feedback that collapses to plain fades under Reduce Motion.
+//
+// Destructive: a secondary or ghost button declared `Button(..., role: .destructive)` draws in
+// `Palette.danger` and warms to `Palette.dangerSoft` on hover and press. `.flowDestructive` is
+// the secondary pill in those colours whatever the role. The navy primary never turns red.
+//
+// Keyboard focus: the system ring follows the pill (`flowFocusRing`).
 
 struct FlowPrimaryButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
@@ -27,6 +33,14 @@ struct FlowGhostButtonStyle: ButtonStyle {
     }
 }
 
+/// The secondary pill in danger colours, for irreversible actions ("Clear History…").
+/// Prefer `.flowSecondary` with `role: .destructive`; use this where the role can't be set.
+struct FlowDestructiveButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        FlowButtonBody(configuration: configuration, kind: .secondary, forcesDestructive: true)
+    }
+}
+
 extension ButtonStyle where Self == FlowPrimaryButtonStyle {
     static var flowPrimary: FlowPrimaryButtonStyle { FlowPrimaryButtonStyle() }
 }
@@ -39,11 +53,16 @@ extension ButtonStyle where Self == FlowGhostButtonStyle {
     static var flowGhost: FlowGhostButtonStyle { FlowGhostButtonStyle() }
 }
 
+extension ButtonStyle where Self == FlowDestructiveButtonStyle {
+    static var flowDestructive: FlowDestructiveButtonStyle { FlowDestructiveButtonStyle() }
+}
+
 private struct FlowButtonBody: View {
     enum Kind { case primary, secondary, ghost }
 
     let configuration: ButtonStyleConfiguration
     let kind: Kind
+    var forcesDestructive = false
 
     @State private var isHovered = false
     @Environment(\.isEnabled) private var isEnabled
@@ -61,6 +80,7 @@ private struct FlowButtonBody: View {
             .background(shape.fill(fill))
             .overlay(shape.strokeBorder(border, lineWidth: Layout.Main.hairline))
             .contentShape(shape)
+            .flowFocusRing(shape)
             .scaleEffect(configuration.isPressed && !reduceMotion ? Interaction.pressedScale : 1)
             .opacity(isEnabled ? 1 : Interaction.disabledOpacity)
             .onHover { isHovered = $0 }
@@ -69,6 +89,11 @@ private struct FlowButtonBody: View {
     }
 
     private var isActive: Bool { isHovered && isEnabled }
+
+    /// Danger colours for secondary and ghost; the primary pill stays navy.
+    private var isDestructive: Bool {
+        kind != .primary && (forcesDestructive || configuration.role == .destructive)
+    }
 
     private var height: CGFloat {
         switch controlSize {
@@ -90,8 +115,12 @@ private struct FlowButtonBody: View {
         switch kind {
         case .primary:
             configuration.isPressed ? Palette.primaryFillPressed : (isActive ? Palette.primaryFillHover : Palette.primaryFill)
+        case .secondary where isDestructive:
+            configuration.isPressed || isActive ? Palette.dangerSoft : Palette.surface
         case .secondary:
             configuration.isPressed ? Palette.surfacePressed : (isActive ? Palette.surfaceHover : Palette.surface)
+        case .ghost where isDestructive:
+            configuration.isPressed || isActive ? Palette.dangerSoft : .clear
         case .ghost:
             configuration.isPressed ? Palette.surfacePressed : (isActive ? Palette.surfaceHover : .clear)
         }
@@ -100,6 +129,8 @@ private struct FlowButtonBody: View {
     private var foreground: Color {
         switch kind {
         case .primary: Palette.onPrimary
+        case .secondary where isDestructive: Palette.danger
+        case .ghost where isDestructive: Palette.danger
         case .secondary: Palette.ink
         case .ghost: isActive ? Palette.ink : Palette.inkSecondary
         }

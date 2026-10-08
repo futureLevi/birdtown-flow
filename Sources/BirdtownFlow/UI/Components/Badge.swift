@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// A small capsule label for something that *happened* to a dictation ("3 corrections",
+/// A small capsule label for something that *happened* to a dictation ("3 replacements",
 /// "Polished · Claude") or a state ("Off"). Plain metadata belongs in text, not badges.
 struct Badge: View {
     enum Tone { case neutral, accent, success, warning, danger }
@@ -38,7 +38,7 @@ struct Badge: View {
 
     private var background: Color {
         switch tone {
-        case .neutral: Palette.sunken
+        case .neutral: Palette.chip
         case .accent: Palette.accentSoft
         case .success: Palette.successSoft
         case .warning: Palette.warningSoft

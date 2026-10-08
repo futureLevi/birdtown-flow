@@ -17,18 +17,18 @@ struct AppIcon: View {
                     .interpolation(.high)
                     .aspectRatio(contentMode: .fit)
             } else {
-                RoundedRectangle(cornerRadius: size * 0.24, style: .continuous)
-                    .fill(Palette.sunken)
+                RoundedRectangle(cornerRadius: size * Layout.Main.monogramCornerRatio, style: .continuous)
+                    .fill(Palette.chip)
                     .overlay(
-                        RoundedRectangle(cornerRadius: size * 0.24, style: .continuous)
+                        RoundedRectangle(cornerRadius: size * Layout.Main.monogramCornerRatio, style: .continuous)
                             .strokeBorder(Palette.hairline, lineWidth: Layout.Main.hairline)
                     )
                     .overlay {
                         Text(monogram)
-                            .font(Typography.monogram(size: size * 0.46))
+                            .font(Typography.monogram(size: size * Layout.Main.monogramFontRatio))
                             .foregroundStyle(Palette.inkSecondary)
                     }
-                    .padding(size * 0.06)
+                    .padding(size * Layout.Main.monogramInsetRatio)
             }
         }
         .frame(width: size, height: size)

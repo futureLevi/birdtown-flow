@@ -22,9 +22,11 @@ struct HistoryRow: View {
     @State private var didCopy = false
     @State private var copyReset: Task<Void, Never>?
     @State private var isAddingWord = false
+    @FocusState private var isPlayFocused: Bool
 
     @Environment(AppModel.self) private var model
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.accessibilityVoiceOverEnabled) private var voiceOverEnabled
 
     init(
         record: HistoryRecord,
@@ -77,6 +79,9 @@ struct HistoryRow: View {
         .animation(Motion.resolve(Motion.smooth, reduceMotion: reduceMotion), value: isExpanded)
         .accessibilityElement(children: .contain)
         .accessibilityLabel("\(appTitle), \(record.createdAt.formatted(date: .omitted, time: .shortened))")
+        // The hover buttons are invisible (and so missing from the accessibility tree) most of
+        // the time; name the row's main actions so VoiceOver offers them directly.
+        .accessibilityActions { accessibilityActionItems }
     }
 
     // MARK: - Pieces
@@ -160,9 +165,9 @@ struct HistoryRow: View {
                     .textSelection(.enabled)
                 if isLong {
                     Button(isExpanded ? "Show less" : "Show more") { isExpanded.toggle() }
-                        .buttonStyle(.plain)
-                        .font(Typography.caption)
-                        .foregroundStyle(Palette.inkSecondary)
+                        .buttonStyle(RowLinkButtonStyle())
+                        .padding(.top, Spacing.xxs)
+                        .accessibilityLabel(isExpanded ? "Show less of this dictation" : "Show all of this dictation")
                 }
             }
         }
@@ -177,7 +182,7 @@ struct HistoryRow: View {
             }
             if correctionCount > 0 {
                 Badge(
-                    text: correctionCount == 1 ? "1 correction" : "\(correctionCount) corrections",
+                    text: correctionCount == 1 ? "1 replacement" : "\(correctionCount) replacements",
                     symbol: "character.book.closed"
                 )
             }
@@ -209,7 +214,7 @@ struct HistoryRow: View {
                 IconButton(symbol: "doc.on.doc", label: "Copy") { copy() }
                     .disabled(!record.hasText)
             }
-            IconButton(symbol: "text.insert", label: "Paste into the app you were using") {
+            IconButton(symbol: "text.insert", label: "Paste Again") {
                 model.controller.insert(record)
             }
             .disabled(!record.hasText)
@@ -247,7 +252,11 @@ struct HistoryRow: View {
                 }
             }
         }
-        .buttonStyle(IconButtonStyle(tint: isPlaying ? Palette.ink : Palette.inkSecondary))
+        .buttonStyle(IconButtonStyle(tint: isPlaying ? Palette.ink : Palette.inkSecondary,
+                                     drawsFocusRing: isPlayFocused))
+        // Like its `IconButton` neighbours: the style draws the Signal blue focus ring.
+        .focusEffectDisabled()
+        .focused($isPlayFocused)
         .disabled(!hasAudio)
         .help(hasAudio ? (isPlaying ? "Stop" : "Play audio") : "This recording's audio is no longer kept")
         .accessibilityLabel(isPlaying ? "Stop audio" : "Play audio")
@@ -269,11 +278,31 @@ struct HistoryRow: View {
         Button(showsOriginal ? "Hide Original" : "Show Original", systemImage: "text.magnifyingglass") {
             showsOriginal.toggle()
         }
-        Button("Add a Word to Dictionary…", systemImage: "character.book.closed") {
+        Button("Add a Replacement…", systemImage: "character.book.closed") {
             isAddingWord = true
         }
         Divider()
         Button("Delete", systemImage: "trash", role: .destructive) { onDelete() }
+    }
+
+    /// VoiceOver's custom actions for the row. Not `menuItems`: that has dividers and opens a
+    /// sheet, neither of which belongs in the actions rotor.
+    @ViewBuilder
+    private var accessibilityActionItems: some View {
+        if record.hasText {
+            Button("Copy") { copy() }
+            Button("Paste Again") { model.controller.insert(record) }
+        }
+        if audioURL != nil {
+            Button(player.isPlaying(record.id) ? "Stop Audio" : "Play Audio") {
+                player.toggle(record.id, url: audioURL)
+            }
+            if !isRetrying {
+                Button("Retry Transcription") { retry() }
+            }
+        }
+        Button(showsOriginal ? "Hide Original" : "Show Original") { showsOriginal.toggle() }
+        Button("Delete", role: .destructive) { onDelete() }
     }
 
     @ViewBuilder
@@ -290,7 +319,8 @@ struct HistoryRow: View {
     // MARK: - Derived
 
     private var showsActions: Bool {
-        isHovered || isSelected || didCopy || player.isPlaying(record.id)
+        // VoiceOver drops invisible views, so keep the buttons in its reach while it runs.
+        isHovered || isSelected || didCopy || player.isPlaying(record.id) || voiceOverEnabled
     }
 
     private var audioURL: URL? { model.history.audioURL(for: record) }
@@ -335,7 +365,7 @@ struct HistoryRow: View {
             parts.append(Duration.seconds(record.audioDuration).formatted(.time(pattern: .minuteSecond)))
         }
         if let wpm = record.wordsPerMinute { parts.append("\(wpm) wpm") }
-        if let note = polishNote { parts.append("Polish skipped · \(Self.shortNote(note))") }
+        if let note = polishNote { parts.append("Not polished · \(Self.shortNote(note))") }
         return parts.joined(separator: " · ")
     }
 
@@ -387,6 +417,32 @@ struct HistoryRow: View {
     }
 }
 
+/// "Show more" / "Show less": a Signal blue text link that underlines on hover and dims on press.
+private struct RowLinkButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        RowLinkBody(configuration: configuration)
+    }
+}
+
+private struct RowLinkBody: View {
+    let configuration: ButtonStyleConfiguration
+
+    @State private var isHovered = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        configuration.label
+            .font(Typography.caption)
+            .foregroundStyle(Palette.accent)
+            .underline(isHovered)
+            .opacity(configuration.isPressed ? Interaction.dimmedOpacity : 1)
+            .contentShape(Rectangle())
+            .onHover { isHovered = $0 }
+            .animation(Motion.resolve(Motion.fadeFast, reduceMotion: reduceMotion), value: configuration.isPressed)
+            .animation(Motion.resolve(Motion.fadeFast, reduceMotion: reduceMotion), value: isHovered)
+    }
+}
+
 /// What the engine heard versus what was written, and what changed in between.
 struct OriginalPanel: View {
     let record: HistoryRecord
@@ -404,7 +460,7 @@ struct OriginalPanel: View {
             }
             if !record.corrections.isEmpty {
                 VStack(alignment: .leading, spacing: Spacing.xs) {
-                    Text("Dictionary").eyebrowStyle()
+                    Text("Replacements").eyebrowStyle()
                     ForEach(record.corrections, id: \.self) { correction in
                         HStack(spacing: Spacing.s) {
                             Text(correction.from)

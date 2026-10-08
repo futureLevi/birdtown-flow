@@ -65,16 +65,39 @@ struct SettingsView: View {
 /// A pane: warm canvas, groups stacked with generous rhythm, scrolling inside a fixed height.
 struct SettingsPane<Content: View>: View {
     @ViewBuilder var content: Content
+    /// Width the pane's scroll view takes, and the width its content gets inside it. With a
+    /// legacy (always visible) scroller the content is narrower by the scroller's gutter.
+    @State private var paneWidth: CGFloat = 0
+    @State private var contentWidth: CGFloat = 0
+
+    /// The legacy scroller's gutter, when there is one: taken out of the trailing margin so
+    /// cards keep the same width and edges on every tab, scrolling or not.
+    private var scrollerGutter: CGFloat {
+        guard paneWidth > 0, contentWidth > 0 else { return 0 }
+        return min(max(paneWidth - contentWidth, 0), Spacing.xxl)
+    }
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: Spacing.xl) {
                 content
             }
-            .padding(Spacing.xxl)
+            .padding(.vertical, Spacing.xxl)
+            .padding(.leading, Spacing.xxl)
+            .padding(.trailing, Spacing.xxl - scrollerGutter)
             .frame(maxWidth: .infinity, alignment: .topLeading)
+            .onGeometryChange(for: CGFloat.self) { proxy in
+                proxy.size.width
+            } action: { width in
+                contentWidth = width
+            }
         }
         .scrollBounceBehavior(.basedOnSize)
+        .onGeometryChange(for: CGFloat.self) { proxy in
+            proxy.size.width
+        } action: { width in
+            paneWidth = width
+        }
         .frame(width: Layout.settingsWidth, height: Layout.Setup.settingsHeight)
         .background(Palette.canvas)
         .tint(Palette.accent)

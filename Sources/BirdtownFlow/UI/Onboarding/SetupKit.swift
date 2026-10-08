@@ -29,6 +29,11 @@ struct SetupPreview {
     var keySaved = false
     /// Text already in the practice field, as if Birdtown Flow had just typed it.
     var practiceText: String?
+    /// Whether Birdtown Flow runs from an app bundle and can relaunch itself. `nil` reads the
+    /// real answer, which is `false` on the snapshot runner (not a bundle).
+    var canRelaunch: Bool?
+    /// As if the user had already clicked Open System Settings on a permission step.
+    var openedSettings = false
 }
 
 private struct SetupPreviewKey: EnvironmentKey {
@@ -56,8 +61,10 @@ extension SetupKit {
         key.displayName.split(separator: " ").last.map(String.init) ?? key.displayName
     }
 
-    /// The key spelled out — "Right Option" — for captions and VoiceOver.
+    /// The key spelled out — "Right Option", "Fn (Globe)" — for captions and VoiceOver.
     static func name(for key: PushToTalkKey) -> String {
+        // Spelled out like the others, so its card doesn't read "fn" under an "fn" keycap.
+        if key == .fn { return "Fn (Globe)" }
         let words = ["⌥": "Option", "⌘": "Command", "⌃": "Control", "⇧": "Shift"]
         return key.displayName.split(separator: " ")
             .map { words[String($0)] ?? String($0) }
@@ -135,8 +142,9 @@ extension SetupKit {
         return "Not downloaded yet"
     }
 
+    /// "42%", in the user's locale, the same way the main window formats it.
     static func percent(_ fraction: Double) -> String {
-        "\(Int((min(max(fraction, 0), 1) * 100).rounded())) %"
+        min(max(fraction, 0), 1).formatted(.percent.precision(.fractionLength(0)))
     }
 
     /// Download progress 0…1 when it is known.
@@ -155,27 +163,13 @@ extension SetupKit {
 
 extension SetupKit {
     /// A keyboard key drawn the way it is printed: "fn", "⌥", "esc".
+    /// Draws the shared `KeyCap`, so setup and the main window show the same key.
     struct KeyCap: View {
         let label: String
         var large = false
 
         var body: some View {
-            let shape = RoundedRectangle(cornerRadius: large ? Radius.m : Radius.xs, style: .continuous)
-            Text(label)
-                .font(large ? Typography.keycapLarge : Typography.keycap)
-                .foregroundStyle(Palette.ink)
-                .padding(.horizontal, large ? Spacing.m : Spacing.xs + Spacing.xxs)
-                .frame(
-                    minWidth: large ? Layout.Setup.keyCapLarge : Layout.Setup.keyCap,
-                    minHeight: large ? Layout.Setup.keyCapLarge : Layout.Setup.keyCap
-                )
-                .background(shape.fill(Palette.surface))
-                .overlay(shape.strokeBorder(Palette.hairlineStrong))
-                .background(
-                    shape.fill(Palette.hairlineStrong)
-                        .offset(y: large ? Layout.Setup.keyLip * 2 : Layout.Setup.keyLip)
-                )
-                .padding(.bottom, large ? Layout.Setup.keyLip * 2 : Layout.Setup.keyLip)
+            SharedKeyCap(label: label, size: large ? .large : .regular)
         }
     }
 
@@ -192,6 +186,11 @@ extension SetupKit {
         }
     }
 }
+
+/// The shared component kit's types, named from file scope: inside `SetupKit` the bare
+/// names would resolve to SetupKit's own wrappers.
+private typealias SharedKeyCap = KeyCap
+private typealias SharedStatusDot = StatusDot
 
 // MARK: - Buttons
 
@@ -210,9 +209,12 @@ extension SetupKit {
 
     /// A quiet bordered pill for secondary actions: the same shape as the primary, none of
     /// its weight.
+    ///
+    /// Draws `.flowSecondary`, so setup's secondary pills match the main window's (and a
+    /// `role: .destructive` button reads as destructive).
     struct SecondaryButtonStyle: ButtonStyle {
         func makeBody(configuration: Configuration) -> some View {
-            SecondaryButtonBody(configuration: configuration)
+            FlowSecondaryButtonStyle().makeBody(configuration: configuration)
         }
     }
 
@@ -261,42 +263,20 @@ private struct PrimaryButtonBody: View {
                 minHeight: large ? Layout.Setup.menuButtonHeight : Layout.Setup.buttonHeight
             )
             .background(shape.fill(fill))
-            .opacity(isEnabled ? 1 : Layout.Setup.disabledOpacity)
-            .scaleEffect(configuration.isPressed && !reduceMotion ? Motion.pressedScale : 1)
+            .opacity(isEnabled ? 1 : Interaction.disabledOpacity)
+            .scaleEffect(configuration.isPressed && !reduceMotion ? Interaction.pressedScale : 1)
             .contentShape(shape)
+            .flowFocusRing(shape)
             .onHover { hovering = $0 }
             .animation(Motion.resolve(Motion.snappy, reduceMotion: reduceMotion), value: configuration.isPressed)
-            .animation(Motion.fadeFast, value: hovering)
-    }
-}
-
-private struct SecondaryButtonBody: View {
-    let configuration: ButtonStyleConfiguration
-    @Environment(\.isEnabled) private var isEnabled
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var hovering = false
-
-    var body: some View {
-        let shape = Capsule(style: .continuous)
-        configuration.label
-            .font(Typography.bodyEmphasis)
-            .foregroundStyle(Palette.ink)
-            .padding(.horizontal, Spacing.l)
-            .frame(minHeight: Layout.Setup.buttonHeight - Spacing.xs)
-            .background(shape.fill(hovering && isEnabled ? Palette.surfaceHover : Palette.surface))
-            .overlay(shape.strokeBorder(Palette.hairlineStrong))
-            .opacity(isEnabled ? (configuration.isPressed ? Layout.Setup.pressedOpacity : 1) : Layout.Setup.disabledOpacity)
-            .scaleEffect(configuration.isPressed && !reduceMotion ? Motion.pressedScale : 1)
-            .contentShape(shape)
-            .onHover { hovering = $0 }
-            .animation(Motion.resolve(Motion.snappy, reduceMotion: reduceMotion), value: configuration.isPressed)
-            .animation(Motion.fadeFast, value: hovering)
+            .animation(Motion.resolve(Motion.fadeFast, reduceMotion: reduceMotion), value: hovering)
     }
 }
 
 private struct QuietButtonBody: View {
     let configuration: ButtonStyleConfiguration
     @Environment(\.isEnabled) private var isEnabled
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var hovering = false
 
     var body: some View {
@@ -305,10 +285,11 @@ private struct QuietButtonBody: View {
             .foregroundStyle(hovering && isEnabled ? Palette.ink : Palette.inkSecondary)
             .padding(.horizontal, Spacing.s)
             .frame(minHeight: Layout.Setup.buttonHeight)
-            .opacity(isEnabled ? (configuration.isPressed ? Layout.Setup.pressedOpacity : 1) : Layout.Setup.disabledOpacity)
+            .opacity(isEnabled ? (configuration.isPressed ? Layout.Setup.pressedOpacity : 1) : Interaction.disabledOpacity)
             .contentShape(Rectangle())
+            .flowFocusRing(Capsule(style: .continuous))
             .onHover { hovering = $0 }
-            .animation(Motion.fadeFast, value: hovering)
+            .animation(Motion.resolve(Motion.fadeFast, reduceMotion: reduceMotion), value: hovering)
     }
 }
 
@@ -319,25 +300,9 @@ extension SetupKit {
     /// is laid across the whole track so the colour warms as the bar grows.
     struct ProgressBar: View {
         let fraction: Double
-        @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
         var body: some View {
-            GeometryReader { proxy in
-                let clamped = min(max(fraction, 0), 1)
-                ZStack(alignment: .leading) {
-                    Capsule().fill(Palette.sunken)
-                    Capsule()
-                        .fill(Spectrum.progress)
-                        .mask(alignment: .leading) {
-                            Capsule().frame(width: max(proxy.size.height, proxy.size.width * clamped))
-                        }
-                }
-            }
-            .frame(height: Layout.Setup.progressBarHeight)
-            .animation(Motion.resolve(Motion.smooth, reduceMotion: reduceMotion), value: fraction)
-            .accessibilityElement()
-            .accessibilityLabel("Download progress")
-            .accessibilityValue(SetupKit.percent(fraction))
+            SpectrumProgressBar(progress: fraction)
         }
     }
 
@@ -347,9 +312,7 @@ extension SetupKit {
         let color: Color
 
         var body: some View {
-            Circle()
-                .fill(color)
-                .frame(width: Layout.Setup.statusDot, height: Layout.Setup.statusDot)
+            SharedStatusDot(color: color)
         }
     }
 

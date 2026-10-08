@@ -40,9 +40,9 @@ enum TextInjector {
         /// Short, human message for the HUD.
         var message: String {
             switch self {
-            case .noTextField: "Copied, since no text field was focused"
-            case .secureInput: "Copied, since secure input is on"
-            case .noAccessibility: "Copied. Allow Accessibility so Birdtown Flow can type"
+            case .noTextField: "Copied · press ⌘V to paste"
+            case .secureInput: "Password field · copied, press ⌘V"
+            case .noAccessibility: "Copied · press ⌘V, or allow Accessibility"
             }
         }
     }

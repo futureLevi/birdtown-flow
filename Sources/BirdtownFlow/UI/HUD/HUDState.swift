@@ -48,7 +48,7 @@ struct HUDState: Equatable, Sendable {
     /// The push-to-talk key, as the user sees it ("fn", "Right ⌥").
     var keyName = "fn"
     var appName: String?
-    /// Why a finished dictation went to the clipboard ("Copied, since no text field was focused").
+    /// Why a finished dictation went to the clipboard ("Copied · press ⌘V to paste").
     /// Shown beside the check; `nil` when the text was typed.
     var notice: String?
 
@@ -136,15 +136,38 @@ enum HUDMetrics {
         case .cancelled:
             return CGSize(width: height, height: height)
         case .failed:
-            return messageSize(state.failureMessage ?? "")
+            return messageSize(state.failureMessage ?? "", lineLimit: Layout.HUD.failureLineLimit)
         }
     }
 
-    /// A glyph and one line of text, truncated at `messageMaxWidth`.
-    static func messageSize(_ message: String) -> CGSize {
+    /// A glyph and text up to `messageMaxWidth`. A message that fits stays on one line at the
+    /// standard height; a longer one wraps to at most `lineLimit` lines and the pill grows
+    /// taller (up to `messageMaxHeight`) rather than cutting off the end of the sentence.
+    static func messageSize(_ message: String, lineLimit: Int = 1) -> CGSize {
         let text = min(textWidth(message, pointSize: Layout.HUD.labelPointSize), Layout.HUD.messageMaxWidth)
         let width = Layout.HUD.contentPadding * 2 + Layout.HUD.failureGlyph + Spacing.s + text
-        return CGSize(width: width.rounded(.up), height: Layout.HUD.height)
+        var height = Layout.HUD.height
+        let lines = messageLines(message, lineLimit: lineLimit)
+        if lines > 1 {
+            let font = NSFont.systemFont(ofSize: Layout.HUD.labelPointSize, weight: .medium)
+            let bounds = (message as NSString).boundingRect(
+                with: CGSize(width: Layout.HUD.messageMaxWidth, height: .greatestFiniteMagnitude),
+                options: [.usesLineFragmentOrigin, .usesFontLeading],
+                attributes: [.font: font],
+                context: nil
+            )
+            let lineHeight = ceil(font.ascender - font.descender + font.leading)
+            let textHeight = min(ceil(bounds.height), lineHeight * CGFloat(lines))
+            height = min(max(height, textHeight + Spacing.s * 2), Layout.HUD.messageMaxHeight)
+        }
+        return CGSize(width: width.rounded(.up), height: height.rounded(.up))
+    }
+
+    /// How many lines a message is drawn on: one when it fits `messageMaxWidth`, otherwise
+    /// `lineLimit`. Deciding here (not in SwiftUI) keeps the text and the pill's size in step.
+    static func messageLines(_ message: String, lineLimit: Int) -> Int {
+        let fits = textWidth(message, pointSize: Layout.HUD.labelPointSize) <= Layout.HUD.messageMaxWidth
+        return fits ? 1 : max(1, lineLimit)
     }
 
     /// The pill's frame inside the panel, in AppKit (y-up) coordinates.
@@ -197,6 +220,12 @@ enum HUDMetrics {
         return HandsFreeLayout(cancel: cancel, bars: (barsLeading + barsTrailing) / 2, timer: timer, stop: stop)
     }
 
+    /// Where the bars sit while listening or thinking: centred between the orb's edge and the
+    /// pill's right end, so the space on either side of them matches.
+    static func listeningBarsX(width: CGFloat) -> CGFloat {
+        (capCentre + Layout.HUD.orb / 2 + width) / 2
+    }
+
     static func hintWidth(keyName: String) -> CGFloat {
         let label = Layout.HUD.labelPointSize
         let keycap = textWidth(keyName, pointSize: Layout.HUD.keycapPointSize, weight: .semibold)
@@ -217,8 +246,19 @@ enum HUDMetrics {
 
     /// "0:42", "12:05".
     static func elapsedText(since start: Date?, now: Date) -> String {
-        guard let start else { return "0:00" }
-        let seconds = max(0, Int(now.timeIntervalSince(start)))
+        let seconds = elapsedSeconds(since: start, now: now)
         return String(format: "%d:%02d", seconds / 60, seconds % 60)
+    }
+
+    /// Whole seconds recorded so far; 0 before recording starts.
+    static func elapsedSeconds(since start: Date?, now: Date) -> Int {
+        guard let start else { return 0 }
+        return max(0, Int(now.timeIntervalSince(start)))
+    }
+
+    /// The elapsed time as VoiceOver should say it: "42 seconds", "1 minute, 5 seconds".
+    static func elapsedSpoken(since start: Date?, now: Date) -> String {
+        let seconds = elapsedSeconds(since: start, now: now)
+        return Duration.seconds(seconds).formatted(.units(allowed: [.minutes, .seconds], width: .wide))
     }
 }

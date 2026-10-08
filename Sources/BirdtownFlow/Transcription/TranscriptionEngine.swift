@@ -30,9 +30,10 @@ enum TranscriptionError: LocalizedError {
         case .modelNotReady:
             "The speech model isn't ready yet."
         case .localeUnsupported(let locale):
-            "Dictation isn't available for \(locale.identifier) on this Mac."
-        case .modelInstallFailed(let detail):
-            "Couldn't install the speech model: \(detail)"
+            "Dictation isn't available for \(Locale.current.localizedString(forIdentifier: locale.identifier) ?? locale.identifier) on this Mac."
+        case .modelInstallFailed:
+            // The system's own detail goes to the log where it's thrown; it reads as developer output.
+            "Couldn't install the speech model. Try again, or pick another model in Settings."
         case .audioUnreadable:
             "The recording couldn't be read."
         }

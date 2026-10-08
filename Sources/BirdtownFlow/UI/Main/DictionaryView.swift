@@ -24,7 +24,7 @@ struct DictionaryView: View {
                     Button {
                         isAdding = true
                     } label: {
-                        Label("Add Entry", systemImage: "plus")
+                        Label("New Entry", systemImage: "plus")
                     }
                     .buttonStyle(.flowSecondary)
                     .keyboardShortcut("n", modifiers: .command)
@@ -38,7 +38,7 @@ struct DictionaryView: View {
                         message: "Add a name, a product or a bit of jargon, or tell it that when it hears "
                             + "“cloud code” you mean “Claude Code”."
                     ) {
-                        Button("Add Entry") { isAdding = true }
+                        Button("New Entry") { isAdding = true }
                             .buttonStyle(.flowSecondary)
                     }
                     .cardSurface()
@@ -50,7 +50,11 @@ struct DictionaryView: View {
                             symbol: "magnifyingglass",
                             title: "No entries match “\(query)”",
                             message: "Search looks at both sides of a replacement."
-                        )
+                        ) {
+                            Button("Clear Search") { query = "" }
+                                .buttonStyle(.flowSecondary)
+                        }
+                        .cardSurface()
                     } else {
                         group(
                             title: "Replacements",
@@ -183,20 +187,29 @@ private struct DictionaryRow: View {
 
             Spacer(minLength: Spacing.m)
 
-            if firedCount > 0 {
-                Text("Fixed \(firedCount)×")
-                    .font(Typography.caption)
-                    .monospacedDigit()
-                    .foregroundStyle(Palette.inkTertiary)
-                    .help("Times this replacement has corrected a dictation in your history")
+            // One trailing slot: the count sits next to the switch at rest, and the hover
+            // actions take its place, so no empty gap strands the count mid-row.
+            ZStack(alignment: .trailing) {
+                if firedCount > 0 {
+                    Text(firedCount == 1 ? "Used once" : "Used \(firedCount) times")
+                        .font(Typography.caption)
+                        .monospacedDigit()
+                        .foregroundStyle(Palette.inkTertiary)
+                        .help("Dictations in your history this replacement has changed")
+                        .opacity(isHovered ? 0 : 1)
+                }
+                HStack(spacing: Spacing.xxs) {
+                    IconButton(symbol: "pencil", label: "Edit") { onEdit() }
+                    IconButton(symbol: "trash", label: "Delete") { onDelete() }
+                }
+                .opacity(isHovered ? 1 : 0)
+                .allowsHitTesting(isHovered)
             }
-            HStack(spacing: Spacing.xxs) {
-                IconButton(symbol: "pencil", label: "Edit") { onEdit() }
-                IconButton(symbol: "trash", label: "Delete") { onDelete() }
-            }
-            .opacity(isHovered ? 1 : 0)
-            .allowsHitTesting(isHovered)
-            Toggle("Enabled", isOn: Binding(get: { entry.isEnabled }, set: { onToggle($0) }))
+            // Hidden visually; VoiceOver names the switch after the entry it controls.
+            Toggle(
+                entry.kind == .correction ? "\(entry.hear) becomes \(entry.write)" : entry.write,
+                isOn: Binding(get: { entry.isEnabled }, set: { onToggle($0) })
+            )
                 .toggleStyle(.switch)
                 .controlSize(.mini)
                 .labelsHidden()
@@ -215,6 +228,13 @@ private struct DictionaryRow: View {
             Button(entry.isEnabled ? "Turn Off" : "Turn On", systemImage: "power") { onToggle(!entry.isEnabled) }
             Divider()
             Button("Delete", systemImage: "trash", role: .destructive) { onDelete() }
+        }
+        // The hover buttons are invisible (and so missing from the accessibility tree) most of
+        // the time; offer Edit and Delete as VoiceOver actions on the row.
+        .accessibilityElement(children: .contain)
+        .accessibilityActions {
+            Button("Edit") { onEdit() }
+            Button("Delete", role: .destructive) { onDelete() }
         }
     }
 }
@@ -297,7 +317,7 @@ struct DictionaryEditorSheet: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.l) {
-            Text(original == nil ? "Add to Dictionary" : "Edit Entry")
+            Text(original == nil ? "New Entry" : "Edit Entry")
                 .font(Typography.title)
                 .tracking(Tracking.title)
                 .foregroundStyle(Palette.ink)
@@ -323,7 +343,7 @@ struct DictionaryEditorSheet: View {
                 LabeledInput(label: "When it hears", text: $hear, prompt: "cloud code")
             }
             LabeledInput(
-                label: kind == .term ? "Word or phrase" : "Write",
+                label: kind == .term ? "Word or phrase" : "Write it as",
                 text: $write,
                 prompt: kind == .term ? "Anthropic" : "Claude Code"
             )
