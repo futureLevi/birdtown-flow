@@ -361,6 +361,8 @@ final class DictationController {
         context = quick
         // Claude Code takes a second or two to start; do it while the person is talking.
         prewarmPolish(for: quick)
+        // The other providers warm up too: Apple's model loads, a cloud connection opens.
+        if blocked == nil { warmUpPolish(for: quick) }
         let contextTask = Task.detached(priority: .userInitiated) {
             FrontmostContext.refined(quick, pid: pid)
         }
@@ -852,6 +854,16 @@ final class DictationController {
         let request = polishRequest(text: "", style: style, context: context, configuration: configuration)
         PolishService.claudeCode(model: configuration?.model, effort: configuration?.effort).prewarm(request)
         return true
+    }
+
+    /// Gets the polish provider for a dictation into `context` ready, unless it's Claude Code,
+    /// which `prewarmPolish` starts. Only at key-down: a settings change doesn't warm anything.
+    private func warmUpPolish(for context: AppContext) {
+        guard settings.polishProvider != .off else { return }
+        let style = settings.style(for: context.category)
+        let configuration = lab.configuration(for: style)
+        let request = polishRequest(text: "", style: style, context: context, configuration: configuration)
+        PolishService(settings: settings).prewarm(request, using: configuration)
     }
 
     /// What polish gets for a dictation: Settings' cleanup level, or the instructions of the

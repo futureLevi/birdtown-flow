@@ -353,4 +353,45 @@ struct PolishClientTests {
             #expect(message == "<html>Bad Gateway</html>")
         }
     }
+
+    @Test("Preconnect warms the server's root with a keyless HEAD", arguments: [
+        ("https://api.anthropic.com/v1/messages", "https://api.anthropic.com/"),
+        ("https://api.openai.com/v1", "https://api.openai.com/"),
+        ("https://user:secret@proxy.example.com:8443/openai/v1?x=1#y", "https://proxy.example.com:8443/"),
+        ("http://localhost:11434/v1", "http://localhost:11434/"),
+    ])
+    func preconnectWarmUp(url: String, origin: String) throws {
+        let server = try #require(HTTP.origin(of: URL(string: url)!))
+        #expect(server.absoluteString == origin)
+        let warmUp = HTTP.preconnectRequest(for: server)
+        #expect(warmUp.httpMethod == "HEAD")
+        #expect(warmUp.url?.absoluteString == origin)
+        #expect(warmUp.httpBody == nil)
+        #expect(warmUp.value(forHTTPHeaderField: "Authorization") == nil)
+        #expect(warmUp.value(forHTTPHeaderField: "x-api-key") == nil)
+        #expect(warmUp.timeoutInterval <= 5)
+    }
+
+    @Test("Preconnect skips a server contacted moments ago")
+    func preconnectThrottle() {
+        let log = ContactLog()
+        #expect(log.claim("https://api.anthropic.com/", unlessWithin: .seconds(30)))
+        #expect(!log.claim("https://api.anthropic.com/", unlessWithin: .seconds(30)))
+        #expect(log.claim("https://api.openai.com/", unlessWithin: .seconds(30)))
+        log.mark("https://example.com/")
+        #expect(!log.claim("https://example.com/", unlessWithin: .seconds(30)))
+        #expect(log.claim("https://example.com/", unlessWithin: .zero))
+    }
+
+    @Test("A temperature rejection is remembered per endpoint and model")
+    func temperatureMemo() {
+        let key = OpenAICompatibleClient.temperatureMemoKey(baseURL: URL(string: "https://api.openai.com/v1/")!, model: " gpt-5 ")
+        #expect(key == OpenAICompatibleClient.temperatureMemoKey(
+            baseURL: URL(string: "https://api.openai.com/v1/chat/completions")!, model: "gpt-5"))
+        #expect(key != OpenAICompatibleClient.temperatureMemoKey(baseURL: URL(string: "https://api.openai.com/v1")!, model: "gpt-4.1-mini"))
+        let memo = LockedSet()
+        #expect(!memo.contains(key))
+        memo.insert(key)
+        #expect(memo.contains(key))
+    }
 }
