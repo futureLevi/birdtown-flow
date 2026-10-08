@@ -67,6 +67,24 @@ final class PolishService {
         }
     }
 
+    /// Gets the provider ready for a dictation that's starting, while the person talks: loads
+    /// Apple's model, or opens the connection to a cloud endpoint. `request` has everything but
+    /// the text. Claude Code is started by `ClaudeCodePolisher.prewarm` instead. Reads no keys,
+    /// sends none, and never changes what polish returns.
+    func prewarm(_ request: PolishRequest, using configuration: PolishConfiguration? = nil) {
+        guard settings.polishProvider != .off else { return }
+        switch configuration?.provider ?? settings.polishProvider {
+        case .appleIntelligence:
+            AppleIntelligencePolisher.prewarm(request)
+        case .anthropic:
+            AnthropicClient.preconnect()
+        case .openAICompatible:
+            if let endpointURL { OpenAICompatibleClient.preconnect(baseURL: endpointURL) }
+        case .off, .claudeCode:
+            break
+        }
+    }
+
     /// For the Settings "Test" button: polishes a fixed sentence with the current provider.
     func test() async -> Result<String, Error> {
         let provider = settings.polishProvider

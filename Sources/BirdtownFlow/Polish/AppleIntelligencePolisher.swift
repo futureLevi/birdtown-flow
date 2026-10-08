@@ -58,7 +58,11 @@ struct AppleIntelligencePolisher: PolishClient {
             throw Failure(note: Self.unavailableNote, detail: reason)
         }
 
-        let session = LanguageModelSession(instructions: PolishPrompt.system(for: request))
+        let instructions = PolishPrompt.system(for: request)
+        // A session warmed at key-down when it was started with these same instructions;
+        // otherwise a fresh one, which loads the model now.
+        let session = await AppleIntelligenceSessions.shared.take(instructions: instructions)
+            ?? LanguageModelSession(instructions: instructions)
         let options = GenerationOptions(
             // Near-deterministic: this is editing, not writing.
             temperature: 0.2,
@@ -70,6 +74,19 @@ struct AppleIntelligencePolisher: PolishClient {
             return response.content
         } catch let error as LanguageModelSession.GenerationError {
             throw Self.failure(for: error)
+        }
+    }
+
+    /// Starts a session for the dictation that's about to happen, so the model is loaded and
+    /// the instructions read while the person is talking. The text isn't known yet, and the
+    /// instructions don't include it.
+    static func prewarm(_ request: PolishRequest) {
+        let instructions = PolishPrompt.system(for: request)
+        // Off the caller's thread: this runs at key-down, and asking for the model's
+        // availability is a system call the main thread needn't wait on.
+        Task.detached(priority: .userInitiated) {
+            guard Self.unavailableReason == nil else { return }
+            await AppleIntelligenceSessions.shared.prewarm(instructions: instructions)
         }
     }
 
@@ -104,5 +121,36 @@ struct AppleIntelligencePolisher: PolishClient {
                 detail: "Apple Intelligence couldn't polish this text: \(error.localizedDescription)"
             )
         }
+    }
+}
+
+// MARK: - Sessions
+
+/// Keeps one session warmed and waiting for the next dictation. Each session answers exactly
+/// one dictation and is never handed out twice, so nothing said earlier rides along.
+actor AppleIntelligenceSessions {
+    static let shared = AppleIntelligenceSessions()
+
+    /// A session left waiting longer than this is replaced rather than trusted to still be warm.
+    static let maxSpareAge: Duration = .seconds(10 * 60)
+
+    private var spare: (instructions: String, session: LanguageModelSession, startedAt: ContinuousClock.Instant)?
+
+    func prewarm(instructions: String) {
+        if let spare, spare.instructions == instructions, ContinuousClock.now - spare.startedAt < Self.maxSpareAge {
+            return
+        }
+        let session = LanguageModelSession(instructions: instructions)
+        session.prewarm()
+        spare = (instructions, session, ContinuousClock.now)
+    }
+
+    /// The waiting session, if it was started with exactly these instructions. Either way the
+    /// spare is used up: a dictation that didn't match leaves nothing worth keeping.
+    func take(instructions: String) -> LanguageModelSession? {
+        defer { spare = nil }
+        guard let spare, spare.instructions == instructions, ContinuousClock.now - spare.startedAt < Self.maxSpareAge
+        else { return nil }
+        return spare.session
     }
 }

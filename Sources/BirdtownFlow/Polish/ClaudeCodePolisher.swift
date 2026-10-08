@@ -121,11 +121,17 @@ actor ClaudeCodeSessions {
             cold = true
         }
         spare = nil
-        // The next dictation's session starts now, while this one is answering.
-        spare = try? ClaudeCodeProcess.start(installation: installation, key: key)
+        // The dictation goes in first, so starting the next session doesn't hold it up.
+        let written = Result { try session.write(message) }
+        // The next dictation's session starts now, while this one is answering. Nothing has
+        // awaited since `spare` was cleared, so this can't replace one started meanwhile.
+        if spare == nil {
+            spare = try? ClaudeCodeProcess.start(installation: installation, key: key)
+        }
 
         do {
-            var reply = try await session.send(message)
+            try written.get()
+            var reply = try await session.awaitReply()
             reply.startedCold = cold
             return reply
         } catch {
@@ -228,11 +234,14 @@ final class ClaudeCodeProcess: @unchecked Sendable {
         return session
     }
 
-    /// Sends one dictation and waits for Claude's answer.
-    func send(_ message: String) async throws -> ClaudeCodeReply {
-        let line = try Self.userMessageLine(message)
-        return try await withTaskCancellationHandler {
-            try input.write(contentsOf: line)
+    /// Sends one dictation; `awaitReply` then waits for Claude's answer.
+    func write(_ message: String) throws {
+        try input.write(contentsOf: Self.userMessageLine(message))
+    }
+
+    /// Waits for the answer to what `write` sent.
+    func awaitReply() async throws -> ClaudeCodeReply {
+        try await withTaskCancellationHandler {
             let event = try await readResult()
             // One message per session: closing the input ends it.
             try? input.close()
