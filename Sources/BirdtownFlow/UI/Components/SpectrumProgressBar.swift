@@ -5,6 +5,7 @@ import SwiftUI
 /// empty track, so an unknown size never pretends to be moving.
 struct SpectrumProgressBar: View {
     let progress: Double?
+    var height: CGFloat = Layout.Main.progressBarHeight
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -14,13 +15,17 @@ struct SpectrumProgressBar: View {
             ZStack(alignment: .leading) {
                 Capsule().fill(Palette.sunken)
                 if fraction > 0 {
+                    // The gradient spans the whole track and the mask reveals the filled part,
+                    // so the colour warms as the bar grows instead of squeezing into the fill.
                     Capsule()
                         .fill(Spectrum.progress)
-                        .frame(width: max(proxy.size.height, proxy.size.width * fraction))
+                        .mask(alignment: .leading) {
+                            Capsule().frame(width: max(proxy.size.height, proxy.size.width * fraction))
+                        }
                 }
             }
         }
-        .frame(height: Layout.Main.progressBarHeight)
+        .frame(height: height)
         .animation(Motion.resolve(Motion.smooth, reduceMotion: reduceMotion), value: progress)
         .accessibilityElement()
         .accessibilityLabel("Download progress")

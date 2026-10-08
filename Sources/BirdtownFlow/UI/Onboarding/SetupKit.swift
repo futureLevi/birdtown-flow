@@ -302,7 +302,7 @@ extension SetupKit {
         let fraction: Double
 
         var body: some View {
-            SpectrumProgressBar(progress: fraction)
+            SpectrumProgressBar(progress: fraction, height: Layout.Setup.progressBarHeight)
         }
     }
 

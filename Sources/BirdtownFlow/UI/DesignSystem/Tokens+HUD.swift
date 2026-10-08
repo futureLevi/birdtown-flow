@@ -26,8 +26,6 @@ extension Layout.HUD {
     static let contactShadowSpread: CGFloat = 1
     /// The pill's edge and the keycap's border.
     static let strokeWidth: CGFloat = 1
-    /// The soft disc behind the hands-free Stop button while the pointer is over it.
-    static let stopHoverRing: CGFloat = 30
 }
 
 extension Motion {

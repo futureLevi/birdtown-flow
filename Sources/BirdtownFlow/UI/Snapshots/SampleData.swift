@@ -306,11 +306,13 @@ extension SampleData {
         let unpolished = "So I was like thinking we could move the Birdtown review to Friday no wait Thursday and then "
             + "you know send the deck to Sarah before then. Does that work for you?"
         func run(_ config: PolishConfiguration, edited: Bool = false, minutesAgo: Double,
-                 result: PolishService.LabResult, output: String) -> LabBench.Run {
-            LabBench.Run(
+                 result: PolishService.LabResult, output: String, needsSettings: Bool = false) -> LabBench.Run {
+            var entry = LabBench.Run(
                 configuration: edited ? labDraft : config, wasEdited: edited, input: input, style: .casual,
                 category: .work, appName: "Slack", ranAt: Date().addingTimeInterval(-minutesAgo * 60),
                 result: result, output: output)
+            entry.needsSettings = needsSettings
+            return entry
         }
         return [
             run(configs[2], edited: true, minutesAgo: 1,
@@ -326,7 +328,7 @@ extension SampleData {
             run(configs[3], minutesAgo: 6,
                 result: .init(verdict: .failed("Add your Anthropic API key to polish with Claude."),
                               totalMilliseconds: 0),
-                output: ""),
+                output: "", needsSettings: true),
             run(configs[0], minutesAgo: 9,
                 result: .init(verdict: .accepted(cleaned), totalMilliseconds: 2_871, modelMilliseconds: 958,
                               sessionMilliseconds: 1_187, startedCold: true),

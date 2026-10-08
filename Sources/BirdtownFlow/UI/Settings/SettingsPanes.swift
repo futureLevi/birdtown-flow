@@ -34,7 +34,7 @@ struct GeneralSettingsPane: View {
                 SettingsRow(title: "Hands-free", detail: handsFreeDetail(settings.handsFreeShortcut, key: settings.pushToTalkKey)) {
                     Picker("Hands-free", selection: $settings.handsFreeShortcut) {
                         ForEach(HandsFreeShortcut.allCases) { shortcut in
-                            Text(shortcut.title(key: settings.pushToTalkKey)).tag(shortcut)
+                            Text(shortcut.title(keyName: SetupKit.name(for: settings.pushToTalkKey))).tag(shortcut)
                         }
                     }
                     .labelsHidden()
@@ -110,7 +110,7 @@ struct GeneralSettingsPane: View {
     private func handsFreeDetail(_ shortcut: HandsFreeShortcut, key: PushToTalkKey) -> String {
         switch shortcut {
         case .doubleTap:
-            "Double-tap \(key.displayName), or press Space while holding it, to keep listening. Tap again to finish."
+            "Double-tap \(SetupKit.name(for: key)), or press Space while holding it, to keep listening. Tap again to finish."
         case .controlOption:
             "Press Control and Option together to keep listening without holding a key. Press them again to finish."
         case .off:

@@ -155,14 +155,15 @@ struct HUDOrb: View {
             if isStop { stop() }
         } label: {
             ZStack {
-                // Hovering Stop lifts a soft disc behind it, the same light Cancel's button
-                // takes on hover, so the target reads as pressable rather than only growing.
-                Circle()
-                    .fill(Palette.HUD.controlHover)
-                    .frame(width: Layout.HUD.stopHoverRing, height: Layout.HUD.stopHoverRing)
-                    .opacity(isStop && isHovered ? 1 : 0)
                 SpectrumOrb(mode: mode, diameter: side, level: level, showsHalo: !isStop, phase: phase,
                             reduceMotionOverride: reduceMotion)
+                // Hovering Stop lightens the orb itself with the same light Cancel's button
+                // takes on hover, so the target reads as pressable without a ring around it.
+                Circle()
+                    .fill(Palette.HUD.controlHover)
+                    .frame(width: side, height: side)
+                    .opacity(isStop && isHovered ? 1 : 0)
+                    .allowsHitTesting(false)
                 RoundedRectangle(cornerRadius: Layout.HUD.stopGlyphRadius, style: .continuous)
                     .fill(Palette.HUD.bar)
                     .frame(width: Layout.HUD.stopGlyph, height: Layout.HUD.stopGlyph)

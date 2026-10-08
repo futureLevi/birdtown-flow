@@ -754,7 +754,7 @@ private struct ModelStep: View {
                 ) {
                     Text(message)
                         .font(Typography.caption)
-                        .foregroundStyle(Palette.inkTertiary)
+                        .foregroundStyle(Palette.inkSecondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
@@ -840,7 +840,7 @@ private struct ShortcutStep: View {
                         tint: Palette.warning,
                         fill: Palette.warningSoft,
                         text: wisprRunning
-                            ? "🌐 also opens Emoji or Dictation. Set it to “Do Nothing”."
+                            ? "The 🌐 key also opens Emoji or Dictation. Set it to “Do Nothing”."
                             : "The 🌐 key also opens Emoji or Dictation. Set “Press 🌐 key to” to “Do Nothing” so only Birdtown Flow hears it."
                     ) {
                         Button("Open Keyboard Settings…", action: SetupKit.openKeyboardSettings)
@@ -976,7 +976,7 @@ private struct PracticeStep: View {
             done: succeeded,
             title: succeeded ? "That's it." : "Give it a try",
             message: succeeded
-                ? "Birdtown Flow works like this in every app. Hold \(keyName), speak, let go."
+                ? "Birdtown Flow works like this in every app.\nHold \(keyName), speak, let go."
                 : "Hold \(keyName) and say:"
         ) {
             VStack(spacing: Spacing.m) {
