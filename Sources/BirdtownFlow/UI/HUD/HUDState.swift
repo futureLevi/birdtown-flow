@@ -259,6 +259,12 @@ enum HUDMetrics {
     /// The elapsed time as VoiceOver should say it: "42 seconds", "1 minute, 5 seconds".
     static func elapsedSpoken(since start: Date?, now: Date) -> String {
         let seconds = elapsedSeconds(since: start, now: now)
-        return Duration.seconds(seconds).formatted(.units(allowed: [.minutes, .seconds], width: .wide))
+        // Asked for on every frame of the hands-free timeline; the text changes once a second.
+        if let last = lastSpoken, last.seconds == seconds { return last.text }
+        let text = Duration.seconds(seconds).formatted(.units(allowed: [.minutes, .seconds], width: .wide))
+        lastSpoken = (seconds, text)
+        return text
     }
+
+    private static var lastSpoken: (seconds: Int, text: String)?
 }
