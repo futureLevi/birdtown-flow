@@ -125,7 +125,7 @@ struct MainSidebar: View {
     @Environment(AppModel.self) private var model
 
     var body: some View {
-        let failed = model.history.records.filter { $0.outcome == .failed }.count
+        let failed = model.history.failedCount
         List(selection: selection) {
             ForEach(SidebarSection.everyday) { section in
                 Label(section.title, systemImage: section.symbol)
@@ -170,9 +170,15 @@ struct SidebarStatusView: View {
         .cardSurface(radius: Radius.m)
     }
 
+    /// Read here, not in `SystemStatus.live`, so a phase change redraws this footer and not the
+    /// whole window. Snapshots still force it through `status`.
+    private var isRecording: Bool {
+        status.isRecording || model.controller.phase.isRecording
+    }
+
     @ViewBuilder
     private var shortcutLine: some View {
-        if status.isRecording {
+        if isRecording {
             HStack(spacing: Spacing.s) {
                 SpectrumOrb(mode: .live, diameter: Layout.Orb.small, phase: preview.orbPhase)
                 Text("Listening…")

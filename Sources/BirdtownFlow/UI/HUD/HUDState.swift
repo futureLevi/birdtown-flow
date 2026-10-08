@@ -220,6 +220,10 @@ enum HUDMetrics {
         return HandsFreeLayout(cancel: cancel, bars: (barsLeading + barsTrailing) / 2, timer: timer, stop: stop)
     }
 
+    /// Measured widths by key name. The hint is hit-tested on every pointer move over the pill,
+    /// and the key name rarely changes, so each one is measured once.
+    private static var hintWidths: [String: CGFloat] = [:]
+
     /// Where the bars sit while listening or thinking: centred between the orb's edge and the
     /// pill's right end, so the space on either side of them matches.
     static func listeningBarsX(width: CGFloat) -> CGFloat {
@@ -227,6 +231,7 @@ enum HUDMetrics {
     }
 
     static func hintWidth(keyName: String) -> CGFloat {
+        if let cached = hintWidths[keyName] { return cached }
         let label = Layout.HUD.labelPointSize
         let keycap = textWidth(keyName, pointSize: Layout.HUD.keycapPointSize, weight: .semibold)
             + Layout.HUD.keycapPadding * 2
@@ -236,7 +241,9 @@ enum HUDMetrics {
             + keycap
             + Layout.HUD.hintSpacing * 2
         // A couple of points of slack: AppKit and SwiftUI round glyph advances differently.
-        return (width + Spacing.xxs * 2).rounded(.up)
+        let result = (width + Spacing.xxs * 2).rounded(.up)
+        hintWidths[keyName] = result
+        return result
     }
 
     static func textWidth(_ text: String, pointSize: CGFloat, weight: NSFont.Weight = .medium) -> CGFloat {

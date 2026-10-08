@@ -514,6 +514,12 @@ public struct AnthropicClient: PolishClient {
         return try Self.parseResponse(data: data, status: status)
     }
 
+    /// Opens a connection to the API while the person is still talking, so the polish request
+    /// doesn't pay for DNS and the TLS handshake. Sends no key; the answer is ignored.
+    public static func preconnect() {
+        HTTP.preconnect(to: endpoint)
+    }
+
     public func makeRequest(for request: PolishRequest) throws -> URLRequest {
         let key = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !key.isEmpty else { throw PolishError.missingAPIKey }
@@ -594,14 +600,37 @@ public struct OpenAICompatibleClient: PolishClient {
     }
 
     public func polish(_ request: PolishRequest) async throws -> String {
+        // Once an endpoint has rejected a temperature, later dictations skip straight to the
+        // request it accepts instead of paying for the rejection every time.
+        let memoKey = Self.temperatureMemoKey(baseURL: baseURL, model: model)
+        if Self.rejectsTemperature.contains(memoKey) {
+            let (data, status) = try await HTTP.send(try makeRequest(for: request, temperature: nil))
+            return try Self.parseResponse(data: data, status: status)
+        }
         let (data, status) = try await HTTP.send(try makeRequest(for: request))
         // Some models (OpenAI's reasoning family) only accept the default temperature; asking
         // again without it beats failing every dictation for those users.
         if status == 400, HTTP.errorMessage(from: data, status: status).lowercased().contains("temperature") {
+            Self.rejectsTemperature.insert(memoKey)
             let (retryData, retryStatus) = try await HTTP.send(try makeRequest(for: request, temperature: nil))
             return try Self.parseResponse(data: retryData, status: retryStatus)
         }
         return try Self.parseResponse(data: data, status: status)
+    }
+
+    /// Endpoint and model pairs that rejected a temperature, for as long as the app runs.
+    static let rejectsTemperature = LockedSet()
+
+    /// The completions URL and the model as it's sent, so stray whitespace doesn't split entries.
+    static func temperatureMemoKey(baseURL: URL, model: String) -> String {
+        completionsURL(for: baseURL).absoluteString + "\n" + model.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    /// Opens a connection to the endpoint's server while the person is still talking, so the
+    /// polish request doesn't pay for DNS and the TLS handshake. Sends no key; the answer is
+    /// ignored.
+    public static func preconnect(baseURL: URL) {
+        HTTP.preconnect(to: baseURL)
     }
 
     /// `{baseURL}/chat/completions`, tolerating a base that already ends in the path.
@@ -664,6 +693,7 @@ public struct OpenAICompatibleClient: PolishClient {
 
 enum HTTP {
     static func send(_ request: URLRequest) async throws -> (Data, Int) {
+        if let server = request.url.flatMap(HTTP.origin(of:)) { contacts.mark(server.absoluteString) }
         do {
             let (data, response) = try await URLSession.shared.data(for: request)
             return (data, (response as? HTTPURLResponse)?.statusCode ?? 0)
@@ -687,5 +717,89 @@ enum HTTP {
         }
         let body = String(decoding: data.prefix(300), as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)
         return body.isEmpty ? HTTPURLResponse.localizedString(forStatusCode: status) : body
+    }
+
+    // MARK: Preconnect
+
+    /// A server talked to more recently than this still has a pooled connection, so warming it
+    /// again would only add a request.
+    static let preconnectInterval: Duration = .seconds(30)
+
+    /// When each server was last sent something.
+    static let contacts = ContactLog()
+
+    /// Sends a keyless `HEAD /` to `url`'s server through the session `send` uses, so the
+    /// request that follows reuses the connection instead of opening one. Fire and forget:
+    /// the answer, usually a 404, and any error are ignored.
+    static func preconnect(to url: URL) {
+        guard let server = HTTP.origin(of: url),
+              contacts.claim(server.absoluteString, unlessWithin: preconnectInterval)
+        else { return }
+        Task.detached(priority: .utility) {
+            _ = try? await URLSession.shared.data(for: HTTP.preconnectRequest(for: server))
+        }
+    }
+
+    /// The warm-up request: the server's root, with no headers of our own and so no key.
+    static func preconnectRequest(for origin: URL) -> URLRequest {
+        var request = URLRequest(url: origin, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 3)
+        request.httpMethod = "HEAD"
+        return request
+    }
+
+    /// `scheme://host[:port]/`: what a pooled connection is shared by.
+    static func origin(of url: URL) -> URL? {
+        guard var components = URLComponents(url: url, resolvingAgainstBaseURL: false),
+              let host = components.host, !host.isEmpty
+        else { return nil }
+        components.user = nil
+        components.password = nil
+        components.path = "/"
+        components.query = nil
+        components.fragment = nil
+        return components.url
+    }
+}
+
+// MARK: - Shared state
+
+/// A set of strings safe to share across tasks. `NSLock` rather than `os` locks so MurmurKit
+/// still builds on Linux.
+final class LockedSet: @unchecked Sendable {
+    private let lock = NSLock()
+    private var values: Set<String> = []
+
+    func contains(_ value: String) -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return values.contains(value)
+    }
+
+    func insert(_ value: String) {
+        lock.lock()
+        defer { lock.unlock() }
+        values.insert(value)
+    }
+}
+
+/// When each server was last contacted, safe to share across tasks.
+final class ContactLog: @unchecked Sendable {
+    private let lock = NSLock()
+    private var last: [String: ContinuousClock.Instant] = [:]
+
+    func mark(_ origin: String) {
+        lock.lock()
+        defer { lock.unlock() }
+        last[origin] = ContinuousClock.now
+    }
+
+    /// Records contact now and returns `true`, unless there was some within `interval`.
+    func claim(_ origin: String, unlessWithin interval: Duration) -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        let now = ContinuousClock.now
+        if let previous = last[origin], now - previous < interval { return false }
+        last[origin] = now
+        return true
     }
 }

@@ -226,21 +226,38 @@ final class DictationController {
     }
 
     /// Polls cheaply (every 2 s) until the tap can be created. Covers grants made while no
-    /// settings window is polling `PermissionsMonitor`.
+    /// settings window is polling `PermissionsMonitor`. While Accessibility is reported granted
+    /// but macOS still refuses the tap (it sometimes wants a fresh process), retries back off
+    /// to once a minute and the failure is logged only when the interval grows; a fresh grant
+    /// notification restarts the loop at 2 s.
     private func scheduleRearm() {
         guard rearmTask == nil else { return }
         rearmTask = Task { [weak self] in
+            let poll: Duration = .seconds(2)
+            var delay = poll
+            var failDelay = poll
             while !Task.isCancelled {
-                try? await Task.sleep(for: .seconds(2))
+                try? await Task.sleep(for: delay, tolerance: .seconds(1))
                 guard let self, !Task.isCancelled else { return }
-                guard Permissions.hasAccessibility else { continue }
+                guard Permissions.hasAccessibility else {
+                    delay = poll
+                    failDelay = poll
+                    continue
+                }
                 self.hotkey.key = self.settings.pushToTalkKey
-                if self.hotkey.start() {
+                if self.hotkey.start(logFailure: false) {
                     self.isHotkeyActive = true
                     self.rearmTask = nil
                     Log.hotkey.info("armed after Accessibility was granted")
                     return
                 }
+                delay = failDelay
+                let next = min(failDelay * 2, .seconds(60))
+                if next != failDelay {
+                    let seconds = delay.components.seconds
+                    Log.hotkey.error("tapCreate refused with Accessibility granted; retrying in \(seconds) s")
+                }
+                failDelay = next
             }
         }
     }
@@ -252,7 +269,13 @@ final class DictationController {
             object: nil,
             queue: .main
         ) { [weak self] _ in
-            Task { @MainActor in _ = self?.activate() }
+            Task { @MainActor in
+                guard let self else { return }
+                // Restart a backed-off rearm loop at its fastest interval.
+                self.rearmTask?.cancel()
+                self.rearmTask = nil
+                _ = self.activate()
+            }
         }
     }
 
@@ -361,6 +384,8 @@ final class DictationController {
         context = quick
         // Claude Code takes a second or two to start; do it while the person is talking.
         prewarmPolish(for: quick)
+        // The other providers warm up too: Apple's model loads, a cloud connection opens.
+        if blocked == nil { warmUpPolish(for: quick) }
         let contextTask = Task.detached(priority: .userInitiated) {
             FrontmostContext.refined(quick, pid: pid)
         }
@@ -852,6 +877,16 @@ final class DictationController {
         let request = polishRequest(text: "", style: style, context: context, configuration: configuration)
         PolishService.claudeCode(model: configuration?.model, effort: configuration?.effort).prewarm(request)
         return true
+    }
+
+    /// Gets the polish provider for a dictation into `context` ready, unless it's Claude Code,
+    /// which `prewarmPolish` starts. Only at key-down: a settings change doesn't warm anything.
+    private func warmUpPolish(for context: AppContext) {
+        guard settings.polishProvider != .off else { return }
+        let style = settings.style(for: context.category)
+        let configuration = lab.configuration(for: style)
+        let request = polishRequest(text: "", style: style, context: context, configuration: configuration)
+        PolishService(settings: settings).prewarm(request, using: configuration)
     }
 
     /// What polish gets for a dictation: Settings' cleanup level, or the instructions of the

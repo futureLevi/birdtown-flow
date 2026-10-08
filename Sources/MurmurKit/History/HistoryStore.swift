@@ -22,6 +22,11 @@ public final class HistoryStore {
 
     @ObservationIgnored private var saveTask: Task<Void, Never>?
 
+    /// Bumped by every change to `records`, so derived values can be cached until the next one.
+    @ObservationIgnored private var revision = 0
+    @ObservationIgnored private var statsCache: (revision: Int, day: Date, calendar: Calendar, stats: DictationStats)?
+    @ObservationIgnored private var failedCache: (revision: Int, count: Int)?
+
     /// Set when `history.json` couldn't be read in full and was copied aside, so the UI can
     /// say so. The copy's name is `history.corrupt-<date>.json`, next to the original.
     public private(set) var quarantinedFile: URL?
@@ -91,12 +96,44 @@ public final class HistoryStore {
         recordingsDirectory.appendingPathComponent("\(id.uuidString).wav")
     }
 
+    /// Home's headline numbers, recomputed only when `records` or the day changes.
+    ///
+    /// Views call this from `body`, which re-runs on every records change and on unrelated
+    /// invalidations too; computing over the whole history each time was the cost. The week
+    /// and the streak depend only on the day of `now`, so a cached value is exact until
+    /// midnight or the next mutation.
+    public func stats(now: Date = Date(), calendar: Calendar = .current) -> DictationStats {
+        // Read through the observed property first, so the calling view still depends on it.
+        let records = self.records
+        let day = calendar.startOfDay(for: now)
+        if let cache = statsCache, cache.revision == revision, cache.day == day, cache.calendar == calendar {
+            return cache.stats
+        }
+        let stats = DictationStats.compute(from: records, now: now, calendar: calendar)
+        statsCache = (revision: revision, day: day, calendar: calendar, stats: stats)
+        return stats
+    }
+
+    /// Dictations that failed and can be retried — the History badge.
+    public var failedCount: Int {
+        let records = self.records
+        if let cache = failedCache, cache.revision == revision { return cache.count }
+        let count = records.reduce(0) { $0 + ($1.outcome == .failed ? 1 : 0) }
+        failedCache = (revision: revision, count: count)
+        return count
+    }
+
     // MARK: - Mutations
 
     public func add(_ record: HistoryRecord) {
         records.removeAll { $0.id == record.id }
         records.insert(record, at: 0)
-        records.sort { $0.createdAt > $1.createdAt }
+        // A new dictation is already the newest, so it only needs sorting into place when it
+        // isn't. Ties stay in front, as the stable sort leaves them.
+        if records.count > 1, records[1].createdAt > record.createdAt {
+            records.sort { $0.createdAt > $1.createdAt }
+        }
+        revision &+= 1
         scheduleSave()
     }
 
@@ -106,6 +143,7 @@ public final class HistoryStore {
             return
         }
         records[index] = record
+        revision &+= 1
         scheduleSave()
     }
 
@@ -114,12 +152,14 @@ public final class HistoryStore {
             removeAudio(of: record)
         }
         records.removeAll { ids.contains($0.id) }
+        revision &+= 1
         scheduleSave()
     }
 
     public func deleteAll() {
         for record in records { removeAudio(of: record) }
         records.removeAll()
+        revision &+= 1
         scheduleSave()
     }
 
@@ -146,7 +186,10 @@ public final class HistoryStore {
                 changed = true
             }
         }
-        if changed { scheduleSave() }
+        if changed {
+            revision &+= 1
+            scheduleSave()
+        }
     }
 
     /// Writes immediately. Call on quit so a debounced save isn't lost.
@@ -175,9 +218,10 @@ public final class HistoryStore {
     }
 
     nonisolated private static func write(_ records: [HistoryRecord], to url: URL) {
+        // No `.sortedKeys`: this runs over the whole history twice per dictation, and the reader
+        // doesn't care about key order.
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
-        encoder.outputFormatting = [.sortedKeys]
         guard let data = try? encoder.encode(records) else { return }
         try? FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
         try? data.write(to: url, options: .atomic)

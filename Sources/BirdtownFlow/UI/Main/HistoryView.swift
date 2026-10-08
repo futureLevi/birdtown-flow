@@ -80,6 +80,9 @@ struct HistoryView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     @State private var query: String
+    /// What the list is searching for: `query` once typing pauses, so each keystroke doesn't
+    /// rescan every dictation. Clearing applies straight away.
+    @State private var appliedQuery: String
     @State private var filter: HistoryFilter = .all
     @State private var selection: Set<UUID> = []
     @State private var highlighted: UUID?
@@ -88,27 +91,39 @@ struct HistoryView: View {
     @State private var commitTask: Task<Void, Never>?
     @State private var isConfirmingBulkDelete = false
     @State private var player = AudioPlayback()
+    @State private var searchMemo = ViewMemo<SearchKey, SearchResult>()
+    @State private var listMemo = ViewMemo<ListKey, ListResult>()
     @FocusState private var listFocused: Bool
 
     private let originalRecordID: UUID?
 
     init(initialQuery: String = "", originalRecordID: UUID? = nil) {
         _query = State(initialValue: initialQuery)
+        _appliedQuery = State(initialValue: initialQuery)
         self.originalRecordID = originalRecordID
     }
 
     var body: some View {
-        let searched = model.history.search(query).filter { !pendingDeletion.contains($0.id) }
-        let visible = searched.filter(filter.matches)
+        // Selecting, highlighting and playing re-run body too; only a new search, filter or
+        // history change redoes the search and the grouping.
+        let searchKey = SearchKey(records: model.history.records, query: appliedQuery, hidden: pendingDeletion)
+        let result = searchMemo.value(for: searchKey) { key in
+            Self.runSearch(key, in: model.history)
+        }
+        let list = listMemo.value(for: ListKey(search: searchKey, filter: filter)) { key in
+            let visible = result.searched.filter(key.filter.matches)
+            return ListResult(visible: visible, days: HistoryDay.group(visible))
+        }
+        let visible = list.visible
         ScrollViewReader { proxy in
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: Spacing.l, pinnedViews: [.sectionHeaders]) {
-                    header(searched: searched)
+                    header(counts: result.counts)
                         .padding(.bottom, Spacing.xs)
                     if visible.isEmpty {
-                        emptyState(searchMatches: searched.count)
+                        emptyState(searchMatches: result.searched.count)
                     } else {
-                        ForEach(HistoryDay.group(visible)) { day in
+                        ForEach(list.days) { day in
                             Section {
                                 dayCard(day)
                             } header: {
@@ -125,11 +140,20 @@ struct HistoryView: View {
             // Only what's on screen: a search may have hidden rows selected earlier.
             .onDeleteCommand { requestDelete(selection.intersection(visible.map(\.id))) }
             .onExitCommand { selection = [] }
-            .onChange(of: query) { _, _ in selection = [] }
+            .onChange(of: appliedQuery) { _, _ in selection = [] }
             .onChange(of: filter) { _, _ in selection = [] }
             .onChange(of: model.focusedRecordID, initial: true) { _, id in
                 reveal(id, proxy: proxy)
             }
+        }
+        .task(id: query) {
+            if query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                appliedQuery = query
+                return
+            }
+            try? await Task.sleep(for: Self.searchDelay)
+            guard !Task.isCancelled else { return }
+            appliedQuery = query
         }
         .overlay(alignment: .bottom) { undoToast }
         .animation(Motion.resolve(Motion.smooth, reduceMotion: reduceMotion), value: pendingDeletion)
@@ -162,7 +186,7 @@ struct HistoryView: View {
         }
     }
 
-    private func header(searched: [HistoryRecord]) -> some View {
+    private func header(counts: [HistoryFilter: Int]) -> some View {
         VStack(alignment: .leading, spacing: Spacing.l) {
             PageHeader(
                 title: "History",
@@ -176,7 +200,7 @@ struct HistoryView: View {
                     FilterChip(
                         title: option.title,
                         symbol: option.symbol,
-                        count: option == .all ? nil : searched.filter(option.matches).count,
+                        count: option == .all ? nil : counts[option, default: 0],
                         isSelected: filter == option
                     ) {
                         filter = option
@@ -226,7 +250,8 @@ struct HistoryView: View {
     /// everything) matched, but not this filter" — each needs a different way out.
     @ViewBuilder
     private func emptyState(searchMatches: Int) -> some View {
-        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        // What the list searched for, which can trail the field by a keystroke while typing.
+        let trimmed = appliedQuery.trimmingCharacters(in: .whitespacesAndNewlines)
         // Records waiting out the undo window are hidden but still in the store.
         if model.history.records.isEmpty || (trimmed.isEmpty && searchMatches == 0) {
             EmptyState(
@@ -242,7 +267,7 @@ struct HistoryView: View {
                 title: "Nothing matches “\(trimmed)”",
                 message: "Try a shorter phrase, or search for the app you were dictating into."
             ) {
-                Button("Clear Search") { query = "" }
+                Button("Clear Search") { clearQuery() }
                     .buttonStyle(.flowSecondary)
             }
         } else if filter == .failed {
@@ -365,7 +390,7 @@ struct HistoryView: View {
         guard let id else { return }
         model.focusedRecordID = nil
         if model.history.record(id: id) != nil, !visibleIDs.contains(id) {
-            query = ""
+            clearQuery()
             filter = .all
         }
         withAnimation(Motion.resolve(Motion.smooth, reduceMotion: reduceMotion)) {
@@ -380,7 +405,53 @@ struct HistoryView: View {
         }
     }
 
+    /// Clears the field and the list together, so a scroll right after finds its row.
+    private func clearQuery() {
+        query = ""
+        appliedQuery = ""
+    }
+
     private var visibleIDs: Set<UUID> {
-        Set(model.history.search(query).filter(filter.matches).map(\.id))
+        Set(model.history.search(appliedQuery).filter(filter.matches).map(\.id))
+    }
+
+    // MARK: - Derived
+
+    /// How long typing has to pause before the list searches.
+    private static let searchDelay: Duration = .milliseconds(120)
+
+    private struct SearchKey: Equatable {
+        let records: [HistoryRecord]
+        let query: String
+        let hidden: Set<UUID>
+    }
+
+    private struct SearchResult {
+        /// Matches for the search, minus records waiting out the undo window.
+        let searched: [HistoryRecord]
+        /// How many of `searched` each chip would show.
+        let counts: [HistoryFilter: Int]
+    }
+
+    private struct ListKey: Equatable {
+        let search: SearchKey
+        let filter: HistoryFilter
+    }
+
+    private struct ListResult {
+        let visible: [HistoryRecord]
+        let days: [HistoryDay]
+    }
+
+    private static func runSearch(_ key: SearchKey, in history: HistoryStore) -> SearchResult {
+        let searched = history.search(key.query).filter { !key.hidden.contains($0.id) }
+        // One pass for every chip's count, not one filter per chip.
+        var counts: [HistoryFilter: Int] = [:]
+        for record in searched {
+            for option in HistoryFilter.allCases where option != .all && option.matches(record) {
+                counts[option, default: 0] += 1
+            }
+        }
+        return SearchResult(searched: searched, counts: counts)
     }
 }

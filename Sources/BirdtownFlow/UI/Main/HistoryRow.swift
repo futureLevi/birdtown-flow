@@ -122,29 +122,7 @@ struct HistoryRow: View {
                     .font(Typography.body)
                     .foregroundStyle(Palette.danger)
                     .fixedSize(horizontal: false, vertical: true)
-                HStack(spacing: Spacing.m) {
-                    Button {
-                        retry()
-                    } label: {
-                        HStack(spacing: Spacing.xs) {
-                            if isRetrying {
-                                ProgressView().controlSize(.mini)
-                            } else {
-                                Image(systemName: "arrow.clockwise")
-                            }
-                            Text(isRetrying ? "Retrying…" : "Retry")
-                        }
-                    }
-                    .buttonStyle(.flowSecondary)
-                    .controlSize(.small)
-                    .disabled(isRetrying || audioURL == nil)
-                    .help(audioURL == nil ? "The audio for this dictation wasn't kept" : "Transcribe the saved audio again")
-                    Text(audioURL == nil
-                         ? "The audio wasn't kept, so this one can't be retried."
-                         : "The audio is saved, so nothing you said is lost.")
-                        .font(Typography.callout)
-                        .foregroundStyle(Palette.inkTertiary)
-                }
+                retryFooter
             }
         case .empty, .cancelled:
             Text(record.outcome == .empty ? "No speech was heard." : "Cancelled before anything was typed.")
@@ -170,6 +148,34 @@ struct HistoryRow: View {
                         .accessibilityLabel(isExpanded ? "Show less of this dictation" : "Show all of this dictation")
                 }
             }
+        }
+    }
+
+    /// Retry, and whether the audio is there to retry with. One disk check per pass.
+    private var retryFooter: some View {
+        let hasAudio = audioURL != nil
+        return HStack(spacing: Spacing.m) {
+            Button {
+                retry()
+            } label: {
+                HStack(spacing: Spacing.xs) {
+                    if isRetrying {
+                        ProgressView().controlSize(.mini)
+                    } else {
+                        Image(systemName: "arrow.clockwise")
+                    }
+                    Text(isRetrying ? "Retrying…" : "Retry")
+                }
+            }
+            .buttonStyle(.flowSecondary)
+            .controlSize(.small)
+            .disabled(isRetrying || !hasAudio)
+            .help(hasAudio ? "Transcribe the saved audio again" : "The audio for this dictation wasn't kept")
+            Text(hasAudio
+                 ? "The audio is saved, so nothing you said is lost."
+                 : "The audio wasn't kept, so this one can't be retried.")
+                .font(Typography.callout)
+                .foregroundStyle(Palette.inkTertiary)
         }
     }
 
@@ -264,6 +270,7 @@ struct HistoryRow: View {
 
     @ViewBuilder
     private var menuItems: some View {
+        let hasAudio = audioURL != nil
         Button("Copy", systemImage: "doc.on.doc") { copy() }
             .disabled(!record.hasText)
         Button("Paste Again", systemImage: "text.insert") { model.controller.insert(record) }
@@ -271,10 +278,10 @@ struct HistoryRow: View {
         Button(player.isPlaying(record.id) ? "Stop Audio" : "Play Audio", systemImage: "play") {
             player.toggle(record.id, url: audioURL)
         }
-        .disabled(audioURL == nil)
+        .disabled(!hasAudio)
         Divider()
         Button("Retry Transcription", systemImage: "arrow.clockwise") { retry() }
-            .disabled(audioURL == nil || isRetrying)
+            .disabled(!hasAudio || isRetrying)
         Button(showsOriginal ? "Hide Original" : "Show Original", systemImage: "text.magnifyingglass") {
             showsOriginal.toggle()
         }

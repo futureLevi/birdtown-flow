@@ -307,19 +307,38 @@ public struct HistoryRecord: Identifiable, Codable, Hashable, Sendable {
         self.errorMessage = errorMessage
     }
 
-    /// Words in the final text.
+    /// Words in the final text: runs of characters that aren't whitespace or newlines.
+    ///
+    /// Counted in place rather than with `split`, which allocated an array of substrings per
+    /// call; Home sums this over the whole history. Same characters, same answer.
     public var wordCount: Int {
-        finalText.split { $0.isWhitespace || $0.isNewline }.count
+        var count = 0
+        var inWord = false
+        for character in finalText {
+            if character.isWhitespace || character.isNewline {
+                inWord = false
+            } else if !inWord {
+                inWord = true
+                count += 1
+            }
+        }
+        return count
     }
 
     /// Speaking rate for this dictation, or `nil` when too short to be meaningful.
     public var wordsPerMinute: Int? {
-        guard audioDuration >= 2, wordCount > 0 else { return nil }
-        return Int((Double(wordCount) / (audioDuration / 60)).rounded())
+        guard audioDuration >= 2 else { return nil }
+        let words = wordCount
+        guard words > 0 else { return nil }
+        return Int((Double(words) / (audioDuration / 60)).rounded())
     }
 
     /// Whether the dictation produced text the user can reuse.
+    ///
+    /// The same test as trimming whitespace and newlines and checking for anything left, without
+    /// building the trimmed copy.
     public var hasText: Bool {
-        !finalText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        let blank = CharacterSet.whitespacesAndNewlines
+        return finalText.unicodeScalars.contains { !blank.contains($0) }
     }
 }

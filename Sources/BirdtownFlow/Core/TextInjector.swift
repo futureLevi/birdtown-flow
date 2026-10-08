@@ -63,29 +63,26 @@ enum TextInjector {
         }
 
         let pasteFirst = prefersPasteboard(NSWorkspace.shared.frontmostApplication)
-        let focused = focusedElement()
 
-        // Apps on the paste-first list often build their AX tree lazily, so "nothing focused"
-        // there means nothing. Everywhere else it's trustworthy.
-        if !pasteFirst {
-            guard let focused, isTextInput(focused) else {
-                copy(text)
-                return .copied(.noTextField)
+        // Every AX call blocks until the target app answers, and the hotkey's event tap lives
+        // on the main run loop, so the probe and write run on their own queue: a slow app
+        // stalls this dictation, not the keyboard. The decisions are the same as on main.
+        let attempt = await withCheckedContinuation { (continuation: CheckedContinuation<AXAttempt, Never>) in
+            axQueue.async {
+                continuation.resume(returning: attemptViaAccessibility(text, pasteFirst: pasteFirst))
             }
         }
 
-        var text = text
-        if let focused, let previous = characterBeforeCaret(in: focused) {
-            text = spaced(text, after: previous)
-        }
-
-        if !pasteFirst, let focused, insertViaAccessibility(text, into: focused) {
-            Log.inject.info("inserted via AX (\(text.count) chars)")
+        switch attempt {
+        case .noTextField:
+            copy(text)
+            return .copied(.noTextField)
+        case .inserted:
+            return .inserted
+        case .needsPaste(let spacedText):
+            await paste(spacedText, restoreClipboard: restoreClipboard)
             return .inserted
         }
-
-        await paste(text, restoreClipboard: restoreClipboard)
-        return .inserted
     }
 
     /// Puts `text` on the clipboard as an ordinary copy (clipboard managers keep it).
@@ -100,7 +97,7 @@ enum TextInjector {
 
     /// Prepends a space when the caret sits right after a word, so consecutive dictations
     /// don't run together — and never doubles one.
-    static func spaced(_ text: String, after previous: Character) -> String {
+    nonisolated static func spaced(_ text: String, after previous: Character) -> String {
         guard let first = text.first else { return text }
         if previous.isWhitespace {
             return first == " " ? String(text.drop { $0 == " " }) : text
@@ -124,7 +121,47 @@ enum TextInjector {
         AXUIElementSetMessagingTimeout(AXUIElementCreateSystemWide(), 0.5)
     }
 
-    private static func focusedElement() -> AXUIElement? {
+    /// What the off-main AX pass decided; the pasteboard side stays on the main actor.
+    private enum AXAttempt: Sendable {
+        /// Typed into the focused field via AX.
+        case inserted
+        /// Nothing editable had focus (only reported outside the paste-first list).
+        case noTextField
+        /// Paste this (already smart-spaced) text instead.
+        case needsPaste(String)
+    }
+
+    /// Serial, so AX reads and writes from back-to-back dictations never interleave.
+    private nonisolated static let axQueue = DispatchQueue(label: "com.birdtownlabs.flow.inject", qos: .userInitiated)
+
+    /// The whole AX side of `insert`: find the focused field, probe for spacing, try the write.
+    /// Runs on `axQueue`; the `AXUIElement` never leaves it.
+    private nonisolated static func attemptViaAccessibility(_ text: String, pasteFirst: Bool) -> AXAttempt {
+        let focused = focusedElement()
+
+        // Apps on the paste-first list often build their AX tree lazily, so "nothing focused"
+        // there means nothing. Everywhere else it's trustworthy.
+        if !pasteFirst {
+            guard let focused, isTextInput(focused) else { return .noTextField }
+        }
+
+        // Read once: it feeds the spacing probe and is the "before" of the AX write's movement
+        // check. Only reads happen in between, so a second read would return the same range.
+        let range = focused.flatMap { selectedRange(of: $0) }
+
+        var text = text
+        if let focused, let range, let previous = characterBeforeCaret(in: focused, at: range) {
+            text = spaced(text, after: previous)
+        }
+
+        if !pasteFirst, let focused, insertViaAccessibility(text, into: focused, before: range) {
+            Log.inject.info("inserted via AX (\(text.count) chars)")
+            return .inserted
+        }
+        return .needsPaste(text)
+    }
+
+    private nonisolated static func focusedElement() -> AXUIElement? {
         var focused: CFTypeRef?
         guard AXUIElementCopyAttributeValue(
             AXUIElementCreateSystemWide(),
@@ -134,12 +171,12 @@ enum TextInjector {
         return unsafeDowncast(focused as AnyObject, to: AXUIElement.self)
     }
 
-    private static let textRoles: Set<String> = [
+    private nonisolated static let textRoles: Set<String> = [
         kAXTextFieldRole, kAXTextAreaRole, kAXComboBoxRole, "AXSearchField",
     ]
 
     /// Something you can type into: a text role, or anything exposing a caret.
-    private static func isTextInput(_ element: AXUIElement) -> Bool {
+    private nonisolated static func isTextInput(_ element: AXUIElement) -> Bool {
         var role: CFTypeRef?
         if AXUIElementCopyAttributeValue(element, kAXRoleAttribute as CFString, &role) == .success,
            let role = role as? String, textRoles.contains(role) {
@@ -151,8 +188,9 @@ enum TextInjector {
             && settable.boolValue
     }
 
-    private static func characterBeforeCaret(in element: AXUIElement) -> Character? {
-        guard let range = selectedRange(of: element), range.location > 0 else { return nil }
+    /// `range` is the element's current selected range, already read by the caller.
+    private nonisolated static func characterBeforeCaret(in element: AXUIElement, at range: CFRange) -> Character? {
+        guard range.location > 0 else { return nil }
 
         var probe = CFRange(location: range.location - 1, length: 1)
         if let parameter = AXValueCreate(.cfRange, &probe) {
@@ -179,7 +217,12 @@ enum TextInjector {
         return String(decoding: Array(units.prefix(range.location)), as: UTF16.self).last
     }
 
-    private static func insertViaAccessibility(_ text: String, into element: AXUIElement) -> Bool {
+    /// `before` is the selected range read just before this call (nil when unreadable).
+    private nonisolated static func insertViaAccessibility(
+        _ text: String,
+        into element: AXUIElement,
+        before: CFRange?
+    ) -> Bool {
         var settable: DarwinBoolean = false
         guard AXUIElementIsAttributeSettable(
             element,
@@ -189,7 +232,7 @@ enum TextInjector {
 
         // Without a readable insertion point there's no way to tell a real insert from a
         // silently-dropped one, so don't gamble — go straight to the fallback.
-        guard let before = selectedRange(of: element) else { return false }
+        guard let before else { return false }
 
         guard AXUIElementSetAttributeValue(
             element,
@@ -214,7 +257,7 @@ enum TextInjector {
         return !unchanged
     }
 
-    private static func selectedRange(of element: AXUIElement) -> CFRange? {
+    private nonisolated static func selectedRange(of element: AXUIElement) -> CFRange? {
         var value: CFTypeRef?
         guard AXUIElementCopyAttributeValue(
             element,
