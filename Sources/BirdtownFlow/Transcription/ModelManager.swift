@@ -54,6 +54,10 @@ final class ModelManager {
     @ObservationIgnored private var wentOffline = false
     @ObservationIgnored private var retriedWhileOnline = false
     private let booster = VocabularyBooster()
+    /// The dictionary's bias phrases, read when an engine becomes ready so the boosting
+    /// session is built before the first dictation. Supplied by the owner: this class doesn't
+    /// read the stores itself.
+    private let boostVocabulary: @MainActor () -> [String]
     /// Snapshot and preview instances show a fixed state and never touch the disk or network.
     private let isPreview: Bool
 
@@ -65,8 +69,9 @@ final class ModelManager {
     /// far longer than anyone should stare at a spinner.
     private static let loadWaitLimit: Duration = .seconds(8)
 
-    init(settings: Settings) {
+    init(settings: Settings, boostVocabulary: @escaping @MainActor () -> [String] = { [] }) {
         self.settings = settings
+        self.boostVocabulary = boostVocabulary
         self.isPreview = false
         observeEngineSetting()
         // A model already on disk starts loading right away, so `.loading` is never a claim
@@ -81,6 +86,7 @@ final class ModelManager {
     /// A manager frozen in `previewState`, for SwiftUI previews and snapshot rendering.
     init(settings: Settings, previewState: State) {
         self.settings = settings
+        self.boostVocabulary = { [] }
         self.isPreview = true
         state = previewState
     }
@@ -215,6 +221,14 @@ final class ModelManager {
                 if !isDownloaded(choice) {
                     try Self.ensureFreeSpace(for: choice, version: version)
                     update(.downloading(progress: nil), id: id)
+                    // Apple Speech stands in for dictations until this finishes (`engine()`).
+                    // Resolve its locale and install its assets now, alongside the download,
+                    // rather than inside the first dictation. A dictation arriving mid-way
+                    // joins the same resolution.
+                    if loaded == nil {
+                        let apple = appleStandIn()
+                        Task { try? await apple.prepare() }
+                    }
                     try await download(version, id: id)
                 }
                 try Task.checkCancellation()
@@ -242,12 +256,14 @@ final class ModelManager {
             state = .ready
             Log.speech.info("\(choice.engineName, privacy: .public) is ready")
 
-            // Off the critical path: if the boosting model is already on disk, load it now so
-            // the first dictation with dictionary words doesn't skip boosting. A missing one is
-            // fetched lazily, the first time there are words to boost.
+            // Off the critical path: if the boosting model is already on disk, load and warm it
+            // now, and build the session for the current dictionary, so the first dictation with
+            // dictionary words neither skips boosting nor waits for it. A missing one is fetched
+            // lazily, the first time there are words to boost.
             if choice.isParakeet, settings.vocabularyBoosting, VocabularyBooster.isDownloaded {
                 let booster = self.booster
-                Task { await booster.prefetch() }
+                let terms = ParakeetEngine.boostTerms(from: boostVocabulary())
+                Task { await booster.prepare(terms: terms) }
             }
         } catch {
             // Superseded or cancelled loads leave `state` to their replacement. A load that is
@@ -389,6 +405,10 @@ final class ModelManager {
     }
 
     private func fallbackEngine() -> any TranscriptionEngine {
+        appleStandIn()
+    }
+
+    private func appleStandIn() -> AppleSpeechEngine {
         if let appleFallback { return appleFallback }
         let engine = AppleSpeechEngine()
         appleFallback = engine
