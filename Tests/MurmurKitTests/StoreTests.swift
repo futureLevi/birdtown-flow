@@ -133,8 +133,11 @@ struct HistoryStoreTests {
 
     @Test("Grouped by day, newest first")
     func groupedByDay() {
-        var calendar = Calendar(identifier: .gregorian)
-        calendar.timeZone = TimeZone(identifier: "UTC")!
+        let calendar: Calendar = {
+            var calendar = Calendar(identifier: .gregorian)
+            calendar.timeZone = TimeZone(identifier: "UTC")!
+            return calendar
+        }()
         let day = calendar.startOfDay(for: now)
         let records = [
             HistoryRecord(createdAt: day.addingTimeInterval(3_600), finalText: "a"),
@@ -159,6 +162,63 @@ struct HistoryStoreTests {
         store.delete(ids: [id])
         #expect(store.records.isEmpty)
         #expect(!FileManager.default.fileExists(atPath: audio.path))
+    }
+
+    @Test("Adding keeps records newest first, whatever order they arrive in")
+    func addOrdering() {
+        let store = HistoryStore(previewRecords: [])
+        let middle = HistoryRecord(createdAt: now, finalText: "middle")
+        let newest = HistoryRecord(createdAt: now.addingTimeInterval(60), finalText: "newest")
+        let oldest = HistoryRecord(createdAt: now.addingTimeInterval(-60), finalText: "oldest")
+        let tie = HistoryRecord(createdAt: now.addingTimeInterval(60), finalText: "tie")
+        store.add(middle)
+        store.add(newest)
+        store.add(oldest)
+        #expect(store.records.map(\.finalText) == ["newest", "middle", "oldest"])
+        // An equal timestamp goes in front, as the stable sort placed it.
+        store.add(tie)
+        #expect(store.records.map(\.finalText) == ["tie", "newest", "middle", "oldest"])
+        // Re-adding a record replaces it rather than duplicating it.
+        var moved = oldest
+        moved.finalText = "oldest again"
+        store.add(moved)
+        #expect(store.records.map(\.finalText) == ["tie", "newest", "middle", "oldest again"])
+    }
+
+    @Test("Cached stats and failed count follow every mutation and the day")
+    func cachedDerivedValues() {
+        let calendar: Calendar = {
+            var calendar = Calendar(identifier: .gregorian)
+            calendar.timeZone = TimeZone(identifier: "UTC")!
+            return calendar
+        }()
+        let store = HistoryStore(previewRecords: [])
+        func check(at date: Date = Date(timeIntervalSince1970: 1_790_000_000)) {
+            #expect(store.stats(now: date, calendar: calendar)
+                == DictationStats.compute(from: store.records, now: date, calendar: calendar))
+            #expect(store.failedCount == store.records.filter { $0.outcome == .failed }.count)
+        }
+        check()
+        let first = HistoryRecord(createdAt: now, finalText: "one two three", audioDuration: 3)
+        store.add(first)
+        check()
+        var edited = first
+        edited.finalText = "one two"
+        store.update(edited)
+        check()
+        store.add(HistoryRecord(createdAt: now.addingTimeInterval(-40 * 86_400), finalText: "old words here",
+                                audioFileName: "gone.wav"))
+        store.add(HistoryRecord(createdAt: now.addingTimeInterval(-60), finalText: "", outcome: .failed))
+        check()
+        // A later day, with no mutation in between, still recomputes the week and the streak.
+        check(at: now.addingTimeInterval(9 * 86_400))
+        store.applyRetention(textDays: 30, audioDays: nil, now: now)
+        check()
+        store.delete(ids: [first.id])
+        check()
+        store.deleteAll()
+        check()
+        #expect(store.stats(now: now, calendar: calendar) == DictationStats())
     }
 }
 

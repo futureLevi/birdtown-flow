@@ -12,7 +12,9 @@ struct HomeView: View {
 
     var body: some View {
         let records = model.history.records
-        let stats = DictationStats.compute(from: records)
+        // Cached in the store: this body re-runs on every history change, and the full
+        // computation scans the whole history.
+        let stats = model.history.stats()
         ScrollView {
             VStack(alignment: .leading, spacing: Spacing.xxl) {
                 header(stats: stats, isFirstRun: records.isEmpty)
