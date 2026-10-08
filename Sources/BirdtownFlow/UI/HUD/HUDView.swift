@@ -20,6 +20,8 @@ struct HUDView: View {
     /// Snapshots pin this so both motion variants can be reviewed whatever the host's setting.
     var reduceMotionOverride: Bool?
     var actions = HUDActions()
+    /// The live panel's audio levels, read each frame by the live content. `nil` uses `state`.
+    var liveLevels: (@MainActor () -> (level: Float, levels: [Float]))? = nil
 
     @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
     @State private var failureCount = 0
@@ -77,7 +79,7 @@ struct HUDView: View {
                 .transition(contentTransition)
         case .listening, .handsFree, .transcribing, .polishing:
             HUDLiveContent(state: state, size: size, frozenTime: frozenTime, reduceMotion: reduceMotion,
-                           actions: actions)
+                           actions: actions, liveLevels: liveLevels)
                 .transition(contentTransition)
         case .done:
             if let notice = state.notice {

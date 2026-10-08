@@ -139,6 +139,8 @@ struct HUDOrb: View {
     let isStop: Bool
     let isHovered: Bool
     let phase: Double?
+    /// The live content's timeline time, so the orb steps in lockstep with the bars.
+    let time: Double?
     let reduceMotion: Bool
     let stop: @MainActor () -> Void
 
@@ -153,7 +155,7 @@ struct HUDOrb: View {
         } label: {
             ZStack {
                 SpectrumOrb(mode: mode, diameter: side, level: level, showsHalo: !isStop, phase: phase,
-                            reduceMotionOverride: reduceMotion)
+                            time: time, reduceMotionOverride: reduceMotion)
                 RoundedRectangle(cornerRadius: Layout.HUD.stopGlyphRadius, style: .continuous)
                     .fill(Palette.HUD.bar)
                     .frame(width: Layout.HUD.stopGlyph, height: Layout.HUD.stopGlyph)
@@ -179,6 +181,9 @@ struct HUDLiveContent: View {
     let frozenTime: Double?
     let reduceMotion: Bool
     let actions: HUDActions
+    /// Reads the live levels; `nil` uses `state`. Read inside the timeline, so the ~30 Hz level
+    /// updates only touch this subtree, which redraws each frame anyway.
+    var liveLevels: (@MainActor () -> (level: Float, levels: [Float]))? = nil
 
     @State private var springs = BarSprings()
 
@@ -193,7 +198,8 @@ struct HUDLiveContent: View {
     }
 
     private func liveFrame(at time: Double, smooth: Bool) -> some View {
-        let wave = HUDWave.frame(kind: state.kind, levels: state.levels, at: time, reduceMotion: reduceMotion)
+        let audio: (level: Float, levels: [Float]) = liveLevels?() ?? (level: state.level, levels: state.levels)
+        let wave = HUDWave.frame(kind: state.kind, levels: audio.levels, at: time, reduceMotion: reduceMotion)
         let heights = smooth ? springs.step(toward: wave.heights, at: time, critical: reduceMotion) : wave.heights
         let thinking = state.kind == .transcribing || state.kind == .polishing
         let midY = size.height / 2
@@ -222,9 +228,9 @@ struct HUDLiveContent: View {
 
             // The one orb, outside any per-state branch so it keeps its identity (and its
             // motion) from listening through thinking.
-            HUDOrb(mode: thinking ? .thinking : .live, level: state.level, isStop: handsFree,
-                   isHovered: state.hover == .stop, phase: frozenTime, reduceMotion: reduceMotion,
-                   stop: actions.stop)
+            HUDOrb(mode: thinking ? .thinking : .live, level: audio.level, isStop: handsFree,
+                   isHovered: state.hover == .stop, phase: frozenTime, time: smooth ? time : nil,
+                   reduceMotion: reduceMotion, stop: actions.stop)
                 .position(x: handsFree ? layout.stop : HUDMetrics.capCentre, y: midY)
         }
         .frame(width: size.width, height: size.height)
