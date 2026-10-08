@@ -467,7 +467,7 @@ private struct LabTestCard: View {
                             .font(Typography.caption)
                             .foregroundStyle(Palette.inkSecondary)
                         Spacer(minLength: Spacing.s)
-                        recentMenu
+                        LabRecentMenu()
                     }
                     TextEditor(text: $bench.sample)
                         .font(Typography.transcript)
@@ -543,11 +543,17 @@ private struct LabTestCard: View {
         guard let id = bench.runningID, let run = bench.runs.first(where: { $0.id == id }) else { return "Running…" }
         return "Running “\(run.configuration.name)”…"
     }
+}
 
-    private var recentMenu: some View {
+/// Fills the test text from a recent dictation. Its own view so typing in the test text,
+/// which re-runs `LabTestCard`, doesn't go through history again.
+private struct LabRecentMenu: View {
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
         let bench = model.bench
         let recent = bench.recentDictations(from: model.history)
-        return Menu {
+        Menu {
             if recent.isEmpty {
                 Text("No dictations yet")
             }

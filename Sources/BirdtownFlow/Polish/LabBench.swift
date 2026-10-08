@@ -121,13 +121,14 @@ final class LabBench {
 
     // MARK: - Test text
 
-    /// Recent dictations with something said, newest first, to test with.
+    /// Recent dictations with something said, newest first, to test with. History is kept
+    /// newest first, so this stops after `limit` matches instead of scanning everything.
     func recentDictations(from history: HistoryStore, limit: Int = 8) -> [HistoryRecord] {
-        history.records
-            .filter { !$0.rawText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
-            .sorted { $0.createdAt > $1.createdAt }
-            .prefix(limit)
-            .map { $0 }
+        Array(
+            history.records.lazy
+                .filter { !$0.rawText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+                .prefix(limit)
+        )
     }
 
     /// Tests with exactly what the speech engine heard, in the app and style it went to.
