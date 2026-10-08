@@ -1,0 +1,7 @@
+sha=0a482d151b4939d07fcc2ecef82174da82bee841
+branch=design/ux-polish-sweep
+build=success
+test=success
+snapshots=success
+speech=failure
+release=skipped
