@@ -211,6 +211,8 @@ struct HistoryView: View {
 
     // MARK: - Header
 
+    private var showsTimings: Bool { model.settings.historyShowsTimings }
+
     /// Matches Settings › Keep audio, so the header never promises audio that isn't kept.
     /// Failed dictations keep theirs regardless, so they can be retried.
     private var subtitle: String {
@@ -246,6 +248,15 @@ struct HistoryView: View {
                     // inviting as a chip with something behind it.
                     .opacity(count == 0 && filter != option ? Interaction.dimmedOpacity : 1)
                 }
+                Spacer(minLength: Spacing.s)
+                // A view, not a filter: it sits apart from the chips and keeps every row listed.
+                FilterChip(title: "Timings", symbol: "stopwatch", isSelected: showsTimings) {
+                    model.settings.historyShowsTimings.toggle()
+                }
+                .help(showsTimings
+                      ? "Hide how long each dictation took"
+                      : "Show how long transcription, polish and the rest took, in milliseconds")
+                .accessibilityLabel("Show timings")
             }
         }
     }
@@ -266,6 +277,7 @@ struct HistoryView: View {
                     showsOriginal: record.id == originalRecordID,
                     // What the list matched, so highlights agree with the rows shown.
                     query: appliedQuery,
+                    showsTimings: showsTimings,
                     onSelect: { click in select(record.id, click, order: order) },
                     onDelete: {
                         requestDelete(selection.contains(record.id)

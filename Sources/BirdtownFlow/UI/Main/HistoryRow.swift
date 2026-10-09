@@ -16,6 +16,8 @@ struct HistoryRow: View {
     var isHighlighted: Bool
     /// The History search, so the row can mark where it matched.
     var query: String
+    /// History's Timings view is on: the row shows how long each step took.
+    var showsTimings: Bool
     var onSelect: ((ListSelection<UUID>.Click) -> Void)?
     let onDelete: () -> Void
 
@@ -38,6 +40,7 @@ struct HistoryRow: View {
         isHighlighted: Bool = false,
         showsOriginal: Bool = false,
         query: String = "",
+        showsTimings: Bool = false,
         onSelect: ((ListSelection<UUID>.Click) -> Void)? = nil,
         onDelete: @escaping () -> Void
     ) {
@@ -46,6 +49,7 @@ struct HistoryRow: View {
         self.isSelected = isSelected
         self.isHighlighted = isHighlighted
         self.query = query
+        self.showsTimings = showsTimings
         self.onSelect = onSelect
         self.onDelete = onDelete
         _showsOriginal = State(initialValue: showsOriginal)
@@ -58,8 +62,12 @@ struct HistoryRow: View {
                 header
                 content
                 footer
+                if showsTimings {
+                    TimingsLine(record: record)
+                }
                 if showsOriginal {
-                    OriginalPanel(record: record, query: query)
+                    // The timings line above already says this, in more detail.
+                    OriginalPanel(record: record, query: query, showsTimings: !showsTimings)
                         .transition(.opacity)
                 }
             }
@@ -622,6 +630,7 @@ private struct RowLinkBody: View {
 struct OriginalPanel: View {
     let record: HistoryRecord
     var query: String = ""
+    var showsTimings = true
 
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.m) {
@@ -661,13 +670,15 @@ struct OriginalPanel: View {
                     }
                 }
             }
-            HStack(spacing: Spacing.l) {
-                timing("Transcribed", record.timings.transcribeMs)
-                if let polisher = record.polishedBy, polisher != .off {
-                    timing(record.polishConfiguration.map { "Polished by \(polisher.title) (Lab: \($0))" }
-                               ?? "Polished by \(polisher.title)", record.timings.polishMs)
+            if showsTimings {
+                HStack(spacing: Spacing.l) {
+                    timing("Transcribed", record.timings.transcribeMs)
+                    if let polisher = record.polishedBy, polisher != .off {
+                        timing(record.polishConfiguration.map { "Polished by \(polisher.title) (Lab: \($0))" }
+                                   ?? "Polished by \(polisher.title)", record.timings.polishMs)
+                    }
+                    timing("Total", record.timings.totalMs)
                 }
-                timing("Total", record.timings.totalMs)
             }
         }
         .padding(Spacing.m)
@@ -692,5 +703,83 @@ struct OriginalPanel: View {
     static func format(_ milliseconds: Int) -> String {
         guard milliseconds >= 1000 else { return "\(milliseconds) ms" }
         return (Double(milliseconds) / 1000).formatted(.number.precision(.fractionLength(1))) + " s"
+    }
+}
+
+/// History's Timings view: how long each step of one dictation took, in milliseconds, so
+/// speed can be compared across dictations without opening each one.
+struct TimingsLine: View {
+    let record: HistoryRecord
+
+    var body: some View {
+        // A narrow window drops the speed and the polisher's name before anything is clipped.
+        ViewThatFits(in: .horizontal) {
+            line(showsDetail: true)
+            line(showsDetail: false)
+        }
+        .font(Typography.caption)
+        .help("Measured from when you let go of the key. Other is cleanup, the dictionary and typing the text.")
+        .accessibilityElement(children: .combine)
+    }
+
+    private func line(showsDetail: Bool) -> some View {
+        let timings = record.timings
+        return HStack(spacing: Spacing.l) {
+            Image(systemName: "stopwatch")
+                .foregroundStyle(Palette.inkTertiary)
+                .accessibilityHidden(true)
+            if timings.isEmpty {
+                Text("No timings recorded")
+                    .foregroundStyle(Palette.inkTertiary)
+            } else {
+                if timings.transcribeMs > 0 {
+                    item("Transcribe", timings.transcribeMs, detail: showsDetail ? speed : nil)
+                }
+                if timings.polishMs > 0 {
+                    // Timed out or rejected: the time was still spent waiting for it.
+                    item(polisher == nil ? "Polish (not used)" : "Polish", timings.polishMs,
+                         detail: showsDetail ? polisher.map { "(\($0))" } : nil)
+                }
+                if timings.otherMs > 0 {
+                    item("Other", timings.otherMs)
+                }
+                item("Total", timings.totalMs, emphasized: true)
+            }
+        }
+        .fixedSize()
+    }
+
+    private func item(_ label: String, _ milliseconds: Int, detail: String? = nil, emphasized: Bool = false) -> some View {
+        HStack(spacing: Spacing.xs) {
+            Text(label)
+                .foregroundStyle(Palette.inkTertiary)
+            Text(Self.format(milliseconds))
+                .foregroundStyle(emphasized ? Palette.ink : Palette.inkSecondary)
+                .monospacedDigit()
+            if let detail {
+                Text(detail)
+                    .foregroundStyle(Palette.inkTertiary)
+                    .monospacedDigit()
+            }
+        }
+        .fixedSize()
+    }
+
+    /// "Claude Code", or `nil` when polish didn't produce the text.
+    private var polisher: String? {
+        guard let provider = record.polishedBy, provider != .off else { return nil }
+        return provider.title
+    }
+
+    /// "(39× real time)": how much faster than the speech itself the engine was.
+    private var speed: String? {
+        guard let factor = record.timings.realtimeFactor(audioSeconds: record.audioDuration) else { return nil }
+        let digits = factor >= 10 ? 0 : 1
+        return "(\(factor.formatted(.number.precision(.fractionLength(digits))))× real time)"
+    }
+
+    /// "9,512 ms": always milliseconds, so rows compare at a glance.
+    static func format(_ milliseconds: Int) -> String {
+        "\(milliseconds.formatted()) ms"
     }
 }
