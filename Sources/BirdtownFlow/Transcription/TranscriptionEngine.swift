@@ -1,4 +1,5 @@
 import Foundation
+import MurmurDictionary
 
 // CONTRACT — owned by the speech agent.
 
@@ -17,6 +18,24 @@ protocol TranscriptionEngine: Sendable {
     ///   - samples: 16 kHz mono Float32.
     ///   - vocabulary: dictionary words to bias toward. May be empty.
     func transcribe(_ samples: [Float], vocabulary: [String]) async throws -> String
+
+    /// `transcribe`, plus the words the engine swapped for dictionary terms on acoustic
+    /// evidence, so History can show them next to the dictionary's own corrections.
+    func transcript(_ samples: [Float], vocabulary: [String]) async throws -> Transcript
+}
+
+extension TranscriptionEngine {
+    /// Engines that don't boost have nothing to report.
+    func transcript(_ samples: [Float], vocabulary: [String]) async throws -> Transcript {
+        Transcript(text: try await transcribe(samples, vocabulary: vocabulary))
+    }
+}
+
+/// One engine result.
+struct Transcript: Sendable {
+    var text: String
+    /// Words the engine first wrote, rewritten to dictionary terms by vocabulary boosting.
+    var boosted: [AppliedCorrection] = []
 }
 
 enum TranscriptionError: LocalizedError {

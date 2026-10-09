@@ -123,7 +123,8 @@ public enum PolishPrompt {
 
     private static let vocabularyHeading = """
         Vocabulary — the speaker's names and terms, spelled correctly. When the transcript has a \
-        word or phrase that sounds like one of these, use this spelling and capitalization:
+        word or phrase that sounds like one of these, use this spelling and capitalization. Never \
+        add a term the speaker didn't say:
         """
 
     private static let replyLine = """
@@ -324,13 +325,21 @@ public enum PolishGuard {
         // 2. No invented content. Editing is subtractive: it deletes fillers, fixes punctuation
         //    and applies spoken corrections, so a content word that was never said is the tell
         //    that the model answered ("what's the capital of France" → "…Paris.").
-        let spoken = Set(contentWords(original) + vocabulary.flatMap(contentWords))
+        //    A dictionary word is the speaker's word only where it replaces something that sounds
+        //    like it ("cloud code" → "Claude Code"). Written where nothing like it was said, it's
+        //    the dictionary leaking into the text, and the deterministic version is better.
+        let said = Set(contentWords(original))
+        let vocabularyWords = Set(vocabulary.flatMap(contentWords))
         var invented: [String] = []
         // "twenty five" → "25" can't be matched word for word; a number is only suspicious
         // when the speaker said no numbers at all.
-        let saidNumbers = spoken.contains { $0.first?.isNumber == true }
-        for word in contentWords(text) where !spoken.contains(word) && !invented.contains(word) {
+        let saidNumbers = said.union(vocabularyWords).contains { $0.first?.isNumber == true }
+        for word in contentWords(text) where !said.contains(word) && !invented.contains(word) {
             if saidNumbers, word.allSatisfy(\.isNumber) { continue }
+            if vocabularyWords.contains(word) {
+                if soundsLikeSomethingSaid(word, in: originalWords) { continue }
+                return .rejected(.inventedWords([word]))
+            }
             invented.append(word)
         }
         let originalCount = contentWords(original).count
@@ -421,6 +430,41 @@ public enum PolishGuard {
         if text.contains("?") { return true }
         let first = words(text).first { !fillers.contains($0) }
         return first.map(interrogatives.contains) ?? false
+    }
+
+    /// How close a dictionary word must be to what was said, by edit distance over the longer
+    /// of the two: "claude"/"cloud" and "anthropic"/"and topic" are 0.67, while a term with no
+    /// counterpart in the sentence scores well under 0.4.
+    static let soundAlikeSimilarity = 0.5
+
+    /// Whether `word` resembles one spoken word, or two or three run together (engines split
+    /// names: "and topic" for "Anthropic", "bird town" for "Birdtown").
+    static func soundsLikeSomethingSaid(_ word: String, in spoken: [String]) -> Bool {
+        let target = Array(word)
+        for start in spoken.indices {
+            var joined = ""
+            for end in start..<min(start + 3, spoken.count) {
+                joined += spoken[end]
+                if similarity(target, Array(joined)) >= soundAlikeSimilarity { return true }
+            }
+        }
+        return false
+    }
+
+    /// 1 minus the Levenshtein distance over the longer length.
+    static func similarity(_ a: [Character], _ b: [Character]) -> Double {
+        let longest = max(a.count, b.count)
+        guard longest > 0 else { return 1 }
+        var previous = Array(0...b.count)
+        for (i, ca) in a.enumerated() {
+            var current = [i + 1]
+            current.reserveCapacity(b.count + 1)
+            for (j, cb) in b.enumerated() {
+                current.append(min(previous[j + 1] + 1, current[j] + 1, previous[j] + (ca == cb ? 0 : 1)))
+            }
+            previous = current
+        }
+        return 1 - Double(previous[b.count]) / Double(longest)
     }
 
     /// Lowercased words with digits and letters, contractions split ("isn't" → "isn", "t").

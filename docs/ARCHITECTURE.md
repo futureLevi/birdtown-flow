@@ -9,7 +9,7 @@ a product that can stand next to Wispr Flow.
 | Area | What it does |
 |---|---|
 | **Dictation** | Hold the push-to-talk key (default **fn**) to record; release to transcribe and insert. Double-tap the key, or press **Space** while holding it, for hands-free; tap again to finish. Settings can make hands-free a tap of **⌃⌥** instead (`HandsFreeShortcut`), for a 🌐 key that macOS also answers. **Esc** cancels. **⌃⌥V** pastes the last dictation again. |
-| **Engine** | Parakeet Ultra (FluidAudio, CoreML on the Neural Engine) by default. Parakeet v3/v2 and Apple Speech as alternatives. Dictionary words boost recognition (CTC vocabulary boosting). |
+| **Engine** | Parakeet Ultra (FluidAudio, CoreML on the Neural Engine) by default. Parakeet v3/v2 and Apple Speech as alternatives. Dictionary words boost recognition (CTC vocabulary boosting), tuned for precision: a word is only rewritten to a dictionary term when it sounds like it, and every rewrite is listed under Replacements in History. |
 | **Pipeline** | raw text → fillers / stutters / spoken commands → optional AI polish → dictionary corrections → snippets → style rules → insert. |
 | **Styles** | Per app category (personal messages, work messages, email, other): formal, casual, very casual, excited. Category comes from the frontmost app (and the window title, for web apps in browsers). |
 | **AI polish** | Off, Apple Intelligence (on-device), Claude (Anthropic key) or any OpenAI-compatible endpoint. Hard timeout; any failure falls back to the deterministic text. |

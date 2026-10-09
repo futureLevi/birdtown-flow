@@ -195,6 +195,33 @@ struct PolishGuardTests {
         #expect(PolishGuard.accept(output, original: original) == nil)
     }
 
+    @Test("A vocabulary term nobody said is rejected, even in a long dictation")
+    func vocabularyInsertionRejected() {
+        let original = "send me the report by friday so I can read it over the weekend and reply on monday"
+        let output = "Send me the Anthropic report by Friday so I can read it over the weekend and reply on Monday."
+        #expect(PolishGuard.review(output, original: original, vocabulary: ["Anthropic"])
+            == .rejected(.inventedWords(["anthropic"])))
+        // The same sentence without the insertion is fine.
+        let clean = "Send me the report by Friday so I can read it over the weekend and reply on Monday."
+        #expect(PolishGuard.accept(clean, original: original, vocabulary: ["Anthropic"]) == clean)
+    }
+
+    @Test("Vocabulary terms may join words the engine split")
+    func vocabularyJoinsSplitWords() {
+        let output = "We should ship the Birdtown build tonight."
+        let original = "we should ship the bird town build tonight"
+        #expect(PolishGuard.accept(output, original: original, vocabulary: ["Birdtown"]) == output)
+    }
+
+    @Test("Sound-alike similarity", arguments: [
+        ("claude", "cloud", true), ("anthropic", "and topic", true), ("birdtown", "bird town", true),
+        ("anthropic", "send me the report", false), ("parakeet", "by friday", false),
+    ])
+    func soundAlike(word: String, spoken: String, expected: Bool) {
+        let words = spoken.split(separator: " ").map(String.init)
+        #expect(PolishGuard.soundsLikeSomethingSaid(word, in: words) == expected)
+    }
+
     @Test("Empty and whitespace-only outputs are rejected", arguments: ["", "   ", "\"\"", "<transcript></transcript>", "..."])
     func rejectsEmpty(output: String) {
         #expect(PolishGuard.accept(output, original: "hello there") == nil)
