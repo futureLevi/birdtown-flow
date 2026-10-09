@@ -55,8 +55,10 @@ actor SegmentedTranscriber {
     private var cuts: [SegmentPlanner.Cut] = []
     private var parts: [WindowTranscript] = []
     private var ledger = SegmentLedger()
-    /// The last word kept so far, for the next window's seam check.
+    /// The last word kept so far, and the first one the last window left past its cut, for
+    /// the next window's seam check.
     private var previous: SegmentStitcher.TimedWord?
+    private var following: SegmentStitcher.TimedWord?
     /// The live windows being decoded, chained one after another.
     private var inFlight: Task<Void, Never>?
     private var decoding = 0
@@ -76,6 +78,9 @@ actor SegmentedTranscriber {
     var analysisStart: Int { planner.analysisStart(after: lastCut) }
     /// A window is being decoded. A live recording waits for it before cutting the next.
     var isBusy: Bool { decoding > 0 }
+    /// Live windows are still wanted: none has failed, and nothing has finished, given up or
+    /// cancelled them.
+    var isAcceptingWindows: Bool { !isClosed && failure == nil }
     /// Windows decoded so far.
     var committedCount: Int { parts.count }
     /// The decoded windows' text, before boosting, so what's built on it while recording
@@ -260,6 +265,7 @@ actor SegmentedTranscriber {
             startSeconds: Double(window.audio.lowerBound) / Self.sampleRate,
             keep: window.keep,
             previous: previous,
+            following: following,
             vocabulary: vocabulary,
             index: index
         )
@@ -271,6 +277,7 @@ actor SegmentedTranscriber {
         }
         parts.append(part)
         if let last = part.kept.lastWord { previous = last }
+        following = part.kept.nextWord
         slowestWindowMs = max(slowestWindowMs, Self.milliseconds(started.duration(to: clock.now)))
         Self.log(part, window: window, index: index, cut: cut, lag: lag)
         return part

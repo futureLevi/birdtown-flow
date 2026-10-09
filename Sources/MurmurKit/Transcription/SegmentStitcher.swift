@@ -53,13 +53,20 @@ public enum SegmentStitcher {
         public var leadingPunctuation: String
         /// The last kept word, for the next window's seam check. `nil` when nothing was kept.
         public var lastWord: TimedWord?
+        /// The first word heard after the kept stretch, which this window leaves to the next
+        /// one, for that window's seam check. `nil` for the tail, or when none was heard.
+        public var nextWord: TimedWord?
         /// `tokens` as text, trimmed.
         public var text: String
 
-        public init(tokens: [TimedToken] = [], leadingPunctuation: String = "", lastWord: TimedWord? = nil, text: String = "") {
+        public init(
+            tokens: [TimedToken] = [], leadingPunctuation: String = "", lastWord: TimedWord? = nil,
+            nextWord: TimedWord? = nil, text: String = ""
+        ) {
             self.tokens = tokens
             self.leadingPunctuation = leadingPunctuation
             self.lastWord = lastWord
+            self.nextWord = nextWord
             self.text = text
         }
     }
@@ -109,17 +116,29 @@ public enum SegmentStitcher {
 
     /// The words of one window that start inside `keep`.
     ///
+    /// The two windows at a seam time a word near the cut a frame or two apart, so it can
+    /// land on different sides of the cut in each. Both mistakes are caught by comparing the
+    /// words either side of the cut: same core, starting within `seamTolerance`.
+    ///
     /// - Parameters:
     ///   - tokens: the window's tokens, in order, timed on the recording's clock.
     ///   - keep: the window's kept stretch, in seconds.
-    ///   - previous: the last word the previous window kept. A first kept word with the same
-    ///     core, starting within `seamTolerance` of it, is the same word heard twice across
-    ///     the cut, and is dropped.
-    public static func keep(_ tokens: [TimedToken], in keep: Range<Double>, after previous: TimedWord?) -> Kept {
-        var kept = Self.words(tokens).filter { keep.contains($0.start) }
-        if let first = kept.first, let previous, first.core == previous.core,
-           abs(first.start - previous.start) <= seamTolerance + 1e-9 {
+    ///   - previous: the last word the previous window kept. A first kept word that's the same
+    ///     word was heard twice across the cut, and is dropped.
+    ///   - following: the first word the previous window heard after the cut, and so left to
+    ///     this one (its `nextWord`). When this window hears that word just before the cut,
+    ///     neither window would write it, so this one keeps it.
+    public static func keep(
+        _ tokens: [TimedToken], in keep: Range<Double>, after previous: TimedWord?, following: TimedWord? = nil
+    ) -> Kept {
+        let words = Self.words(tokens)
+        var kept = words.filter { keep.contains($0.start) }
+        if let first = kept.first, let previous, isSameWord(first, previous) {
             kept.removeFirst()
+        }
+        if let following, let before = words.last(where: { $0.start < keep.lowerBound }),
+           isSameWord(before, following), !(previous.map { isSameWord(before, $0) } ?? false) {
+            kept.insert(before, at: 0)
         }
 
         // Punctuation heard inside the kept stretch but before the first kept word, outside
@@ -132,7 +151,15 @@ public enum SegmentStitcher {
 
         let keptTokens = kept.flatMap { tokens[$0.tokens] }
         let text = keptTokens.map(\.text).joined().trimmingCharacters(in: .whitespacesAndNewlines)
-        return Kept(tokens: keptTokens, leadingPunctuation: leading, lastWord: kept.last, text: text)
+        return Kept(
+            tokens: keptTokens, leadingPunctuation: leading, lastWord: kept.last,
+            nextWord: words.first(where: { $0.start >= keep.upperBound }), text: text
+        )
+    }
+
+    /// The same word heard by two windows: same core, starting within `seamTolerance`.
+    private static func isSameWord(_ a: TimedWord, _ b: TimedWord) -> Bool {
+        a.core == b.core && abs(a.start - b.start) <= seamTolerance + 1e-9
     }
 
     // MARK: - Joining

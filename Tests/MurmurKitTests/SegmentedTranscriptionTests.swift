@@ -220,8 +220,39 @@ struct SegmentStitcherTests {
     @Test("A word belongs to the window holding the start of its first token")
     func keepBoundary() {
         let heard = tokens([(" one", 9.0), (" two", 11.99), ("s", 12.0), (" three", 12.0), (" four", 13.0)])
-        #expect(SegmentStitcher.keep(heard, in: 0..<12, after: nil).text == "one twos")
-        #expect(SegmentStitcher.keep(heard, in: 12..<Double.infinity, after: nil).text == "three four")
+        let first = SegmentStitcher.keep(heard, in: 0..<12, after: nil)
+        #expect(first.text == "one twos")
+        // The word it leaves to the next window, for that window's seam check.
+        #expect(first.nextWord == SegmentStitcher.TimedWord(core: "three", start: 12.0, tokens: 3..<4))
+        let tail = SegmentStitcher.keep(heard, in: 12..<Double.infinity, after: nil)
+        #expect(tail.text == "three four")
+        #expect(tail.nextWord == nil)
+    }
+
+    @Test("A word heard past the cut by one window and before it by the next is still written once")
+    func seamLoss() {
+        // The previous window kept "to" and heard "the" just after the cut, so left it.
+        let previous = SegmentStitcher.TimedWord(core: "to", start: 11.6, tokens: 0..<1)
+        let following = SegmentStitcher.TimedWord(core: "the", start: 12.04, tokens: 1..<2)
+        // This window times "the" a frame earlier, just before the cut.
+        let heard = tokens([(" to", 11.62), (" the", 11.97), (" store", 12.3), (".", 12.6)])
+        let kept = SegmentStitcher.keep(heard, in: 12..<Double.infinity, after: previous, following: following)
+        #expect(kept.text == "the store.")
+        #expect(kept.tokens.map(\.index) == [1, 2, 3])
+        #expect(kept.leadingPunctuation == "")
+        // Without the previous window's word, it would be lost.
+        #expect(SegmentStitcher.keep(heard, in: 12..<Double.infinity, after: previous).text == "store.")
+
+        // Not when it's another word, or too far from the one left over…
+        let other = SegmentStitcher.TimedWord(core: "a", start: 12.04, tokens: 1..<2)
+        #expect(SegmentStitcher.keep(heard, in: 12..<Double.infinity, after: previous, following: other).text == "store.")
+        let later = SegmentStitcher.TimedWord(core: "the", start: 12.2, tokens: 1..<2)
+        #expect(SegmentStitcher.keep(heard, in: 12..<Double.infinity, after: previous, following: later).text == "store.")
+        // …or when the previous window kept it already (a real repeat, "the the", is the one
+        // case the seam can't tell apart, as with duplicates).
+        let keptThe = SegmentStitcher.TimedWord(core: "the", start: 11.95, tokens: 1..<2)
+        #expect(SegmentStitcher.keep(heard, in: 12..<Double.infinity, after: keptThe, following: following).text
+            == "store.")
     }
 
     @Test("Punctuation heard after the previous window's last word is carried as leading punctuation")

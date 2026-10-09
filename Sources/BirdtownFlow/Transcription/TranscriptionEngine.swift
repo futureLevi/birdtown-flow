@@ -56,6 +56,9 @@ struct WindowRequest: Sendable {
     var keep: Range<Double>
     /// The last word the previous window kept, for the seam check.
     var previous: SegmentStitcher.TimedWord?
+    /// The first word the previous window heard past its cut and left to this one, for the
+    /// seam check.
+    var following: SegmentStitcher.TimedWord?
     /// Dictionary terms to boost. May be empty.
     var vocabulary: [String]
     /// The window's number, for logs.

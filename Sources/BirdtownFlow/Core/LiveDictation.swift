@@ -76,14 +76,17 @@ final class LiveDictation {
 
     /// Key-up: stops cutting windows and closes the WAV writer. A window already being
     /// decoded keeps going; `LongTranscription` waits for it.
+    ///
+    /// Doesn't wait for a tick in progress: it may be waiting for a copy of the audio, queued
+    /// behind the recorder stopping its device (slow on Bluetooth), which key-up never waits
+    /// for. Every step of a tick checks `isEnded` first, so it saves nothing more. Closing
+    /// the writer is the part that must finish: an append already running ends first and
+    /// none can start after, so the whole WAV `process` writes next is never overwritten.
     func stop() async {
         guard !isEnded else { return }
         isEnded = true
-        let loop = self.loop
-        self.loop = nil
         loop?.cancel()
-        // A tick half-way through saving a window finishes, or gives up, before the writer closes.
-        await loop?.value
+        loop = nil
         await writer?.close()
     }
 
@@ -112,6 +115,11 @@ final class LiveDictation {
     func handOff() {
         isHandedOff = true
         history.clearInProgress(id)
+        // The row was saved without audio: the whole WAV couldn't be written over the partial
+        // one, which nothing would point at any more.
+        if let writer, history.record(id: id)?.audioFileName == nil {
+            Task { await writer.discard() }
+        }
     }
 
     // MARK: - Ticks
@@ -119,6 +127,9 @@ final class LiveDictation {
     /// Returns `false` when there's nothing more to do for this recording.
     private func step() async -> Bool {
         guard let transcriber else { return await arm() }
+        // Windows given up (one failed, or its audio couldn't be saved) won't be used, so
+        // neither would anything more: stop, rather than copy the recording every second.
+        guard await transcriber.isAcceptingWindows, !isEnded else { return false }
 
         // Text decoded since the last tick.
         let decoded = await transcriber.committedCount
