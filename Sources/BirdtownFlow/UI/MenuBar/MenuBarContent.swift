@@ -7,7 +7,6 @@ import SwiftUI
 struct MenuBarContent: View {
     @Environment(AppModel.self) private var model
     @Environment(\.setupPreview) private var preview
-    @Environment(\.openSettings) private var openSettings
     @Environment(\.openWindow) private var openWindow
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var copiedID: UUID?
@@ -256,9 +255,7 @@ struct MenuBarContent: View {
                 // model can.
                 MenuRow(title: "Speech Settings…", alignsWithBadge: true) {
                     guard preview == nil else { return }
-                    model.requestSettings(.audio)
-                    NSApp.activate()
-                    openSettings()
+                    model.showSettings(.audio)
                 }
             }
         }
@@ -361,8 +358,7 @@ struct MenuBarContent: View {
             .keyboardShortcut("o", modifiers: .command)
             MenuRow(title: "Settings…", shortcut: "⌘,") {
                 guard preview == nil else { return }
-                NSApp.activate()
-                openSettings()
+                model.showSettings()
             }
             .keyboardShortcut(",", modifiers: .command)
             MenuRow(title: "Quit Birdtown Flow", shortcut: "⌘Q") {

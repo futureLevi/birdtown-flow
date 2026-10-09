@@ -45,7 +45,8 @@ Sources/BirdtownFlow             the macOS app
   UI/Components            shared controls
   UI/HUD                   floating pill
   UI/Main                  main window (Home, History, Dictionary, Snippets, Style, Lab)
-  UI/Onboarding, UI/Settings, UI/MenuBar
+  UI/Onboarding, UI/MenuBar
+  UI/Settings              Settings, a modal over the main window (⌘, or the sidebar)
   UI/Snapshots             `BirdtownFlow --render-snapshots <dir>` renders screens to PNG
 ```
 

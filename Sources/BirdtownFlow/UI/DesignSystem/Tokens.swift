@@ -398,6 +398,26 @@ extension Layout {
 extension Elevation {
     /// No shadow, for marks drawn too small for one to read as anything but a smudge.
     static let flat = Shadow(color: .clear, radius: 0, y: 0)
+    /// The Settings card floating over the dimmed main window.
+    static let modal = Shadow(color: .black.opacity(0.22), radius: 40, y: 16)
+}
+
+extension Palette {
+    /// Dims the main window behind the Settings card.
+    static let scrim = Color.adaptive(light: 0x0E183C, lightAlpha: 0.28, dark: 0x000000, darkAlpha: 0.55)
+}
+
+extension Layout {
+    /// Settings as a card over the main window: a column of sections, then a pane as wide
+    /// as the old Settings window. In a smaller window the card shrinks and its pane scrolls.
+    enum SettingsModal {
+        static let sidebarWidth: CGFloat = 200
+        static let rowHeight: CGFloat = 30
+        static let size = CGSize(
+            width: sidebarWidth + Setup.hairline + Layout.settingsWidth,
+            height: Setup.settingsHeight
+        )
+    }
 }
 
 extension Motion {

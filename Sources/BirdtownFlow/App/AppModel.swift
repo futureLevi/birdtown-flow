@@ -67,14 +67,14 @@ final class AppModel {
     @ObservationIgnored var retries: RetryTracker = .shared
 
     /// Main-window navigation. To move around from outside the window, call `show(_:)`,
-    /// `showHistory(revealing:)` or `requestSettings(_:)` rather than setting these.
+    /// `showHistory(revealing:)` or `showSettings(_:)` rather than setting these.
     var section: SidebarSection = .home
     /// History row to reveal: History scrolls to it, selects it and flashes it, then clears
     /// this. Set it through `showHistory(revealing:)`.
     var focusedRecordID: UUID?
-    /// The Settings tab the next opening of Settings should land on. `SettingsView` reads
-    /// and clears it; set it through `requestSettings(_:)`.
-    var requestedSettingsTab: SettingsTab?
+    /// The Settings section showing in the main window's Settings modal, or `nil` when it's
+    /// closed. Open it through `showSettings(_:)`; the modal switches sections by setting it.
+    var settingsTab: SettingsTab?
 
     init(
         settings: Settings = .shared,
@@ -194,9 +194,10 @@ final class AppModel {
     // The one way to move the main window from anywhere (the HUD, the menu bar, Settings,
     // other pages). Each brings the window forward, reopening it if it was closed.
 
-    /// Brings the main window forward on a section.
+    /// Brings the main window forward on a section, closing Settings if it was open.
     func show(_ section: SidebarSection) {
         self.section = section
+        settingsTab = nil
         bringMainWindowForward()
     }
 
@@ -209,11 +210,16 @@ final class AppModel {
         show(.history)
     }
 
-    /// Asks the Settings window to open on `tab`. Call it just before the view's
-    /// `openSettings()` (or from a `SettingsLink`'s simultaneous gesture); `SettingsView`
-    /// switches to the tab and clears the request.
-    func requestSettings(_ tab: SettingsTab) {
-        requestedSettingsTab = tab
+    /// Brings the main window forward with Settings open over it, on `tab`. Settings is a
+    /// modal inside the main window, not a window of its own.
+    func showSettings(_ tab: SettingsTab = .general) {
+        settingsTab = tab
+        bringMainWindowForward()
+    }
+
+    /// Closes the Settings modal, leaving the main window where it was.
+    func closeSettings() {
+        settingsTab = nil
     }
 
     private func bringMainWindowForward() {
