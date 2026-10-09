@@ -12,7 +12,8 @@ struct MurmurApp: App {
                 .frame(minWidth: Layout.windowMinWidth, minHeight: Layout.windowMinHeight)
         }
         .defaultSize(width: Layout.windowIdealWidth, height: Layout.windowIdealHeight)
-        .windowToolbarStyle(.unified(showsTitle: false))
+        // No title bar: the traffic lights sit over the sidebar, under them the app's name.
+        .windowStyle(.hiddenTitleBar)
         .commands { MurmurCommands() }
 
         MenuBarExtra {
