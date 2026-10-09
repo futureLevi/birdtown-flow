@@ -1,5 +1,6 @@
 import FluidAudio
 import Foundation
+import MurmurDictionary
 
 /// NVIDIA Parakeet TDT 0.6B (Ultra, v3 or v2), compiled to CoreML and run on the Neural
 /// Engine through FluidAudio's `AsrManager`.
@@ -70,7 +71,11 @@ actor ParakeetEngine: TranscriptionEngine {
     }
 
     func transcribe(_ samples: [Float], vocabulary: [String]) async throws -> String {
-        guard !samples.isEmpty else { return "" }
+        try await transcript(samples, vocabulary: vocabulary).text
+    }
+
+    func transcript(_ samples: [Float], vocabulary: [String]) async throws -> Transcript {
+        guard !samples.isEmpty else { return Transcript(text: "") }
 
         await acquire()
         defer { release() }
@@ -95,32 +100,36 @@ actor ParakeetEngine: TranscriptionEngine {
         let recognized = clock.now
 
         let terms = Self.boostTerms(from: vocabulary)
-        var boosted = false
+        var boosted: [AppliedCorrection] = []
+        var rescoredText = false
         if !text.isEmpty, !terms.isEmpty, let timings = result.tokenTimings, !timings.isEmpty,
            await boostingEnabled(),
            let rescored = await boost(text: text, timings: timings, audio: audio, terms: terms) {
-            text = rescored
-            boosted = true
+            text = rescored.text
+            boosted = rescored.replacements
+            rescoredText = true
         }
 
         let engineName = name
         let audioSeconds = Double(samples.count) / Self.sampleRate
         let totalSeconds = Self.seconds(clock.now - started)
         let recognitionSeconds = Self.seconds(recognized - started)
-        let boostNote = boosted ? ", boosted" : ""
+        let boostNote = rescoredText ? ", boosted" : ""
         Log.speech.info("""
             \(engineName, privacy: .public): \(audioSeconds, format: .fixed(precision: 1))s audio in \
             \(totalSeconds, format: .fixed(precision: 2))s (recognition \(recognitionSeconds, format: .fixed(precision: 2))s\
             \(boostNote, privacy: .public))
             """)
-        return text
+        return Transcript(text: text, boosted: boosted)
     }
 
     // MARK: - Boosting
 
     /// Rescoring runs a second, smaller encoder over the audio. It's bounded so a wedged
     /// CoreML pass can only ever cost the boost, never the dictation.
-    private func boost(text: String, timings: [TokenTiming], audio: [Float], terms: [String]) async -> String? {
+    private func boost(
+        text: String, timings: [TokenTiming], audio: [Float], terms: [String]
+    ) async -> VocabularyBooster.Rescored? {
         let booster = self.booster
         let audioSeconds = Double(audio.count) / Self.sampleRate
         let budget = Duration.milliseconds(Int(1_000 + audioSeconds * 60))

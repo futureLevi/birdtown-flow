@@ -819,6 +819,8 @@ final class DictationController {
     private struct PipelineOutput {
         var engineName: String
         var raw: String
+        /// Words the engine's vocabulary boosting rewrote before `raw` came back.
+        var boosted: [AppliedCorrection]
         var result: PipelineResult
         var polishedBy: PolishProvider?
         var polishNote: String?
@@ -831,7 +833,19 @@ final class DictationController {
             record.engine = engineName
             record.rawText = raw
             record.finalText = result.text
-            record.corrections = result.corrections
+            // Boosting first: it ran first, on the audio, before any text step. The same pair
+            // from both steps is one row (History lists them by value), with the counts added.
+            var corrections: [AppliedCorrection] = []
+            for correction in boosted + result.corrections {
+                if let index = corrections.firstIndex(where: { $0.from == correction.from && $0.to == correction.to }) {
+                    let merged = corrections[index]
+                    corrections[index] = AppliedCorrection(from: merged.from, to: merged.to,
+                                                           count: merged.count + correction.count)
+                } else {
+                    corrections.append(correction)
+                }
+            }
+            record.corrections = corrections
             record.snippets = result.snippets
             record.polishedBy = polishedBy
             record.polishConfiguration = polishConfiguration
@@ -856,9 +870,10 @@ final class DictationController {
         let engine = try await readyEngine()
         engineName = engine.displayName
         let vocabulary = settings.vocabularyBoosting ? dictionary.biasPhrases : []
-        let raw = try await Watchdog.run(within: Timing.transcription) {
-            try await engine.transcribe(samples, vocabulary: vocabulary)
+        let transcript = try await Watchdog.run(within: Timing.transcription) {
+            try await engine.transcript(samples, vocabulary: vocabulary)
         }
+        let raw = transcript.text
         let transcribeMs = Self.milliseconds(transcribeStart.duration(to: clock.now))
         try Task.checkCancellation()
 
@@ -894,6 +909,7 @@ final class DictationController {
         return PipelineOutput(
             engineName: engine.displayName,
             raw: raw,
+            boosted: transcript.boosted,
             result: result,
             polishedBy: polishedBy,
             polishNote: polishNote,
