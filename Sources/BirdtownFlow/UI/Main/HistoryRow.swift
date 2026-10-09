@@ -301,7 +301,7 @@ struct HistoryRow: View {
                 .font(Typography.caption)
                 .foregroundStyle(Palette.inkTertiary)
                 .lineLimit(1)
-                .help(polishNote.map { record.polishedBy == nil ? "AI polish wasn't used: \($0)" : $0 } ?? "")
+                .help(polishNote.map { wasPolished ? $0 : "AI polish wasn't used: \($0)" } ?? "")
         }
     }
 
@@ -493,9 +493,14 @@ struct HistoryRow: View {
         if let wpm = record.wordsPerMinute { parts.append("\(wpm) wpm") }
         if let note = polishNote {
             // A long dictation polished in parts was polished, even if some parts weren't.
-            parts.append(record.polishedBy == nil ? "Not polished · \(Self.shortNote(note))" : Self.shortNote(note))
+            parts.append(wasPolished ? Self.shortNote(note) : "Not polished · \(Self.shortNote(note))")
         }
         return parts.joined(separator: " · ")
+    }
+
+    /// The text went in polished, at least in part.
+    private var wasPolished: Bool {
+        record.polishedBy.map { $0 != .off } ?? false
     }
 
     /// Core keeps polish fallback notes ("Timed out after 4 s", "Partly polished · 1 of 4

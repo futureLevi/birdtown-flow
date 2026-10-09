@@ -183,7 +183,25 @@ struct PolishChunkerTests {
         // "N" may yet be "No", which keeps the correction with it.
         #expect(PolishChunker.chunks(text + " N", closedOnly: true).count == 1)
         #expect(PolishChunker.chunks(text + " No wait, Friday.", closedOnly: true).count == 1)
-        #expect(PolishChunker.chunks(text + " Nobody minded.", closedOnly: true).count == 2)
+        // "I" may yet be "I mean", and "I mean" is known only once the word after "mean" is.
+        #expect(PolishChunker.chunks(text + " I", closedOnly: true).count == 1)
+        #expect(PolishChunker.chunks(text + " I m", closedOnly: true).count == 1)
+        #expect(PolishChunker.chunks(text + " I mean Friday.", closedOnly: true).count == 1)
+        #expect(PolishChunker.chunks(text + " Nobody minded.", closedOnly: true).count == 1)
+        #expect(PolishChunker.chunks(text + " Nobody minded at all.", closedOnly: true).count == 2)
+        #expect(PolishChunker.chunks(text + " I think it went well.", closedOnly: true).count == 2)
+    }
+
+    @Test("A two-word correction stays with what it corrects", arguments: ["I mean Friday.", "Make that Friday."])
+    func twoWordCorrectionNotSplit(correction: String) {
+        for leading in 6...14 {
+            let parts = (0..<leading).map { sentence($0, words: 12) }
+                + ["Let's move the launch to Thursday.", correction] + sentences(from: 50, total: 300)
+            let chunks = PolishChunker.chunks(parts.joined(separator: " "))
+            #expect(chunks.count > 1)
+            #expect(!chunks.contains { $0.text.hasSuffix("Thursday.") })
+            #expect(!chunks.contains { $0.text.hasPrefix(correction) })
+        }
     }
 
     @Test("Context is the end of the part before, at most 60 words")
@@ -266,6 +284,16 @@ struct PolishChunkerTests {
     ])
     func cues(token: String, expected: PolishChunker.Cue) {
         #expect(PolishChunker.cue(Substring(token)) == expected)
+    }
+
+    @Test("Two-word cues", arguments: [
+        ("I", "mean", PolishChunker.Cue.strong), ("I", "mean,", .strong), ("Make", "that", .strong),
+        ("make", "it", .strong), ("I", "think", .none), ("Make", "sure", .none), ("Meanwhile", "I", .none),
+    ])
+    func twoWordCues(token: String, following: String, expected: PolishChunker.Cue) {
+        #expect(PolishChunker.cue(Substring(token), then: Substring(following)) == expected)
+        // Without the second word, only the first counts.
+        #expect(PolishChunker.cue(Substring(token)) == .none)
     }
 
     @Test("Parts polished at once, by provider", arguments: [

@@ -17,10 +17,17 @@ final class ProgressivePolisher {
     /// The part being polished now.
     private(set) var inFlight: (request: PolishRequest, task: Task<PolishService.Outcome, Never>)?
 
+    /// The provider the cached and in-flight results come from; `nil` until the first part
+    /// is sent. Key-up uses them only if it polishes with the same one.
+    var provider: PolishProvider? { polisher?.provider }
+
     private let service: PolishService
     private let settings: Settings
     private var template: PolishRequest?
+    private var configuration: PolishConfiguration?
     private var options = PipelineOptions()
+    /// Made when the first part is ready to send, so a short dictation never reads a key or
+    /// builds a client for it.
     private var polisher: (client: any PolishClient, provider: PolishProvider)?
     /// The most recent committed text, for when the part in flight is done.
     private var latest: String?
@@ -40,9 +47,10 @@ final class ProgressivePolisher {
 
     /// Called once the frontmost context is known; `template.text` is "".
     func configure(template: PolishRequest, configuration: PolishConfiguration?, options: PipelineOptions) {
+        guard !isStopped else { return }
         self.template = template
+        self.configuration = configuration
         self.options = options
-        polisher = service.polisher(using: configuration)
         startNextPart()
     }
 
@@ -75,7 +83,7 @@ final class ProgressivePolisher {
     /// Sends the first finished part that hasn't been polished, unless one is in flight.
     private func startNextPart() {
         guard !isStopped, inFlight == nil, settings.polishWhileSpeaking, settings.polishInParts,
-              let template, let polisher, let raw = latest
+              let template, let raw = latest
         else { return }
         let prepared = TextPipeline.prepare(raw, options: options)
         for (index, chunk) in PolishChunker.chunks(prepared, closedOnly: true).enumerated() {
@@ -84,6 +92,15 @@ final class ProgressivePolisher {
             request.context = chunk.context
             request.continues = chunk.continues
             guard cache[request] == nil, !failed.contains(request) else { continue }
+            if polisher == nil {
+                // No key, Apple Intelligence off…: key-up polishes every part and says why.
+                guard let made = service.polisher(using: configuration) else {
+                    isStopped = true
+                    return
+                }
+                polisher = made
+            }
+            guard let polisher else { return }
             start(request, number: index + 1, client: polisher.client, provider: polisher.provider)
             return
         }

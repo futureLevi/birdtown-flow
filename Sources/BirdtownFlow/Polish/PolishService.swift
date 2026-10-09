@@ -111,53 +111,70 @@ final class PolishService {
             part.continues = chunk.continues
             return part
         }
-        progressive?.stop(keeping: requests)
+        // What was polished while the person talked counts only if it came from this provider
+        // (Settings can change during a recording).
+        let earlier = progressive.flatMap { $0.provider == polisher.provider ? $0 : nil }
+        progressive?.stop(keeping: earlier == nil ? [] : requests)
 
         var outcomes = [Outcome?](repeating: nil, count: requests.count)
         var awaited: [(index: Int, task: Task<Outcome, Never>)] = []
         var fresh: [Int] = []
         for (index, part) in requests.enumerated() {
-            if let done = progressive?.cache[part] {
+            if let done = earlier?.cache[part] {
                 outcomes[index] = done
-            } else if let inFlight = progressive?.inFlight, inFlight.request == part {
+            } else if let inFlight = earlier?.inFlight, inFlight.request == part {
                 awaited.append((index, inFlight.task))
             } else {
                 fresh.append(index)
             }
         }
+        // The part still in flight counts against the provider's limit, but never holds back
+        // the first fresh part.
         let local = endpointURL.map { Self.isLocal($0) } ?? false
-        let parallel = min(PolishChunker.concurrency(for: polisher.provider, localEndpoint: local), fresh.count)
+        let limit = PolishChunker.concurrency(for: polisher.provider, localEndpoint: local)
+        let parallel = min(max(1, limit - awaited.count), fresh.count)
         let client = polisher.client
         let provider = polisher.provider
-        let polishPart: @Sendable (Int) async -> PartResult = { [requests] index in
-            let started = ContinuousClock.now
-            let outcome = await self.polishOne(requests[index], client: client, provider: provider, deadline: deadline)
-            return PartResult(index: index, outcome: outcome, wait: ContinuousClock.now - started, fresh: true)
+        let polishPart: @Sendable (Int) async -> Outcome = { [requests] index in
+            await self.polishOne(requests[index], client: client, provider: provider, deadline: deadline)
         }
 
         let results = await withTaskGroup(of: PartResult.self, returning: [PartResult].self) { group in
             for (index, task) in awaited {
                 group.addTask {
                     let started = ContinuousClock.now
-                    let outcome = await withTaskCancellationHandler {
+                    var outcome = await withTaskCancellationHandler {
                         await task.value
                     } onCancel: {
                         task.cancel()
                     }
-                    return PartResult(index: index, outcome: outcome, wait: ContinuousClock.now - started, fresh: false)
+                    // It timed out or failed against its own, earlier deadline: like a part
+                    // that failed while the person talked, it gets what's left of this one.
+                    if outcome.provider == nil, !outcome.rejectedByGuard, !Task.isCancelled {
+                        outcome = await polishPart(index)
+                    }
+                    return PartResult(index: index, outcome: outcome, wait: ContinuousClock.now - started)
                 }
             }
             var queue = fresh[...]
-            var running = 0
-            while running < parallel, let index = queue.popFirst() {
-                group.addTask { await polishPart(index) }
-                running += 1
+            for _ in 0..<parallel {
+                guard let index = queue.popFirst() else { break }
+                group.addTask {
+                    let started = ContinuousClock.now
+                    let outcome = await polishPart(index)
+                    return PartResult(index: index, outcome: outcome, wait: ContinuousClock.now - started)
+                }
             }
             var results: [PartResult] = []
             while let result = await group.next() {
                 results.append(result)
-                if result.fresh, let index = queue.popFirst() {
-                    group.addTask { await polishPart(index) }
+                // A part finished, awaited or fresh: the next one takes its place.
+                if let index = queue.popFirst() {
+                    group.addTask {
+                        let started = ContinuousClock.now
+                        let outcome = await polishPart(index)
+                        return PartResult(index: index, outcome: outcome, wait: ContinuousClock.now - started)
+                    }
                 }
             }
             return results
@@ -195,8 +212,6 @@ final class PolishService {
         let index: Int
         let outcome: Outcome
         let wait: Duration
-        /// Sent at key-up, rather than started while the person was talking.
-        let fresh: Bool
     }
 
     /// The client a dictation with `configuration` (or Settings) is polished with, and its

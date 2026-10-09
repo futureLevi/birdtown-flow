@@ -48,7 +48,7 @@ public enum PolishChunker {
     /// place to split.
     ///
     /// - Parameter closedOnly: only the parts already finished: those followed by the start
-    ///   of a part whose first word is known. Nothing while the text is under `minimumWords`
+    ///   of a part whose first two words are known. Nothing while the text is under `minimumWords`
     ///   words, since it may yet be polished in one piece.
     public static func chunks(_ text: String, closedOnly: Bool = false) -> [PolishChunk] {
         let scan = Scan(text)
@@ -58,8 +58,9 @@ public enum PolishChunker {
         var parts = split(scan)
         if closedOnly {
             parts.removeLast()
-            // A part is decided by the first word after it; the text's last word may still grow.
-            if let last = parts.last, scan.segments[last.upperBound].lowerBound == scan.tokens.count - 1 {
+            // A part is decided by the first two words after it ("I mean…"); the text's last
+            // word may still grow.
+            if let last = parts.last, scan.segments[last.upperBound].lowerBound >= scan.tokens.count - 2 {
                 parts.removeLast()
             }
         } else if parts.count == 1 {
@@ -125,9 +126,11 @@ public enum PolishChunker {
         "next", "finally", "lastly",
     ]
     static let weakCues: Set<String> = ["and", "but", "or", "so", "then", "also"]
+    /// Corrections spoken as two words: "I mean Friday.", "Make that four."
+    static let strongPairs: [String: Set<String>] = ["i": ["mean"], "make": ["that", "it"]]
 
     /// Greedy, left to right: each part closes at the first sentence end that qualifies, so
-    /// a part depends only on the text up to the first word after it.
+    /// a part depends only on the text up to the first two words after it.
     private static func split(_ scan: Scan) -> [Range<Int>] {
         var parts: [Range<Int>] = []
         var start = 0
@@ -136,8 +139,10 @@ public enum PolishChunker {
             words += scan.segments[index].count
             guard index < scan.segments.count - 1 else { break }
             let separator = scan.runs[scan.segments[index].upperBound - 1]
-            let next = scan.tokens[scan.segments[index + 1].lowerBound]
-            if closes(words: words, paragraph: separator.filter(\.isNewline).count >= 2, cue: cue(next)) {
+            let first = scan.segments[index + 1].lowerBound
+            let next = scan.tokens[first]
+            let after = first + 1 < scan.tokens.count ? scan.tokens[first + 1] : nil
+            if closes(words: words, paragraph: separator.filter(\.isNewline).count >= 2, cue: cue(next, then: after)) {
                 parts.append(start..<(index + 1))
                 start = index + 1
                 words = 0
@@ -157,10 +162,15 @@ public enum PolishChunker {
         return paragraph || words >= targetWords
     }
 
-    static func cue(_ token: Substring) -> Cue {
+    /// - Parameter following: the word after `token`, for the two-word corrections.
+    static func cue(_ token: Substring, then following: Substring? = nil) -> Cue {
         if isListMarker(token) { return .strong }
         let word = token.lowercased().trimmingCharacters(in: .punctuationCharacters)
         if strongCues.contains(word) || isOrdinalNumber(word) { return .strong }
+        if let following, let seconds = strongPairs[word],
+           seconds.contains(following.lowercased().trimmingCharacters(in: .punctuationCharacters)) {
+            return .strong
+        }
         return weakCues.contains(word) ? .weak : .none
     }
 
