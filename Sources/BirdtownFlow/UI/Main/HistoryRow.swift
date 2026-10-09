@@ -733,7 +733,7 @@ struct TimingsLine: View {
                     .foregroundStyle(Palette.inkTertiary)
             } else {
                 if timings.transcribeMs > 0 {
-                    item("Transcribe", timings.transcribeMs, detail: showsDetail ? speed : nil)
+                    item("Transcribe", timings.transcribeMs, detail: showsDetail ? transcribeDetail : nil)
                 }
                 if timings.polishMs > 0 {
                     // Timed out or rejected: the time was still spent waiting for it.
@@ -771,8 +771,11 @@ struct TimingsLine: View {
         return provider.title
     }
 
-    /// "(39× real time)": how much faster than the speech itself the engine was.
-    private var speed: String? {
+    /// "(39× real time)": how much faster than the speech itself the engine was. A long
+    /// dictation transcribed while it was recorded has no such number (key-up only waited for
+    /// its last few seconds), so it says where the rest of the work went instead.
+    private var transcribeDetail: String? {
+        if record.timings.transcribedWhileRecording == true { return "(the rest done while you talked)" }
         guard let factor = record.timings.realtimeFactor(audioSeconds: record.audioDuration) else { return nil }
         let digits = factor >= 10 ? 0 : 1
         return "(\(factor.formatted(.number.precision(.fractionLength(digits))))× real time)"
