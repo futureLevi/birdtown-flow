@@ -103,7 +103,18 @@ actor VocabularyBooster {
         }
 
         guard let session = await configuredSession(for: terms, models: models) else { return nil }
+        return await Self.rescore(text: text, tokenTimings: tokenTimings, samples: samples, session: session)
+    }
 
+    /// The CTC pass, FluidAudio's candidates, `BoostGuard`, and the rewrite. Static and async,
+    /// so it runs off this actor: a boost that overruns its deadline mustn't hold up the next
+    /// dictation's call into the actor.
+    private static func rescore(
+        text: String,
+        tokenTimings: [TokenTiming],
+        samples: [Float],
+        session: Session
+    ) async -> Rescored? {
         let evidence: VocabularyRescorer.CandidateEvidenceOutput
         do {
             let spotted = try await session.spotter.spotKeywordsWithLogProbs(
@@ -142,12 +153,12 @@ actor VocabularyBooster {
             Log.speech.info("vocabulary boosting: \(vetoed, privacy: .public) rewrite(s) vetoed by BoostGuard")
         }
         guard !accepted.isEmpty,
-              let rescored = Self.rewrite(evidence, applying: accepted)?
+              let rescored = rewrite(evidence, applying: accepted)?
                   .trimmingCharacters(in: .whitespacesAndNewlines),
               !rescored.isEmpty, rescored != text
         else { return nil }
 
-        let replacements = Self.applied(accepted)
+        let replacements = applied(accepted)
         let rewritten = replacements.reduce(0) { $0 + $1.count }
         Log.speech.info("vocabulary boosting rewrote \(rewritten, privacy: .public) word(s)")
         return Rescored(text: rescored, replacements: replacements)
@@ -175,7 +186,7 @@ actor VocabularyBooster {
            ranges.allSatisfy({ $0.lowerBound >= 0 && $0.upperBound <= bytes.count }) {
             var output = bytes
             for (candidate, range) in zip(chosen, ranges).reversed() {
-                output.replaceSubrange(range, with: Array(candidate.canonicalTerm.utf8))
+                output.replaceSubrange(range, with: Array(written(candidate, in: evidence).utf8))
             }
             return String(decoding: output, as: UTF8.self)
         }
@@ -187,11 +198,25 @@ actor VocabularyBooster {
             // Keep the sentence punctuation the replaced words ended on.
             let ending = String(evidence.baseWords[candidate.wordRange.upperBound - 1]
                 .reversed().prefix(while: { ".,;:!?…".contains($0) }).reversed())
-            words.append(candidate.canonicalTerm + ending)
+            words.append(written(candidate, in: evidence) + ending)
             index = candidate.wordRange.upperBound
         }
         words += evidence.baseWords[index...]
         return words.joined(separator: " ")
+    }
+
+    /// The term as it goes into the text: capitalized where the heard words started a sentence
+    /// ("kubectl" for "Cube control" at the start), otherwise exactly as the dictionary spells it.
+    /// FluidAudio's own rewrite does the same.
+    private static func written(
+        _ candidate: VocabularyRescorer.CandidateEvidence,
+        in evidence: VocabularyRescorer.CandidateEvidenceOutput
+    ) -> String {
+        let term = candidate.canonicalTerm
+        guard let first = term.first, first.isLowercase,
+              evidence.baseWords[candidate.wordRange.lowerBound].first?.isUppercase == true
+        else { return term }
+        return first.uppercased() + term.dropFirst()
     }
 
     /// The rewrites that were applied, one entry per distinct rewrite, in the order first seen.
