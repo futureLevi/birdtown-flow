@@ -1,0 +1,154 @@
+[0/1] Planning build
+Building for debugging...
+[0/7] Write sources
+[3/7] Write swift-version-7974D3F7F03D5E95.txt
+[5/10] Compiling MurmurDictionary DictionaryEntry.swift
+[6/10] Emitting module MurmurDictionary
+/Users/runner/work/birdtown-flow/birdtown-flow/Sources/MurmurDictionary/DictionaryCorrector.swift:156:5: warning: 'public' modifier is redundant for static property declared in a public extension
+154 |     /// or ambiguous audio they start inventing text from the vocabulary they were primed
+155 |     /// with, which is a far worse failure than the misspelling it was meant to fix.
+156 |     public static let biasLimit = 40
+    |     `- warning: 'public' modifier is redundant for static property declared in a public extension
+157 | 
+158 |     /// - Returns: the correct spellings — `.term` words and the *write* side of corrections —
+
+/Users/runner/work/birdtown-flow/birdtown-flow/Sources/MurmurDictionary/DictionaryCorrector.swift:160:5: warning: 'public' modifier is redundant for static method declared in a public extension
+158 |     /// - Returns: the correct spellings — `.term` words and the *write* side of corrections —
+159 |     ///   most recently useful first, capped at `biasLimit`.
+160 |     public static func biasPhrases(from entries: [DictionaryEntry]) -> [String] {
+    |     `- warning: 'public' modifier is redundant for static method declared in a public extension
+161 |         var seen = Set<String>()
+162 |         var phrases: [String] = []
+[7/10] Compiling MurmurDictionary DictionaryCorrector.swift
+/Users/runner/work/birdtown-flow/birdtown-flow/Sources/MurmurDictionary/DictionaryCorrector.swift:156:5: warning: 'public' modifier is redundant for static property declared in a public extension
+154 |     /// or ambiguous audio they start inventing text from the vocabulary they were primed
+155 |     /// with, which is a far worse failure than the misspelling it was meant to fix.
+156 |     public static let biasLimit = 40
+    |     `- warning: 'public' modifier is redundant for static property declared in a public extension
+157 | 
+158 |     /// - Returns: the correct spellings — `.term` words and the *write* side of corrections —
+
+/Users/runner/work/birdtown-flow/birdtown-flow/Sources/MurmurDictionary/DictionaryCorrector.swift:160:5: warning: 'public' modifier is redundant for static method declared in a public extension
+158 |     /// - Returns: the correct spellings — `.term` words and the *write* side of corrections —
+159 |     ///   most recently useful first, capped at `biasLimit`.
+160 |     public static func biasPhrases(from entries: [DictionaryEntry]) -> [String] {
+    |     `- warning: 'public' modifier is redundant for static method declared in a public extension
+161 |         var seen = Set<String>()
+162 |         var phrases: [String] = []
+[8/27] Compiling MurmurKit HistoryDeletion.swift
+[9/27] Compiling MurmurKit HistoryStore.swift
+[10/27] Compiling MurmurKit ListSelection.swift
+[11/27] Compiling MurmurKit Retranscription.swift
+[12/27] Compiling MurmurKit SearchHighlight.swift
+[13/27] Compiling MurmurKit KeyShortcut.swift
+[14/27] Compiling MurmurKit ModifierPairTap.swift
+[15/27] Compiling MurmurKit ShortcutCapture.swift
+[16/27] Emitting module MurmurKit
+[17/27] Compiling MurmurKit ShortcutRules.swift
+[18/27] Compiling MurmurKit DictationFeedback.swift
+[19/27] Compiling MurmurKit EngineFallback.swift
+[20/27] Compiling MurmurKit Models.swift
+[21/27] Compiling MurmurKit Readiness.swift
+[22/27] Compiling MurmurKit Polish.swift
+[23/27] Compiling MurmurKit PolishLab.swift
+[24/27] Compiling MurmurKit DictationStats.swift
+[25/34] Compiling MurmurKit LibraryUsage.swift
+[26/34] Compiling MurmurKit AppCategoryResolver.swift
+[27/34] Compiling MurmurKit Cleanup.swift
+[28/34] Compiling MurmurKit Regex.swift
+[29/34] Compiling MurmurKit SnippetStore.swift
+[30/34] Compiling MurmurKit TextPipeline.swift
+[31/34] Compiling MurmurKit UndoableDeletion.swift
+[32/79] Compiling BirdtownFlow Sounds.swift
+[33/79] Compiling BirdtownFlow SpeechSmokeTest.swift
+[34/79] Compiling BirdtownFlow AppleSpeechEngine.swift
+[35/79] Compiling BirdtownFlow HardDeadline.swift
+[36/79] Compiling BirdtownFlow ModelManager.swift
+[37/79] Compiling BirdtownFlow ParakeetEngine.swift
+[38/79] Compiling BirdtownFlow TranscriptionEngine.swift
+[39/79] Compiling BirdtownFlow VocabularyBooster.swift
+[40/79] Compiling BirdtownFlow Brand.swift
+[41/79] Compiling BirdtownFlow IconExporter.swift
+[42/79] Compiling BirdtownFlow LogoPainter.swift
+[43/79] Compiling BirdtownFlow SpectrumOrb.swift
+[44/79] Compiling BirdtownFlow AppIcon.swift
+[45/79] Compiling BirdtownFlow Badge.swift
+[46/79] Compiling BirdtownFlow Banner.swift
+[47/79] Compiling BirdtownFlow ButtonStyles.swift
+[48/79] Compiling BirdtownFlow Card.swift
+[49/79] Compiling BirdtownFlow EmptyState.swift
+[50/79] Compiling BirdtownFlow FilterChip.swift
+[51/79] Compiling BirdtownFlow FocusRing.swift
+[52/79] Compiling BirdtownFlow IconButton.swift
+[53/79] Compiling BirdtownFlow KeyCap.swift
+[54/101] Emitting module BirdtownFlow
+[55/101] Compiling BirdtownFlow AppModel.swift
+[56/101] Compiling BirdtownFlow MurmurApp.swift
+[57/101] Compiling BirdtownFlow AudioDevices.swift
+[58/101] Compiling BirdtownFlow AudioRecorder.swift
+[59/101] Compiling BirdtownFlow DictationController.swift
+[60/101] Compiling BirdtownFlow FrontmostContext.swift
+[61/101] Compiling BirdtownFlow GlobalShortcut.swift
+[62/101] Compiling BirdtownFlow HotkeyMonitor.swift
+[63/101] Compiling BirdtownFlow TextInjector.swift
+[64/101] Compiling BirdtownFlow Watchdog.swift
+[65/101] Compiling BirdtownFlow AppleIntelligencePolisher.swift
+[66/101] Compiling BirdtownFlow ClaudeCodePolisher.swift
+[67/101] Compiling BirdtownFlow Keychain.swift
+[68/101] Compiling BirdtownFlow LabBench.swift
+[69/101] Compiling BirdtownFlow PolishService.swift
+[70/101] Compiling BirdtownFlow DictionaryStore.swift
+[71/101] Compiling BirdtownFlow AppPaths.swift
+[72/101] Compiling BirdtownFlow LaunchAtLogin.swift
+[73/101] Compiling BirdtownFlow Log.swift
+[74/101] Compiling BirdtownFlow Permissions.swift
+[75/101] Compiling BirdtownFlow PermissionsMonitor.swift
+[76/101] Compiling BirdtownFlow Settings.swift
+[77/123] Compiling BirdtownFlow LabeledInput.swift
+[78/123] Compiling BirdtownFlow SearchField.swift
+[79/123] Compiling BirdtownFlow SectionHeader.swift
+[80/123] Compiling BirdtownFlow ShortcutRecorder.swift
+[81/123] Compiling BirdtownFlow SpectrumProgressBar.swift
+[82/123] Compiling BirdtownFlow StatTile.swift
+[83/123] Compiling BirdtownFlow UndoToast.swift
+[84/123] Compiling BirdtownFlow AppearanceSupport.swift
+[85/123] Compiling BirdtownFlow Tokens+HUD.swift
+[86/123] Compiling BirdtownFlow Tokens+History.swift
+[87/123] Compiling BirdtownFlow Tokens.swift
+[88/123] Compiling BirdtownFlow HUDController.swift
+[89/123] Compiling BirdtownFlow HUDFilm.swift
+[90/123] Compiling BirdtownFlow HUDState.swift
+[91/123] Compiling BirdtownFlow HUDView.swift
+[92/123] Compiling BirdtownFlow HUDWaveform.swift
+[93/123] Compiling BirdtownFlow AudioPlayback.swift
+[94/123] Compiling BirdtownFlow DictionaryView.swift
+[95/123] Compiling BirdtownFlow HistoryFloatingBar.swift
+[96/123] Compiling BirdtownFlow HistoryRow.swift
+[97/123] Compiling BirdtownFlow HistoryView.swift
+[98/123] Compiling BirdtownFlow HomeView.swift
+[99/123] Compiling BirdtownFlow LabView.swift
+[100/123] Compiling BirdtownFlow MainEnvironment.swift
+[101/123] Compiling BirdtownFlow MainView.swift
+[102/123] Compiling BirdtownFlow RetryTracker.swift
+[103/123] Compiling BirdtownFlow SnippetsView.swift
+[104/123] Compiling BirdtownFlow StyleView.swift
+[105/123] Compiling BirdtownFlow ViewMemo.swift
+[106/123] Compiling BirdtownFlow MenuBarContent.swift
+[107/123] Compiling BirdtownFlow OnboardingView.swift
+[108/123] Compiling BirdtownFlow OnboardingWindowController.swift
+[109/123] Compiling BirdtownFlow SetupKit.swift
+[110/123] Compiling BirdtownFlow SettingsPanes.swift
+[111/123] Compiling BirdtownFlow SettingsView.swift
+[112/123] Compiling BirdtownFlow SampleData.swift
+[113/123] Compiling BirdtownFlow SnapshotCatalog+HUD.swift
+[114/123] Compiling BirdtownFlow SnapshotCatalog+Lab.swift
+[115/123] Compiling BirdtownFlow SnapshotCatalog+Library.swift
+[116/123] Compiling BirdtownFlow SnapshotCatalog+Main.swift
+[117/123] Compiling BirdtownFlow SnapshotCatalog+MenuBar.swift
+[118/123] Compiling BirdtownFlow SnapshotCatalog+Setup.swift
+[119/123] Compiling BirdtownFlow SnapshotCatalog+Shortcuts.swift
+[120/123] Compiling BirdtownFlow SnapshotRenderer.swift
+[120/123] Write Objects.LinkFileList
+[121/123] Linking BirdtownFlow
+[122/123] Applying BirdtownFlow
+Build complete! (44.92s)
