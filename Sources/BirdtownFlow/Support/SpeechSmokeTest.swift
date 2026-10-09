@@ -72,9 +72,13 @@ enum SpeechSmokeTest {
 
     /// `--compare-segmented`: transcribes the file whole, then window by window as a long
     /// Retry does (`SegmentedTranscriber.offline`), prints both and checks they agree: at most
-    /// 1.0% of words changed, no word doubled at a seam, no window over 600 ms. Each
-    /// `--term <phrase>` is boosted and must come out of both; `--expect-forced` asks for at
-    /// least one cut made without a pause. Any failed check exits non-zero.
+    /// 1.0% of words changed, no words doubled at a seam. Speed is checked against the whole
+    /// pass on the same machine, since CI's virtual Mac is much slower than a real one: the
+    /// windows together take at most 1.75× the whole pass (their overlap alone adds about a
+    /// quarter), and no window takes over 2.5 s, far less than the ~12 s of speech it adds
+    /// while recording. Each `--term <phrase>` is boosted and must come out of both;
+    /// `--expect-forced` asks for at least one cut made without a pause. Any failed check
+    /// exits non-zero.
     private static func compareSegmented(
         _ samples: [Float], engine: any TranscriptionEngine, models: ModelManager, arguments: [String]
     ) async throws -> Int32 {
@@ -131,7 +135,9 @@ enum SpeechSmokeTest {
         check("words changed ≤ 1.0%", changed <= 0.01,
               "\(String(format: "%.2f", changed * 100))%, -\(removed) +\(added) of \(words)")
         check("no word doubled at a seam", doubled.isEmpty, doubled.isEmpty ? "none" : doubled.joined(separator: ", "))
-        check("slowest window ≤ 600 ms", segmented.slowestWindowMs <= 600,
+        let cost = Self.seconds(windowsTime) / max(Self.seconds(wholeTime), 0.001)
+        check("windows ≤ 1.75× the whole pass", cost <= 1.75, String(format: "%.2f×", cost))
+        check("slowest window ≤ 2.5 s", segmented.slowestWindowMs <= 2500,
               "\(segmented.slowestWindowMs) ms, \(segmented.windows) windows")
         if arguments.contains("--expect-forced") {
             check("a cut without a pause", segmented.forcedCuts >= 1, "\(segmented.forcedCuts) forced")
@@ -142,5 +148,10 @@ enum SpeechSmokeTest {
             check("\"\(term)\" in both", inWhole && inWindows, "whole \(inWhole), windows \(inWindows)")
         }
         return failed ? 5 : 0
+    }
+
+    private static func seconds(_ duration: Duration) -> Double {
+        let (seconds, attoseconds) = duration.components
+        return Double(seconds) + Double(attoseconds) / 1e18
     }
 }

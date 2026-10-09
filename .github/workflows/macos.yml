@@ -151,8 +151,9 @@ jobs:
           grep -qi "dictation" speech.log
 
       # A long recording transcribed whole and in windows must agree (`--compare-segmented`):
-      # under 1% of words changed, no word doubled at a seam, no window over 600 ms, at least
-      # one cut made without a pause, and the dictionary term out of both.
+      # under 1% of words changed, no words doubled at a seam, windows not much slower than
+      # the whole pass, at least one cut made without a pause, and the dictionary term out of
+      # both.
       - name: Long recording check
         id: segmented
         if: steps.build.outcome == 'success'
