@@ -23,6 +23,7 @@ final class ProgressivePolisher {
 
     private let service: PolishService
     private let settings: Settings
+    private let lab: PolishLabStore
     private var template: PolishRequest?
     private var configuration: PolishConfiguration?
     private var options = PipelineOptions()
@@ -34,15 +35,17 @@ final class ProgressivePolisher {
     /// Parts that timed out or failed while recording; key-up sends them again.
     private var failed: Set<PolishRequest> = []
     private var failuresInARow = 0
-    /// Key-up took over, the recording is gone, or the provider keeps failing.
+    /// Key-up took over, the recording is gone, the provider keeps failing, or the polish
+    /// settings changed while recording.
     private var isStopped = false
 
     /// A provider that fails this many parts in a row is left alone until key-up.
     private static let failureLimit = 2
 
-    init(service: PolishService, settings: Settings) {
+    init(service: PolishService, settings: Settings, lab: PolishLabStore) {
         self.service = service
         self.settings = settings
+        self.lab = lab
     }
 
     /// Called once the frontmost context is known; `template.text` is "".
@@ -82,9 +85,18 @@ final class ProgressivePolisher {
 
     /// Sends the first finished part that hasn't been polished, unless one is in flight.
     private func startNextPart() {
-        guard !isStopped, inFlight == nil, settings.polishWhileSpeaking, settings.polishInParts,
-              let template, let raw = latest
-        else { return }
+        guard !isStopped, let template else { return }
+        // Settings and the Lab can change while the person talks. Text goes out before key-up
+        // only while that's still wanted, and only for parts key-up would use.
+        let sameWay = polishesSameWay(as: template)
+        guard mayPolishWhileSpeaking, sameWay else {
+            Log.polish.info("progressive polish stopped: the polish settings changed while recording")
+            // Parts polished some other way mustn't stand in for this way at key-up.
+            if !sameWay { cache = [:] }
+            stop(keeping: [])
+            return
+        }
+        guard inFlight == nil, let raw = latest else { return }
         let prepared = TextPipeline.prepare(raw, options: options)
         for (index, chunk) in PolishChunker.chunks(prepared, closedOnly: true).enumerated() {
             var request = template
@@ -104,6 +116,24 @@ final class ProgressivePolisher {
             start(request, number: index + 1, client: polisher.client, provider: polisher.provider)
             return
         }
+    }
+
+    /// Polish is on, in parts, and allowed to send text before key-up.
+    private var mayPolishWhileSpeaking: Bool {
+        settings.polishProvider != .off && settings.polishInParts && settings.polishWhileSpeaking
+    }
+
+    /// Whether key-up would polish the way the parts here are polished: the app still has
+    /// `template`'s style, the style the same Lab configuration (or none, and unchanged), and
+    /// that resolves to the provider the first part went to.
+    private func polishesSameWay(as template: PolishRequest) -> Bool {
+        guard settings.style(for: template.category) == template.style,
+              lab.configuration(for: template.style) == configuration
+        else { return false }
+        let provider = configuration?.provider ?? settings.polishProvider
+        guard provider != .off else { return false }
+        if let polisher, polisher.provider != provider { return false }
+        return true
     }
 
     private func start(_ request: PolishRequest, number: Int, client: any PolishClient, provider: PolishProvider) {

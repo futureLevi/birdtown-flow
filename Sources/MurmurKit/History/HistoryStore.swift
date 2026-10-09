@@ -15,7 +15,8 @@ import Observation
 /// A long recording saves its row before the key comes up, while its audio is still being
 /// appended (`LiveDictation`). Until the dictation takes the row over, its id is in
 /// `inProgress` and lists leave it out (`HistoryDeletion.visible`). The set isn't saved: after
-/// a crash the row shows as "Interrupted", with the audio recorded so far, and Retry works.
+/// a crash the row shows as "Interrupted", with the audio recorded so far (its length read
+/// back from the WAV, `RecordingLength`), and Retry works.
 @MainActor
 @Observable
 public final class HistoryStore {
@@ -42,7 +43,7 @@ public final class HistoryStore {
         self.directory = directory
         try? FileManager.default.createDirectory(at: recordingsDirectory, withIntermediateDirectories: true)
         let loaded = Self.load(from: fileURL)
-        records = loaded.records
+        records = Self.recoveringLengths(of: loaded.records, in: recordingsDirectory)
         quarantinedFile = loaded.quarantined
     }
 
@@ -284,6 +285,22 @@ public final class HistoryStore {
         let records = entries.compactMap(\.record)
         let quarantined = records.count < entries.count ? quarantine(url) : nil
         return (records.sorted { $0.createdAt > $1.createdAt }, quarantined)
+    }
+
+    /// Rows saved before their recording's length was known get it from their WAV: a long
+    /// recording's row, saved while it was still going, that a crash or a quit left as
+    /// "Interrupted". Only failed rows without a length are looked at, so launch reads few
+    /// headers if any: every other row got its length from the dictation that settled it.
+    /// Nothing is saved here; the next change saves it with the rest.
+    nonisolated static func recoveringLengths(of records: [HistoryRecord], in recordings: URL) -> [HistoryRecord] {
+        var records = records
+        for index in records.indices where records[index].outcome == .failed && records[index].audioDuration == 0 {
+            guard let name = records[index].audioFileName,
+                  let seconds = RecordingLength.seconds(ofFileAt: recordings.appendingPathComponent(name))
+            else { continue }
+            records[index].audioDuration = seconds
+        }
+        return records
     }
 
     /// Copies a damaged file to `<name>.corrupt-<timestamp>.json` beside it.
