@@ -11,7 +11,8 @@ import MurmurKit
 /// once a second, the next window is cut when the audio allows and the last one is decoded.
 @MainActor
 final class LiveDictation {
-    /// Raw joined text of committed windows, after each commit. `ProgressivePolisher` subscribes.
+    /// Joined text of committed windows, boosted, before the text pipeline; after each commit.
+    /// `ProgressivePolisher` subscribes.
     var onCommittedText: (@MainActor (String) -> Void)?
     /// The windowed transcription in progress. `nil` until the recording is long enough.
     private(set) var transcriber: SegmentedTranscriber?

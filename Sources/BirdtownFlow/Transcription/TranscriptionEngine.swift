@@ -54,8 +54,9 @@ struct WindowRequest: Sendable {
     var startSeconds: Double
     /// The stretch whose words this window keeps, in the recording's seconds.
     var keep: Range<Double>
-    /// The last word the previous window kept, for the seam check.
-    var previous: SegmentStitcher.TimedWord?
+    /// The last words kept before this window (`SegmentStitcher.Kept.lastWords`), for the
+    /// seam check.
+    var tail: [SegmentStitcher.TimedWord]
     /// The first word the previous window heard past its cut and left to this one, for the
     /// seam check.
     var following: SegmentStitcher.TimedWord?

@@ -55,9 +55,9 @@ actor SegmentedTranscriber {
     private var cuts: [SegmentPlanner.Cut] = []
     private var parts: [WindowTranscript] = []
     private var ledger = SegmentLedger()
-    /// The last word kept so far, and the first one the last window left past its cut, for
+    /// The last words kept so far, and the first one the last window left past its cut, for
     /// the next window's seam check.
-    private var previous: SegmentStitcher.TimedWord?
+    private var tail: [SegmentStitcher.TimedWord] = []
     private var following: SegmentStitcher.TimedWord?
     /// The live windows being decoded, chained one after another.
     private var inFlight: Task<Void, Never>?
@@ -83,11 +83,13 @@ actor SegmentedTranscriber {
     var isAcceptingWindows: Bool { !isClosed && failure == nil }
     /// Windows decoded so far.
     var committedCount: Int { parts.count }
-    /// The decoded windows' text, before boosting, so what's built on it while recording
-    /// (`ProgressivePolisher`) doesn't depend on when boosting ran.
+    /// The decoded windows' text, boosted as the final transcript will be: a window's text
+    /// is fixed once it's decoded, so this is exactly the start of the transcript key-up
+    /// builds, and what's polished from it while recording (`ProgressivePolisher`) is
+    /// reused.
     var committedRawText: String {
         SegmentStitcher.join(parts.map {
-            SegmentStitcher.Part(leadingPunctuation: $0.kept.leadingPunctuation, text: $0.kept.text)
+            SegmentStitcher.Part(leadingPunctuation: $0.kept.leadingPunctuation, text: $0.text)
         })
     }
 
@@ -264,7 +266,7 @@ actor SegmentedTranscriber {
             audio: audio,
             startSeconds: Double(window.audio.lowerBound) / Self.sampleRate,
             keep: window.keep,
-            previous: previous,
+            tail: tail,
             following: following,
             vocabulary: vocabulary,
             index: index
@@ -276,7 +278,7 @@ actor SegmentedTranscriber {
             try await engine.transcribeWindow(request)
         }
         parts.append(part)
-        if let last = part.kept.lastWord { previous = last }
+        if !part.kept.lastWords.isEmpty { tail = part.kept.lastWords }
         following = part.kept.nextWord
         slowestWindowMs = max(slowestWindowMs, Self.milliseconds(started.duration(to: clock.now)))
         Self.log(part, window: window, index: index, cut: cut, lag: lag)

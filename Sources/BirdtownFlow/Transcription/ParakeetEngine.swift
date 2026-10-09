@@ -252,7 +252,7 @@ extension ParakeetEngine: WindowedTranscriptionEngine {
         let tokens = timings.enumerated().map { index, timing in
             SegmentStitcher.TimedToken(text: timing.token, start: timing.startTime + request.startSeconds, index: index)
         }
-        let kept = SegmentStitcher.keep(tokens, in: request.keep, after: request.previous, following: request.following)
+        let kept = SegmentStitcher.keep(tokens, in: request.keep, after: request.tail, following: request.following)
 
         // Only the kept words are offered for rewriting, with their timings on the window's
         // own clock and the window's audio, as `VocabularyBoostingSession` asks of a window
