@@ -301,7 +301,7 @@ struct HistoryRow: View {
                 .font(Typography.caption)
                 .foregroundStyle(Palette.inkTertiary)
                 .lineLimit(1)
-                .help(polishNote.map { "AI polish wasn't used: \($0)" } ?? "")
+                .help(polishNote.map { record.polishedBy == nil ? "AI polish wasn't used: \($0)" : $0 } ?? "")
         }
     }
 
@@ -491,12 +491,16 @@ struct HistoryRow: View {
             parts.append(Duration.seconds(record.audioDuration).formatted(.time(pattern: .minuteSecond)))
         }
         if let wpm = record.wordsPerMinute { parts.append("\(wpm) wpm") }
-        if let note = polishNote { parts.append("Not polished · \(Self.shortNote(note))") }
+        if let note = polishNote {
+            // A long dictation polished in parts was polished, even if some parts weren't.
+            parts.append(record.polishedBy == nil ? "Not polished · \(Self.shortNote(note))" : Self.shortNote(note))
+        }
         return parts.joined(separator: " · ")
     }
 
-    /// Core keeps polish fallback notes ("Timed out after 4 s") on records that succeeded.
-    /// They're information, not errors: only `.failed` records show their message in red.
+    /// Core keeps polish fallback notes ("Timed out after 4 s", "Partly polished · 1 of 4
+    /// parts kept as dictated (timed out after 4 s)") on records that succeeded. They're
+    /// information, not errors: only `.failed` records show their message in red.
     private var polishNote: String? {
         guard record.outcome != .failed,
               let note = record.errorMessage?.trimmingCharacters(in: .whitespacesAndNewlines),
