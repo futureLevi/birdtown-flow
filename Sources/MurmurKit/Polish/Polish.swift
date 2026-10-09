@@ -434,7 +434,7 @@ public enum PolishGuard {
 
     /// How close a dictionary word must be to what was said, by edit distance over the longer
     /// of the two: "claude"/"cloud" and "anthropic"/"and topic" are 0.67, while a term with no
-    /// counterpart in the sentence scores well under 0.4.
+    /// counterpart in the sentence scores under 0.5.
     static let soundAlikeSimilarity = 0.5
 
     /// Whether `word` resembles one spoken word, or two or three run together (engines split

@@ -101,18 +101,20 @@ actor ParakeetEngine: TranscriptionEngine {
 
         let terms = Self.boostTerms(from: vocabulary)
         var boosted: [AppliedCorrection] = []
+        var rescoredText = false
         if !text.isEmpty, !terms.isEmpty, let timings = result.tokenTimings, !timings.isEmpty,
            await boostingEnabled(),
            let rescored = await boost(text: text, timings: timings, audio: audio, terms: terms) {
             text = rescored.text
             boosted = rescored.replacements
+            rescoredText = true
         }
 
         let engineName = name
         let audioSeconds = Double(samples.count) / Self.sampleRate
         let totalSeconds = Self.seconds(clock.now - started)
         let recognitionSeconds = Self.seconds(recognized - started)
-        let boostNote = boosted.isEmpty ? "" : ", boosted"
+        let boostNote = rescoredText ? ", boosted" : ""
         Log.speech.info("""
             \(engineName, privacy: .public): \(audioSeconds, format: .fixed(precision: 1))s audio in \
             \(totalSeconds, format: .fixed(precision: 2))s (recognition \(recognitionSeconds, format: .fixed(precision: 2))s\
