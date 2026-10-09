@@ -40,6 +40,10 @@ extension SnapshotCatalog {
             SnapshotRenderer.Shot("history-selection", size: size) {
                 window(.history, records: records, preview: selected)
             },
+            // The Timings view: every row says how long each step took, one with Original open.
+            SnapshotRenderer.Shot("history-timings", size: size) {
+                historyTimings(records: records, preview: original)
+            },
             // A delete from Recent, still undoable: Home shows the same toast as History.
             SnapshotRenderer.Shot("home-undo-delete", size: size) {
                 undoDelete(.home, records: records, preview: sample)
@@ -232,6 +236,16 @@ extension SnapshotCatalog {
             // Every shot is built before any renders: hold the undo window open past them all.
             model.historyDeletion.delete([first.id], window: .seconds(3600))
         }
+        return MainView()
+            .environment(model)
+            .environment(\.mainPreview, preview)
+            .transaction { $0.disablesAnimations = true }
+    }
+
+    /// History with the Timings view on.
+    private static func historyTimings(records: [HistoryRecord], preview: MainPreview) -> some View {
+        let model = previewModel(records: records, section: .history)
+        model.settings.historyShowsTimings = true
         return MainView()
             .environment(model)
             .environment(\.mainPreview, preview)
