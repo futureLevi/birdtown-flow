@@ -76,6 +76,8 @@ final class HotkeyMonitor {
     /// Device modifier bits already down when our key went down (or since reported), so only
     /// a *newly* pressed modifier counts as a chord.
     private var knownModifiers: UInt64 = 0
+    /// Mouse presses counted when a click-modifying push-to-talk key went down.
+    private var clicksAtPress: UInt64 = 0
     /// Keys whose key-down we swallowed; their auto-repeats and key-up are swallowed too, so
     /// the target app never sees half a keystroke.
     private var swallowed: Set<Int64> = []
@@ -231,7 +233,17 @@ final class HotkeyMonitor {
             if nowPressed != isPressed {
                 isPressed = nowPressed
                 knownModifiers = held
-                if nowPressed { startReleaseWatch() } else { stopReleaseWatch() }
+                // ⌘-click, ⇧-click and ⌥-drag are shortcuts too, though no key event says so.
+                // fn and the dedicated right-hand keys don't modify clicks, so a click while
+                // holding them stays part of dictating.
+                let modifiesClicks = modifier != .function && !modifier.shouldConsumeEvent
+                if nowPressed {
+                    if modifiesClicks { clicksAtPress = Self.clickCount() }
+                    startReleaseWatch()
+                } else {
+                    stopReleaseWatch()
+                    if modifiesClicks, Self.clickCount() != clicksAtPress { _ = handler?(.chord) }
+                }
                 _ = handler?(nowPressed ? .keyDown : .keyUp)
             }
             return modifier.shouldConsumeEvent
