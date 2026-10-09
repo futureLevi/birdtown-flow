@@ -764,8 +764,19 @@ final class DictationController {
             record.engine = engineName
             record.rawText = raw
             record.finalText = result.text
-            // Boosting first: it ran first, on the audio, before any text step.
-            record.corrections = boosted + result.corrections
+            // Boosting first: it ran first, on the audio, before any text step. The same pair
+            // from both steps is one row (History lists them by value), with the counts added.
+            var corrections: [AppliedCorrection] = []
+            for correction in boosted + result.corrections {
+                if let index = corrections.firstIndex(where: { $0.from == correction.from && $0.to == correction.to }) {
+                    let merged = corrections[index]
+                    corrections[index] = AppliedCorrection(from: merged.from, to: merged.to,
+                                                           count: merged.count + correction.count)
+                } else {
+                    corrections.append(correction)
+                }
+            }
+            record.corrections = corrections
             record.snippets = result.snippets
             record.polishedBy = polishedBy
             record.polishConfiguration = polishConfiguration

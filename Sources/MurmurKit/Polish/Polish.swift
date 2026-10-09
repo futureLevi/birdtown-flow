@@ -328,7 +328,11 @@ public enum PolishGuard {
         //    A dictionary word is the speaker's word only where it replaces something that sounds
         //    like it ("cloud code" → "Claude Code"). Written where nothing like it was said, it's
         //    the dictionary leaking into the text, and the deterministic version is better.
+        //    Names spelled nothing like they sound ("shivon" → "Siobhan") still pass when they
+        //    replace a word the speaker said; they count against the misheard-word allowance.
         let said = Set(contentWords(original))
+        let kept = Set(contentWords(text))
+        let replacedSomething = !said.subtracting(kept).subtracting(fillers).isEmpty
         let vocabularyWords = Set(vocabulary.flatMap(contentWords))
         var invented: [String] = []
         // "twenty five" → "25" can't be matched word for word; a number is only suspicious
@@ -338,7 +342,7 @@ public enum PolishGuard {
             if saidNumbers, word.allSatisfy(\.isNumber) { continue }
             if vocabularyWords.contains(word) {
                 if soundsLikeSomethingSaid(word, in: originalWords) { continue }
-                return .rejected(.inventedWords([word]))
+                if !replacedSomething { return .rejected(.inventedWords([word])) }
             }
             invented.append(word)
         }

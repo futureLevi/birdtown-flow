@@ -206,6 +206,13 @@ struct PolishGuardTests {
         #expect(PolishGuard.accept(clean, original: original, vocabulary: ["Anthropic"]) == clean)
     }
 
+    @Test("A vocabulary name spelled unlike it sounds may replace what was said")
+    func vocabularyRespellingAccepted() {
+        let original = "send the notes to shivon before the meeting"
+        let output = "Send the notes to Siobhan before the meeting."
+        #expect(PolishGuard.accept(output, original: original, vocabulary: ["Siobhan"]) == output)
+    }
+
     @Test("Vocabulary terms may join words the engine split")
     func vocabularyJoinsSplitWords() {
         let output = "We should ship the Birdtown build tonight."
