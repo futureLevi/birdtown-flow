@@ -6,6 +6,8 @@ struct HUDActions {
     var cancel: @MainActor () -> Void = {}
     /// Click on the idle pill: start a hands-free dictation.
     var activate: @MainActor () -> Void = {}
+    /// Click on a failure or notice that links somewhere (`HUDState.actionLabel`).
+    var followUp: @MainActor () -> Void = {}
 }
 
 /// The floating pill. One dark capsule whose size springs between states while its content
@@ -49,8 +51,13 @@ struct HUDView: View {
             // At rest the whole pill is faded, so its edge needs more light to stay findable
             // on dark content.
             let resting = kind == .idle || kind == .hidden
-            HUDPillBody(stroke: resting ? Palette.HUD.idleStroke : Palette.HUD.stroke,
+            // A message that opens something lights its edge under the pointer, with the wash
+            // `HUDMessage` lays over its content.
+            let linkHovered = link?.isHovered == true
+            HUDPillBody(stroke: resting ? Palette.HUD.idleStroke
+                            : linkHovered ? Palette.HUD.linkHoverStroke : Palette.HUD.stroke,
                         shadowScale: resting ? Palette.HUD.idleShadowScale : 1)
+                .animation(Motion.resolve(Motion.snappy, reduceMotion: reduceMotion), value: linkHovered)
             content(size: size, kind: kind)
                 .frame(width: size.width, height: size.height)
                 .clipShape(Capsule(style: .continuous))
@@ -83,7 +90,9 @@ struct HUDView: View {
                 .transition(contentTransition)
         case .done:
             if let notice = state.notice {
-                HUDMessage(message: notice, tone: .success, animated: frozenTime == nil && !reduceMotion)
+                HUDMessage(message: notice, tone: .success, animated: frozenTime == nil && !reduceMotion,
+                           lineLimit: HUDMetrics.messageLines(notice, lineLimit: Layout.HUD.failureLineLimit),
+                           link: link)
                     .transition(contentTransition)
             } else {
                 HUDDrawnCheck(animated: frozenTime == nil && !reduceMotion)
@@ -98,9 +107,17 @@ struct HUDView: View {
         case .failed:
             let message = state.failureMessage ?? ""
             HUDMessage(message: message, tone: .failure, animated: false,
-                       lineLimit: HUDMetrics.messageLines(message, lineLimit: Layout.HUD.failureLineLimit))
+                       lineLimit: HUDMetrics.messageLines(message, lineLimit: Layout.HUD.failureLineLimit),
+                       link: link)
                 .transition(contentTransition)
         }
+    }
+
+    /// The message's next step, when it has one.
+    private var link: HUDMessage.Destination? {
+        guard state.hasAction, let label = state.actionLabel else { return nil }
+        return HUDMessage.Destination(label: label, isHovered: state.hover == .pill, reduceMotion: reduceMotion,
+                               action: actions.followUp)
     }
 
     private var contentTransition: AnyTransition {
@@ -248,15 +265,54 @@ struct HUDDrawnCheck: View {
 /// Text beside a glyph: the failure message, or the "copied" notice beside a drawn check.
 /// One line unless the caller allows more (a long failure wraps rather than losing its end;
 /// `HUDMetrics.messageSize` grows the pill to match).
+///
+/// With a `link`, the whole pill is a button with a trailing chevron: a failure opens its
+/// History row, a missing permission opens System Settings. The panel stays non-activating,
+/// so the click never moves focus out of the user's app; only the window it opens does.
 struct HUDMessage: View {
     enum Tone { case success, failure }
+
+    /// Where clicking the message goes.
+    struct Destination {
+        /// For VoiceOver and the tooltip: "Show in History".
+        let label: String
+        let isHovered: Bool
+        let reduceMotion: Bool
+        let action: @MainActor () -> Void
+    }
 
     let message: String
     let tone: Tone
     let animated: Bool
     var lineLimit = 1
+    var link: Destination?
 
     var body: some View {
+        if let link {
+            Button {
+                link.action()
+            } label: {
+                content
+                    .background(
+                        // The whole pill is the button, so the whole pill answers the pointer.
+                        // The parent clips content to the pill's capsule.
+                        Capsule(style: .continuous)
+                            .fill(Palette.HUD.linkHoverWash)
+                            .opacity(link.isHovered ? 1 : 0)
+                    )
+                    .contentShape(Capsule(style: .continuous))
+                    .animation(Motion.resolve(Motion.snappy, reduceMotion: link.reduceMotion), value: link.isHovered)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(Text(message))
+            .accessibilityHint(Text(link.label))
+            .help(link.label)
+        } else {
+            content
+        }
+    }
+
+    private var content: some View {
         HStack(spacing: Spacing.s) {
             ZStack {
                 Circle().fill(tone == .success ? Palette.HUD.control : Palette.HUD.dangerSoft)
@@ -279,6 +335,16 @@ struct HUDMessage: View {
                 .multilineTextAlignment(.leading)
                 .truncationMode(.tail)
                 .frame(maxWidth: Layout.HUD.messageMaxWidth, alignment: .leading)
+
+            if let link {
+                Image(systemName: "chevron.right")
+                    .font(Typography.hudGlyph)
+                    .foregroundStyle(link.isHovered ? Palette.HUD.ink : Palette.HUD.inkSecondary)
+                    .frame(width: Layout.HUD.actionDisc, height: Layout.HUD.actionDisc)
+                    .background(Circle().fill(link.isHovered ? Palette.HUD.controlHover : Palette.HUD.control))
+                    .animation(Motion.resolve(Motion.snappy, reduceMotion: link.reduceMotion), value: link.isHovered)
+                    .accessibilityHidden(true)
+            }
         }
         .padding(.horizontal, Layout.HUD.contentPadding)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)

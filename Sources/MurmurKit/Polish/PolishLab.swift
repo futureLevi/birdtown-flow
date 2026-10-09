@@ -345,10 +345,11 @@ public enum WordDiff {
 
     /// Words are compared ignoring case and surrounding punctuation, so "like," and "Like" are
     /// the same word; the revised spelling is what's shown for words both versions share.
-    /// Neighbouring segments of the same kind are merged.
+    /// Neighbouring segments of the same kind are merged. Line breaks in the revised text are
+    /// kept on the end of the word before them, so a polished email keeps its paragraphs.
     public static func diff(original: String, revised: String) -> [Segment] {
         let before = tokens(original)
-        let after = tokens(revised)
+        let after = tokensWithBreaks(revised).map { $0.word + $0.breaks }
         let a = before.map(normalized)
         let b = after.map(normalized)
 
@@ -364,12 +365,15 @@ public enum WordDiff {
         }
 
         var segments: [Segment] = []
+        func join(_ x: String, _ y: String) -> String {
+            x.last?.isNewline == true ? x + y : x + " " + y
+        }
         func push(_ segment: Segment) {
             if let last = segments.last {
                 switch (last, segment) {
-                case (.same(let x), .same(let y)): segments[segments.count - 1] = .same(x + " " + y); return
-                case (.removed(let x), .removed(let y)): segments[segments.count - 1] = .removed(x + " " + y); return
-                case (.added(let x), .added(let y)): segments[segments.count - 1] = .added(x + " " + y); return
+                case (.same(let x), .same(let y)): segments[segments.count - 1] = .same(join(x, y)); return
+                case (.removed(let x), .removed(let y)): segments[segments.count - 1] = .removed(join(x, y)); return
+                case (.added(let x), .added(let y)): segments[segments.count - 1] = .added(join(x, y)); return
                 default: break
                 }
             }
@@ -410,9 +414,84 @@ public enum WordDiff {
         text.split(whereSeparator: { $0.isWhitespace || $0.isNewline }).map(String.init)
     }
 
+    /// Each word with the line breaks in the gap after it ("" when the gap has none). Breaks
+    /// after the last word are dropped.
+    static func tokensWithBreaks(_ text: String) -> [(word: String, breaks: String)] {
+        var result: [(word: String, breaks: String)] = []
+        var word = ""
+        for character in text {
+            if character.isWhitespace || character.isNewline {
+                if !word.isEmpty {
+                    result.append((word, ""))
+                    word = ""
+                }
+                if character.isNewline, !result.isEmpty { result[result.count - 1].breaks.append(character) }
+            } else {
+                word.append(character)
+            }
+        }
+        if !word.isEmpty {
+            result.append((word, ""))
+        } else if !result.isEmpty {
+            result[result.count - 1].breaks = ""
+        }
+        return result
+    }
+
     static func normalized(_ token: String) -> String {
-        let straight = token.replacingOccurrences(of: "\u{2019}", with: "'").lowercased()
+        let straight = token.trimmingCharacters(in: .newlines)
+            .replacingOccurrences(of: "\u{2019}", with: "'").lowercased()
         let trimmed = straight.trimmingCharacters(in: .punctuationCharacters.union(.symbols))
         return trimmed.isEmpty ? straight : trimmed
+    }
+}
+
+// MARK: - Lab page helpers
+
+/// Moving through the Lab's configuration list from the keyboard, like a Mail list: ↑ and ↓
+/// stop at the ends rather than wrapping.
+public enum PolishLabNavigation {
+    /// The id `step` rows from `current` in `order`, clamped to the ends. With nothing (or
+    /// something no longer listed) selected, ↓ starts at the top and ↑ at the bottom. `nil`
+    /// when there's nowhere to go: an empty list, no step, or already at that end.
+    public static func neighbor<ID: Equatable>(of current: ID?, step: Int, in order: [ID]) -> ID? {
+        guard !order.isEmpty, step != 0 else { return nil }
+        guard let current, let index = order.firstIndex(of: current) else {
+            return step > 0 ? order.first : order.last
+        }
+        let target = order[min(max(index + step, 0), order.count - 1)]
+        return target == current ? nil : target
+    }
+}
+
+/// How the Lab lays out its results: runs on the same text, in the same style and app, sit
+/// together under one header naming the text, so a Run All batch reads as one comparison and
+/// older runs on other text don't look like they belong to it.
+public enum PolishLabResults {
+    /// Neighbouring items with equal keys, in their original order. Items with the same key
+    /// that aren't next to each other stay in separate groups, so time order is kept.
+    public static func consecutiveGroups<Item, Key: Equatable>(
+        _ items: [Item], by key: (Item) -> Key
+    ) -> [[Item]] {
+        var groups: [[Item]] = []
+        var lastKey: Key?
+        for item in items {
+            let itemKey = key(item)
+            if let lastKey, lastKey == itemKey, !groups.isEmpty {
+                groups[groups.count - 1].append(item)
+            } else {
+                groups.append([item])
+            }
+            lastKey = itemKey
+        }
+        return groups
+    }
+
+    /// The text on one line: whitespace and line breaks collapsed, cut to `maxWords` words
+    /// with an ellipsis when there were more.
+    public static func excerpt(_ text: String, maxWords: Int) -> String {
+        let words = text.split(whereSeparator: { $0.isWhitespace || $0.isNewline })
+        let kept = words.prefix(max(maxWords, 0)).joined(separator: " ")
+        return words.count > maxWords ? kept + "…" : kept
     }
 }

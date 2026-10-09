@@ -7,12 +7,15 @@ struct SnippetsView: View {
     @State private var query = ""
     @State private var isAdding = false
     @State private var editing: Snippet?
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         let store = model.snippets
-        let uses = Self.useCounts(in: model.history.records)
+        let uses = LibraryUsage.snippetCounts(
+            snippets: store.snippets, aliases: store.aliases, records: model.history.records)
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
-        let visible = store.snippets.filter {
+        // Snippets waiting out a delete's undo window are hidden.
+        let visible = store.visible.filter {
             trimmed.isEmpty || $0.trigger.localizedStandardContains(trimmed) || $0.expansion.localizedStandardContains(trimmed)
         }
         ScrollView {
@@ -28,7 +31,7 @@ struct SnippetsView: View {
                     .help("Add a snippet (⌘N)")
                 }
 
-                if store.snippets.isEmpty {
+                if store.visible.isEmpty {
                     EmptyState(
                         symbol: "text.badge.plus",
                         title: "Stop typing the same things",
@@ -61,14 +64,14 @@ struct SnippetsView: View {
                             ForEach(visible) { snippet in
                                 SnippetCard(
                                     snippet: snippet,
-                                    uses: uses[snippet.trigger.lowercased()] ?? 0,
+                                    uses: uses[snippet.id] ?? 0,
                                     onToggle: { isOn in
                                         var updated = snippet
                                         updated.isEnabled = isOn
                                         model.snippets.update(updated)
                                     },
                                     onEdit: { editing = snippet },
-                                    onDelete: { model.snippets.delete(ids: [snippet.id]) }
+                                    onDelete: { delete(snippet) }
                                 )
                             }
                         }
@@ -76,7 +79,15 @@ struct SnippetsView: View {
                 }
             }
             .pageLayout()
+            // Room for the toast, so the last card's footer can scroll clear of it.
+            .padding(.bottom, undoMessage == nil ? 0 : Layout.Main.floatingBarClearance)
         }
+        .overlay(alignment: .bottom) {
+            UndoToast(message: undoMessage) { model.snippets.undoDeletion() }
+        }
+        .animation(Motion.resolve(Motion.smooth, reduceMotion: reduceMotion), value: store.deletion.pending)
+        // As in History, leaving the page doesn't make a delete final: it stays undoable for
+        // the rest of its window (the store commits it then, or at quit).
         .sheet(isPresented: $isAdding) {
             SnippetEditorSheet(original: nil) { model.snippets.add($0) }
                 .environment(model)
@@ -87,15 +98,21 @@ struct SnippetsView: View {
         }
     }
 
-    /// How often each trigger has expanded, from history.
-    static func useCounts(in records: [HistoryRecord]) -> [String: Int] {
-        var counts: [String: Int] = [:]
-        for record in records {
-            for trigger in record.snippets {
-                counts[trigger.lowercased(), default: 0] += 1
-            }
-        }
-        return counts
+    /// Deletes at once, with Undo (and ⌘Z) for `Motion.undoWindow`, as History does.
+    private func delete(_ snippet: Snippet) {
+        if editing?.id == snippet.id { editing = nil }
+        model.snippets.delete(ids: [snippet.id], undoWindow: Motion.undoWindow)
+        // VoiceOver hears which snippet went; the toast stays short, as History's does.
+        UndoToast.announce("Snippet “\(snippet.trigger)” deleted")
+    }
+
+    /// "Snippet deleted", worded like History's "Dictation deleted", while a delete can
+    /// still be undone.
+    private var undoMessage: String? {
+        let store = model.snippets
+        let count = store.snippets.filter { store.deletion.isPending($0.id) }.count
+        guard count > 0 else { return nil }
+        return count == 1 ? "Snippet deleted" : "\(count) snippets deleted"
     }
 }
 

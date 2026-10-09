@@ -34,6 +34,19 @@ final class DictationController {
         var isBusy: Bool { self == .transcribing || self == .polishing }
     }
 
+    /// The next step a finished dictation's message points to. Clicking the HUD's message
+    /// pill takes it (see `HUDController`); `nil` means the pill isn't clickable.
+    enum FollowUp: Equatable, Sendable {
+        /// The dictation's History row: its audio, Retry, and any polish note.
+        case record(UUID)
+        /// System Settings › Privacy & Security › Microphone.
+        case microphoneAccess
+        /// System Settings › Privacy & Security › Accessibility.
+        case accessibilityAccess
+        /// Birdtown Flow's microphone picker (Settings › Audio & Speech).
+        case inputDevice
+    }
+
     /// Gesture and display timings. The HUD and UI read these rather than guessing.
     enum Timing {
         /// A press becomes a dictation (sound, HUD) only after this long without another key:
@@ -46,13 +59,20 @@ final class DictationController {
         static let doubleTapWindow: Duration = .milliseconds(350)
         /// Recordings shorter than this are dropped without a trace.
         static let minimumAudio: Double = 0.3
-        /// …as are recordings whose loudest 33 ms window stays below this meter level (≈ −47 dBFS).
+        /// A recording whose loudest 33 ms window stays below this meter level (≈ −47 dBFS)
+        /// heard nothing…
         static let silenceLevel: Float = 0.06
+        /// …and if it lasted at least this long it was deliberate, so the HUD says the mic
+        /// heard nothing. Shorter silent ones are dropped without a trace.
+        static let noSpeechNotice: Double = 1.0
         static let doneDisplay: Duration = .milliseconds(800)
         /// Longer than `doneDisplay`, so the "copied" notice can be read.
         static let copiedDisplay: Duration = .milliseconds(2200)
         static let cancelledDisplay: Duration = .milliseconds(500)
-        static let failedDisplay: Duration = .milliseconds(2500)
+        /// Long enough to read a two-line message and reach for the pill to act on it.
+        static let failedDisplay: Duration = .milliseconds(4000)
+        /// A message the pointer was holding open stays this long after the pointer leaves.
+        static let hoverLinger: Duration = .milliseconds(1200)
         /// Closing the microphone and collecting its samples.
         static let recorderStop: Duration = .seconds(5)
         /// Waiting for a model that's still loading.
@@ -83,6 +103,9 @@ final class DictationController {
     /// Why the last dictation went to the clipboard instead of being typed ("Copied, since no
     /// text field was focused"). Set alongside `.done`, cleared at idle. `nil` when it was typed.
     private(set) var notice: String?
+    /// Where clicking the HUD's message goes: set with `.failed` and notice-bearing `.done`,
+    /// cleared at idle.
+    private(set) var followUp: FollowUp?
 
     let settings: Settings
     let history: HistoryStore
@@ -129,6 +152,8 @@ final class DictationController {
     @ObservationIgnored private var armTask: Task<Void, Never>?
     @ObservationIgnored private var doubleTapTask: Task<Void, Never>?
     @ObservationIgnored private var phaseResetTask: Task<Void, Never>?
+    /// The pointer is resting on the message pill, so it stays until the pointer leaves.
+    @ObservationIgnored private var isFeedbackHeld = false
     @ObservationIgnored private var rearmTask: Task<Void, Never>?
     /// The dictation being finished (stop → transcribe → insert). `nil` once it's done or cancelled.
     @ObservationIgnored private var processing: (id: UUID, task: Task<Void, Never>)?
@@ -175,6 +200,7 @@ final class DictationController {
     @discardableResult
     func activate() -> Bool {
         hotkey.watchesControlOption = settings.handsFreeShortcut == .controlOption
+        hotkey.handsFreeChord = settings.activeHandsFreeChord
         if !hotkey.isArmed || hotkey.key != settings.pushToTalkKey {
             restartHotkey()
         }
@@ -205,6 +231,7 @@ final class DictationController {
     /// Re-reads shortcut settings (push-to-talk key, hands-free, paste-last) and re-arms.
     func reloadShortcuts() {
         hotkey.watchesControlOption = settings.handsFreeShortcut == .controlOption
+        hotkey.handsFreeChord = settings.activeHandsFreeChord
         if hotkey.key != settings.pushToTalkKey || !hotkey.isArmed {
             restartHotkey()
             isHotkeyActive = hotkey.isArmed
@@ -284,8 +311,9 @@ final class DictationController {
             pasteLastShortcut.unregister()
             return
         }
-        guard !pasteLastShortcut.isRegistered else { return }
-        pasteLastShortcut.register(keyCode: kVK_ANSI_V, modifiers: controlKey | optionKey) { [weak self] in
+        let chord = settings.pasteLastShortcut
+        guard pasteLastShortcut.registeredChord != chord else { return }
+        pasteLastShortcut.register(chord) { [weak self] in
             self?.pasteLast()
         }
     }
@@ -318,7 +346,7 @@ final class DictationController {
 
         if let blocked = current.blocked {
             recorder.cancel()
-            fail(blocked)
+            fail(blocked, followUp: blockedFollowUp())
             return
         }
         // Normally visible by now; if the announcement was delayed (a busy main thread), the
@@ -365,6 +393,8 @@ final class DictationController {
         phaseResetTask = nil
         if phase != .idle { phase = .idle }
         notice = nil
+        followUp = nil
+        isFeedbackHeld = false
 
         generation += 1
         let generation = generation
@@ -419,7 +449,7 @@ final class DictationController {
             if AVCaptureDevice.authorizationStatus(for: .audio) == .notDetermined {
                 Task { _ = await Permissions.requestMicrophone() }
             }
-            fail(blocked)
+            fail(blocked, followUp: blockedFollowUp())
             return
         }
 
@@ -608,7 +638,7 @@ final class DictationController {
                 session = nil
                 armTask?.cancel()
                 doubleTapTask?.cancel()
-                fail(message)
+                fail(message, followUp: .inputDevice)
             } else {
                 current.blocked = message
                 session = current
@@ -631,7 +661,7 @@ final class DictationController {
             Log.audio.error("the recorder didn't hand over its audio in time")
             isStopping = false
             processing = nil
-            fail("The microphone stopped responding")
+            fail("The microphone stopped responding", followUp: .inputDevice)
             return
         }
         guard isCurrent(id) else { return }
@@ -639,11 +669,27 @@ final class DictationController {
         isHandsFree = false
         level = 0
 
-        if audio.duration < Timing.minimumAudio || audio.peakLevel < Timing.silenceLevel {
+        switch DictationFeedback.classify(
+            duration: audio.duration,
+            peakLevel: audio.peakLevel,
+            minimumAudio: Timing.minimumAudio,
+            silenceLevel: Timing.silenceLevel,
+            noSpeechNotice: Timing.noSpeechNotice
+        ) {
+        case .drop:
             Log.audio.info("dropped: \(audio.duration, format: .fixed(precision: 2))s, peak \(audio.peakLevel, format: .fixed(precision: 2))")
             processing = nil
             resetToIdle()
             return
+        case .noSpeech:
+            // Held long enough to mean it, and the mic heard nothing: a muted or wrong input
+            // (AirPods that just connected). Say so, rather than look like a missed hotkey.
+            Log.audio.info("no speech: \(audio.duration, format: .fixed(precision: 2))s, peak \(audio.peakLevel, format: .fixed(precision: 2))")
+            processing = nil
+            fail(DictationFeedback.noSpeechMessage(deviceName: inputDeviceName()), followUp: .inputDevice)
+            return
+        case .speech:
+            break
         }
 
         Sounds.play(.stop)
@@ -682,7 +728,11 @@ final class DictationController {
 
         do {
             guard isCurrent(id) else { throw CancellationError() }
-            let output = try await transcribeAndClean(samples, context: context, style: style) { [weak self] in
+            // `record.engine` starts as the selected engine and becomes the one that actually ran
+            // (Apple Speech stands in while Parakeet downloads), even if transcription then fails.
+            let output = try await transcribeAndClean(
+                samples, context: context, style: style, engineName: &record.engine
+            ) { [weak self] in
                 if self?.isCurrent(id) == true { self?.phase = .polishing }
             }
             guard isCurrent(id) else { throw CancellationError() }
@@ -696,18 +746,24 @@ final class DictationController {
                 history.update(record)
                 applyAudioRetention()
                 processing = nil
-                resetToIdle()
+                // Sound, but no words: say so, and point at the recording in History while
+                // it's still there to play or retry ("Keep no audio" has just dropped it).
+                let audioSaved = history.record(id: id)?.audioFileName != nil
+                fail(DictationFeedback.noWordsMessage(audioSaved: audioSaved),
+                     followUp: audioSaved ? .record(id) : nil)
                 return
             }
 
             let outcome = await TextInjector.insert(text, restoreClipboard: settings.restoreClipboard)
             var copiedNotice: String?
+            var copiedFollowUp: FollowUp?
             switch outcome {
             case .inserted:
                 record.outcome = .inserted
             case .copied(let reason):
                 record.outcome = .copied
                 copiedNotice = reason.message
+                copiedFollowUp = reason.followUp
             }
             // A polish fallback note ("timed out", "no API key") is the only message a
             // successful record carries.
@@ -723,10 +779,22 @@ final class DictationController {
             // phase, sounds and `processing` now belong to whatever came next: touching them
             // would flash "done" over a live recording or orphan the next dictation.
             guard isCurrent(id) else { return }
-            if let copiedNotice { notice = copiedNotice }
+            // Where the text went matters most, so a "copied" notice wins over a polish note.
+            // Text left on the clipboard is pasted with ⌘V, so that pill only becomes a link
+            // when there's something to fix (Accessibility); opening a window would take the
+            // paste target away.
+            var resultFollowUp: FollowUp?
+            if let copiedNotice {
+                notice = copiedNotice
+                resultFollowUp = copiedFollowUp
+            } else if let polishNotice = DictationFeedback.polishNotice(for: output.polishNote) {
+                notice = polishNotice
+                resultFollowUp = .record(id)
+            }
             processing = nil
             Sounds.play(.done)
-            showTransient(.done, for: notice == nil ? Timing.doneDisplay : Timing.copiedDisplay)
+            showTransient(.done, for: notice == nil ? Timing.doneDisplay : Timing.copiedDisplay,
+                          followUp: resultFollowUp)
         } catch is CancellationError {
             // `cancel()` already moved the phase on; just record what happened.
             record.outcome = .cancelled
@@ -742,7 +810,8 @@ final class DictationController {
             lastRecord = record
             guard isCurrent(id) else { return }
             processing = nil
-            fail(failure)
+            // The audio is saved; History is where Retry lives.
+            fail(failure, followUp: .record(id))
         }
     }
 
@@ -786,15 +855,20 @@ final class DictationController {
     }
 
     /// engine → `TextPipeline.prepare` → optional polish → `TextPipeline.finalize`.
+    ///
+    /// `engineName` is set to the engine that runs as soon as it's chosen, so a failed record
+    /// still names it.
     private func transcribeAndClean(
         _ samples: [Float],
         context: AppContext,
         style: WritingStyle,
+        engineName: inout String,
         willPolish: () -> Void
     ) async throws -> PipelineOutput {
         let clock = ContinuousClock()
         let transcribeStart = clock.now
         let engine = try await readyEngine()
+        engineName = engine.displayName
         let vocabulary = settings.vocabularyBoosting ? dictionary.biasPhrases : []
         let transcript = try await Watchdog.run(within: Timing.transcription) {
             try await engine.transcript(samples, vocabulary: vocabulary)
@@ -933,28 +1007,52 @@ final class DictationController {
         }
     }
 
+    /// Records whose saved audio a retry is reading right now; retention must leave it alone.
+    private var retryingIDs: Set<UUID> = []
+
     private func applyAudioRetention() {
         // "Keep no audio": drop it the moment the dictation is settled. Failed records keep
         // theirs regardless — HistoryStore never purges those.
         if settings.audioRetentionDays == 0 {
-            history.applyRetention(textDays: nil, audioDays: 0)
+            history.applyRetention(textDays: nil, audioDays: 0, sparing: retryingIDs)
         }
     }
 
     // MARK: - Phases
 
-    private func fail(_ message: String) {
+    private func fail(_ message: String, followUp: FollowUp? = nil) {
         Sounds.play(.error)
-        showTransient(.failed(message), for: Timing.failedDisplay)
+        showTransient(.failed(message), for: Timing.failedDisplay, followUp: followUp)
+    }
+
+    /// Where a blocked microphone sends the user: System Settings once access was refused.
+    /// While it's undetermined the system's own prompt is the next step, so there's no link.
+    private func blockedFollowUp() -> FollowUp? {
+        switch AVCaptureDevice.authorizationStatus(for: .audio) {
+        case .denied, .restricted: return .microphoneAccess
+        default: return nil
+        }
+    }
+
+    /// The microphone a recording would use: the chosen one if it's connected, else the
+    /// system default. Plain HAL reads, cheap enough for the main thread.
+    private func inputDeviceName() -> String? {
+        AudioDevices.resolveInputDevice(uid: settings.inputDeviceUID).flatMap { AudioDevices.name(of: $0) }
     }
 
     /// Shows `phase` for `duration`, then returns to idle — unless something newer replaced it.
-    private func showTransient(_ phase: Phase, for duration: Duration) {
+    private func showTransient(_ phase: Phase, for duration: Duration, followUp: FollowUp? = nil) {
         self.phase = phase
+        self.followUp = followUp
+        isFeedbackHeld = false
         isHandsFree = false
         level = 0
         levels = Self.silentLevels
         recordingStartedAt = nil
+        scheduleReset(of: phase, after: duration)
+    }
+
+    private func scheduleReset(of phase: Phase, after duration: Duration) {
         phaseResetTask?.cancel()
         phaseResetTask = Task { [weak self] in
             try? await Task.sleep(for: duration)
@@ -973,6 +1071,36 @@ final class DictationController {
         recordingStartedAt = nil
         context = nil
         notice = nil
+        followUp = nil
+        isFeedbackHeld = false
+    }
+
+    // MARK: - Message pill
+
+    /// The pointer is on (or has left) the HUD's clickable message. While it rests there the
+    /// message stays; once it leaves, the message lingers briefly and goes.
+    func holdFeedback(_ held: Bool) {
+        guard followUp != nil else { return }
+        switch phase {
+        case .done, .failed: break
+        default: return
+        }
+        guard held != isFeedbackHeld else { return }
+        isFeedbackHeld = held
+        if held {
+            phaseResetTask?.cancel()
+            phaseResetTask = nil
+        } else {
+            scheduleReset(of: phase, after: Timing.hoverLinger)
+        }
+    }
+
+    /// The message was clicked: its follow-up is being taken, so the pill can go.
+    func dismissFeedback() {
+        switch phase {
+        case .done, .failed: resetToIdle()
+        default: break
+        }
     }
 
     // MARK: - History actions
@@ -998,10 +1126,14 @@ final class DictationController {
         Task { [weak self] in
             await Self.yieldFocusIfNeeded()
             let outcome = await TextInjector.insert(text, restoreClipboard: restore)
-            if case .copied(let reason) = outcome {
-                Log.inject.info("insert from history copied instead: \(reason.message, privacy: .public)")
-                self?.notice = reason.message
-            }
+            guard case .copied(let reason) = outcome else { return }
+            Log.inject.info("insert from history copied instead: \(reason.message, privacy: .public)")
+            // Say so the way a fresh dictation does, but never over a live one: a recording
+            // or a result on screen belongs to that dictation, and the notice would leak into it.
+            guard let self, self.phase == .idle, self.session == nil, self.processing == nil, !self.isStopping
+            else { return }
+            self.notice = reason.message
+            self.showTransient(.done, for: Timing.copiedDisplay, followUp: reason.followUp)
         }
     }
 
@@ -1009,6 +1141,8 @@ final class DictationController {
     /// goes to the clipboard (outcome `.copied`) — typing into whatever is focused now would be
     /// a surprise.
     func retry(_ record: HistoryRecord) async {
+        retryingIDs.insert(record.id)
+        defer { retryingIDs.remove(record.id) }
         var updated = history.record(id: record.id) ?? record
         guard let url = history.audioURL(for: updated) else {
             updated.outcome = .failed
@@ -1018,13 +1152,16 @@ final class DictationController {
         }
 
         let started = Date()
+        var engineName = updated.engine
         do {
             let samples = try await Task.detached(priority: .userInitiated) {
                 try AudioRecorder.readSamples(from: url)
             }.value
             let context = updated.context ?? AppContext(bundleID: nil, appName: nil, category: .other)
             let style = updated.style ?? settings.style(for: context.category)
-            let output = try await transcribeAndClean(samples, context: context, style: style) {}
+            let output = try await transcribeAndClean(
+                samples, context: context, style: style, engineName: &engineName
+            ) {}
 
             updated = history.record(id: record.id) ?? updated
             output.apply(to: &updated)
@@ -1041,6 +1178,7 @@ final class DictationController {
             if lastRecord?.id == updated.id { lastRecord = updated }
         } catch {
             updated = history.record(id: record.id) ?? updated
+            updated.engine = engineName
             updated.outcome = .failed
             updated.errorMessage = error is CancellationError ? "Retry was cancelled" : message(for: error)
             history.update(updated)
@@ -1100,6 +1238,17 @@ final class DictationController {
         for _ in 0..<40 {
             if CGEventSource.flagsState(.combinedSessionState).intersection(held).isEmpty { return }
             try? await Task.sleep(for: .milliseconds(25))
+        }
+    }
+}
+
+extension TextInjector.CopyReason {
+    /// What the "copied" pill links to. Only a missing Accessibility grant has a fix to go to;
+    /// otherwise the next step is ⌘V, and opening a window would take the paste target away.
+    var followUp: DictationController.FollowUp? {
+        switch self {
+        case .noAccessibility: return .accessibilityAccess
+        case .noTextField, .secureInput: return nil
         }
     }
 }

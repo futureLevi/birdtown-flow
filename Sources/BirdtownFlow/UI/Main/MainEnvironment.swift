@@ -57,6 +57,8 @@ struct MainPreview: Sendable {
     var firstName: String?
     var historyQuery = ""
     var originalRecordID: UUID?
+    /// History rows that start selected (several show the selection bar).
+    var historySelection: [UUID] = []
     /// Seconds into the live orb's turn, so recording states render the same frame every time.
     var orbPhase: Double?
 }

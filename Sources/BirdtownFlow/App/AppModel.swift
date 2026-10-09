@@ -59,11 +59,22 @@ final class AppModel {
     let models: ModelManager
     let permissions: PermissionsMonitor
     let controller: DictationController
+    /// History deletes waiting out their undo window. Shared by Home and History, so a
+    /// delete survives switching pages and either page's Undo (⌘Z) brings it back.
+    let historyDeletion: HistoryDeletion
+    /// "Transcribe Again" in flight, and what each attempt left for its row to show.
+    /// Snapshots swap in a fresh tracker so their state stays in one shot.
+    @ObservationIgnored var retries: RetryTracker = .shared
 
-    /// Main-window navigation.
+    /// Main-window navigation. To move around from outside the window, call `show(_:)`,
+    /// `showHistory(revealing:)` or `requestSettings(_:)` rather than setting these.
     var section: SidebarSection = .home
-    /// History row to reveal when navigating from elsewhere (Home, menu bar).
+    /// History row to reveal: History scrolls to it, selects it and flashes it, then clears
+    /// this. Set it through `showHistory(revealing:)`.
     var focusedRecordID: UUID?
+    /// The Settings tab the next opening of Settings should land on. `SettingsView` reads
+    /// and clears it; set it through `requestSettings(_:)`.
+    var requestedSettingsTab: SettingsTab?
 
     init(
         settings: Settings = .shared,
@@ -81,6 +92,7 @@ final class AppModel {
         let models = ModelManager(settings: settings, boostVocabulary: { dictionary.biasPhrases })
         self.models = models
         self.permissions = PermissionsMonitor()
+        self.historyDeletion = HistoryDeletion(store: history, undoWindow: Motion.undoWindow)
         self.controller = DictationController(
             settings: settings,
             history: history,
@@ -91,23 +103,136 @@ final class AppModel {
         )
     }
 
-    /// Normal launch: arm the hotkey, load the model, tidy history.
+    /// Normal launch: arm the hotkey, load the model, tidy history (and keep it tidy).
     func start() {
-        history.applyRetention(
-            textDays: settings.historyRetentionDays > 0 ? settings.historyRetentionDays : nil,
-            audioDays: settings.audioRetentionDays >= 0 ? settings.audioRetentionDays : nil
-        )
+        applyRetention()
+        keepApplyingRetention()
         controller.activate()
         controller.polishSettingsChanged()
         Task { await models.prepare() }
+        // A delete still inside its undo window is meant: finish it before quitting, or the
+        // dictation would come back on the next launch.
+        terminationObserver = NotificationCenter.default.addObserver(
+            forName: NSApplication.willTerminateNotification, object: nil, queue: .main
+        ) { [weak self] _ in
+            // Delivered on the main queue, so this is provably the main thread.
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                self.historyDeletion.commit()
+                // Dictionary and snippet deletes have the same undo window; both save at once.
+                self.dictionary.commitDeletion()
+                self.snippets.commitDeletion()
+                self.history.flush()
+            }
+        }
     }
+
+    @ObservationIgnored private var terminationObserver: (any NSObjectProtocol)?
+
+    // MARK: - Retention
+    //
+    // Birdtown Flow is an open-at-login menu bar app that can run for weeks, so applying the
+    // History limits only at launch would keep month-old text under a "7 days" setting.
+
+    /// Applies the History retention settings now. Records a "Transcribe Again" is still
+    /// working on are left for the next sweep.
+    func applyRetention() {
+        history.applyRetention(
+            HistoryRetention(
+                settingsHistoryDays: settings.historyRetentionDays,
+                settingsAudioDays: settings.audioRetentionDays
+            ),
+            sparing: retries.inFlight
+        )
+    }
+
+    /// Re-applies retention hourly, after the Mac wakes (a timer doesn't fire during sleep),
+    /// and as soon as either retention setting changes.
+    private func keepApplyingRetention() {
+        guard retentionTimer == nil else { return }
+        let timer = Timer(timeInterval: HistoryRetention.sweepInterval, repeats: true) { [weak self] _ in
+            // Scheduled on the main run loop below, so this is provably the main thread.
+            MainActor.assumeIsolated {
+                self?.applyRetention()
+            }
+        }
+        // Nobody waits on it: let the system batch it with other wake-ups.
+        timer.tolerance = HistoryRetention.sweepInterval / 10
+        RunLoop.main.add(timer, forMode: .common)
+        retentionTimer = timer
+
+        wakeObserver = NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.didWakeNotification, object: nil, queue: .main
+        ) { [weak self] _ in
+            // Delivered on the main queue, so this is provably the main thread.
+            MainActor.assumeIsolated {
+                self?.applyRetention()
+            }
+        }
+        observeRetentionSettings()
+    }
+
+    private func observeRetentionSettings() {
+        withObservationTracking {
+            _ = settings.historyRetentionDays
+            _ = settings.audioRetentionDays
+        } onChange: { [weak self] in
+            // Fires before the new value is stored; hop so the sweep reads the new one.
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                self.observeRetentionSettings()
+                self.applyRetention()
+            }
+        }
+    }
+
+    @ObservationIgnored private var retentionTimer: Timer?
+    @ObservationIgnored private var wakeObserver: (any NSObjectProtocol)?
+
+    // MARK: - Navigation
+    //
+    // The one way to move the main window from anywhere (the HUD, the menu bar, Settings,
+    // other pages). Each brings the window forward, reopening it if it was closed.
 
     /// Brings the main window forward on a section.
     func show(_ section: SidebarSection) {
         self.section = section
+        bringMainWindowForward()
+    }
+
+    /// Brings the main window forward on History, scrolled to `id`, selected and flashed.
+    /// With `nil`, or an id that's no longer in History, it just opens History.
+    func showHistory(revealing id: UUID? = nil) {
+        if let id, history.record(id: id) != nil, !historyDeletion.isPending(id) {
+            focusedRecordID = id
+        }
+        show(.history)
+    }
+
+    /// Asks the Settings window to open on `tab`. Call it just before the view's
+    /// `openSettings()` (or from a `SettingsLink`'s simultaneous gesture); `SettingsView`
+    /// switches to the tab and clears the request.
+    func requestSettings(_ tab: SettingsTab) {
+        requestedSettingsTab = tab
+    }
+
+    private func bringMainWindowForward() {
         NSApp.activate()
         if let window = NSApp.windows.first(where: { $0.identifier?.rawValue == "main" }) {
             window.makeKeyAndOrderFront(nil)
+            return
+        }
+        // Closed: SwiftUI only reopens a `Window` scene through `openWindow`, which needs a
+        // view. File › Open Birdtown Flow (⌘O, in `MurmurCommands`) is that call, so use it.
+        guard let menu = NSApp.mainMenu else { return }
+        for item in menu.items {
+            guard let submenu = item.submenu,
+                  let index = submenu.items.firstIndex(where: {
+                      $0.keyEquivalent == "o" && $0.keyEquivalentModifierMask == .command && $0.isEnabled
+                  })
+            else { continue }
+            submenu.performActionForItem(at: index)
+            return
         }
     }
 }

@@ -1,9 +1,10 @@
 import Carbon.HIToolbox
 import Foundation
+import MurmurKit
 
 /// A system-wide shortcut via Carbon's `RegisterEventHotKey`.
 ///
-/// Used for ⌃⌥V (paste last dictation). Carbon hot keys are delivered by the window server
+/// Used for paste last dictation (⌃⌥V unless the user recorded another chord). Carbon hot keys are delivered by the window server
 /// to the registering app, need no Accessibility grant, and keep working when the event tap
 /// can't be created — which is exactly when a fallback is most useful.
 @MainActor
@@ -26,6 +27,17 @@ final class GlobalShortcut {
 
     var isRegistered: Bool { hotKeyRef != nil }
 
+    /// The chord registered now, so a caller can tell whether a changed setting needs a
+    /// re-registration. `nil` when nothing is registered.
+    private(set) var registeredChord: KeyChord?
+
+    /// Registers `chord`, replacing any previous registration. Returns `false` if another app
+    /// already owns it.
+    @discardableResult
+    func register(_ chord: KeyChord, action: @escaping () -> Void) -> Bool {
+        register(keyCode: Int(chord.keyCode), modifiers: chord.modifiers.carbonFlags, action: action)
+    }
+
     /// Registers `keyCode` + Carbon `modifiers` (e.g. `controlKey | optionKey`), replacing any
     /// previous registration. Returns `false` if another app already owns the combination.
     @discardableResult
@@ -43,6 +55,7 @@ final class GlobalShortcut {
             return false
         }
         hotKeyRef = ref
+        registeredChord = KeyChord(keyCode: UInt16(truncatingIfNeeded: keyCode), modifiers: ShortcutModifiers(carbonFlags: modifiers))
         Self.handlers[id] = action
         return true
     }
@@ -50,6 +63,7 @@ final class GlobalShortcut {
     func unregister() {
         if let hotKeyRef { UnregisterEventHotKey(hotKeyRef) }
         hotKeyRef = nil
+        registeredChord = nil
         Self.handlers[id] = nil
     }
 

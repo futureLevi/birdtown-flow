@@ -1,4 +1,5 @@
 import AppKit
+import MurmurKit
 import SwiftUI
 
 /// Small controls shared by onboarding, Settings and the menu bar.
@@ -29,6 +30,9 @@ struct SetupPreview {
     var keySaved = false
     /// Text already in the practice field, as if Birdtown Flow had just typed it.
     var practiceText: String?
+    /// The engine History recorded for the practice dictation, e.g. "Apple Speech" when it
+    /// stood in for a Parakeet model that was still downloading.
+    var practiceEngine: String?
     /// Whether Birdtown Flow runs from an app bundle and can relaunch itself. `nil` reads the
     /// real answer, which is `false` on the snapshot runner (not a bundle).
     var canRelaunch: Bool?
@@ -52,23 +56,42 @@ extension EnvironmentValues {
 @MainActor
 extension SetupKit {
     /// Push-to-talk keys in the order we suggest them: fn first, it's the easiest to reach.
-    static var orderedKeys: [PushToTalkKey] {
-        [.fn] + PushToTalkKey.allCases.filter { $0 != .fn }
+    /// Anything else comes from the shortcut recorder.
+    static var orderedKeys: [PushToTalkKey] { PushToTalkKey.quickPicks }
+
+    /// The quick picks, plus `current` when it was recorded, so a picker can show it selected.
+    static func pickerKeys(including current: PushToTalkKey) -> [PushToTalkKey] {
+        current.isQuickPick ? orderedKeys : orderedKeys + [current]
     }
 
-    /// The symbol printed on the key: "fn", "⌥", "⌘".
+    /// The symbol printed on the key: "fn", "⌥", "⌘"; a chord's keys run together: "⌃⌥D".
     static func glyph(for key: PushToTalkKey) -> String {
-        key.displayName.split(separator: " ").last.map(String.init) ?? key.displayName
+        key.glyphs.joined()
     }
 
-    /// The key spelled out — "Right Option", "Fn (Globe)" — for captions and VoiceOver.
+    /// One keycap per key: ["fn"], ["⌃", "⌥", "D"].
+    static func keys(for key: PushToTalkKey) -> [String] {
+        key.glyphs
+    }
+
+    /// The key spelled out — "Right Option", "Fn (Globe)" — for captions and VoiceOver. A
+    /// chord reads as printed ("⌃⌥D"), which is shorter in a sentence than its spoken name.
     static func name(for key: PushToTalkKey) -> String {
-        // Spelled out like the others, so its card doesn't read "fn" under an "fn" keycap.
-        if key == .fn { return "Fn (Globe)" }
-        let words = ["⌥": "Option", "⌘": "Command", "⌃": "Control", "⇧": "Shift"]
-        return key.displayName.split(separator: " ")
-            .map { words[String($0)] ?? String($0) }
-            .joined(separator: " ")
+        switch key {
+        case .modifier(let modifier): modifier.spokenName
+        case .keys(let chord): chord.displayName
+        }
+    }
+
+    /// The hands-free shortcut's keycaps when it has one of its own: ["⌃", "⌥"] or the
+    /// recorded chord's.
+    static func handsFreeKeys(_ settings: Settings) -> [String] {
+        settings.handsFreeChord?.glyphs ?? ["⌃", "⌥"]
+    }
+
+    /// "⌃⌥", or the recorded chord, for sentences like "Press ⌃⌥ again to finish."
+    static func handsFreeName(_ settings: Settings) -> String {
+        handsFreeKeys(settings).joined()
     }
 
     /// Whether pressing 🌐/fn on its own also does something (emoji picker, input source,
@@ -156,6 +179,29 @@ extension SetupKit {
     static func isFailed(_ state: ModelManager.State) -> Bool {
         if case .failed = state { return true }
         return false
+    }
+
+    /// The engine standing in for `engine` in `state`, for snapshots, which have no live
+    /// `ModelManager`. Nothing loaded from before, so it's Apple Speech or nothing. The live
+    /// answer is `ModelManager.standInName`.
+    static func standIn(for engine: SpeechEngineChoice, state: ModelManager.State) -> String? {
+        EngineFallback.standIn(
+            selected: engine.displayName,
+            selectedIsDownloadable: engine.isParakeet,
+            selectedReady: state == .ready,
+            loaded: nil
+        )
+    }
+
+    /// "Using Apple Speech until Parakeet Ultra is ready · 42%", or `nil` when `engine` is
+    /// ready or nothing stands in for it.
+    static func standInNote(_ standIn: String?, for engine: SpeechEngineChoice, state: ModelManager.State) -> String? {
+        guard let standIn, state != .ready else { return nil }
+        return EngineFallback.note(
+            standIn: standIn,
+            selected: engine.displayName,
+            progress: progress(of: state).map { percent($0) }
+        )
     }
 }
 

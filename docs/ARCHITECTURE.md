@@ -8,16 +8,16 @@ a product that can stand next to Wispr Flow.
 
 | Area | What it does |
 |---|---|
-| **Dictation** | Hold the push-to-talk key (default **fn**) to record; release to transcribe and insert. Double-tap the key, or press **Space** while holding it, for hands-free; tap again to finish. Settings can make hands-free a tap of **⌃⌥** instead (`HandsFreeShortcut`), for a 🌐 key that macOS also answers. **Esc** cancels. **⌃⌥V** pastes the last dictation again. |
-| **Engine** | Parakeet Ultra (FluidAudio, CoreML on the Neural Engine) by default. Parakeet v3/v2 and Apple Speech as alternatives. Dictionary words boost recognition (CTC vocabulary boosting), tuned for precision: a word is only rewritten to a dictionary term when it sounds like it, and every rewrite is listed under Replacements in History. |
+| **Dictation** | Hold the push-to-talk key (default **fn**) to record; release to transcribe and insert. Double-tap the key, or press **Space** while holding it, for hands-free; tap again to finish. Settings can make hands-free a tap of **⌃⌥** or a recorded chord instead (`HandsFreeShortcut`), for a 🌐 key that macOS also answers. Push-to-talk can be any single modifier key (either side) or a recorded chord; hands-free and paste-last chords can be recorded too (`MurmurKit/Input`: `KeyShortcut`, `ShortcutRules`, `ShortcutCapture`). **Esc** cancels. **⌃⌥V** (by default) pastes the last dictation again. |
+| **Engine** | Parakeet Ultra (FluidAudio, CoreML on the Neural Engine) by default. Parakeet v3/v2 and Apple Speech as alternatives. Dictionary words boost recognition (CTC vocabulary boosting), tuned for precision: a word is only rewritten to a dictionary term when it sounds like it, and every rewrite is listed under Replacements in History. While the selected Parakeet model downloads or loads, Apple Speech (or the previously loaded model) stands in and History names it (`ModelManager.standInName`, `MurmurKit.EngineFallback`); it switches over automatically. |
 | **Pipeline** | raw text → fillers / stutters / spoken commands → optional AI polish → dictionary corrections → snippets → style rules → insert. |
 | **Styles** | Per app category (personal messages, work messages, email, other): formal, casual, very casual, excited. Category comes from the frontmost app (and the window title, for web apps in browsers). |
 | **AI polish** | Off, Apple Intelligence (on-device), Claude (Anthropic key) or any OpenAI-compatible endpoint. Hard timeout; any failure falls back to the deterministic text. |
 | **Lab** | Admin tool in the main window. Named polish configurations (provider, model, effort, instructions with `{{style}}`, `{{destination}}`, `{{vocabulary}}` placeholders), run side by side on real dictations with timings, the guard's verdict and a word diff. A configuration can take over chosen writing styles; the rest follow Settings, and turning polish off in Settings turns it off for all of them. |
-| **History** | Every dictation with its audio. Search, copy, paste again, play, retry transcription, see what the dictionary and polish changed. Failed dictations keep their audio so nothing said is ever lost. |
+| **History** | Every dictation with its audio. Search, copy, paste again, play, retry transcription, see what the dictionary and polish changed. Failed dictations keep their audio so nothing said is ever lost. Deletes can be undone for 5 s (`HistoryDeletion`). Retention runs at launch, hourly, on wake and when either setting changes (`AppModel.keepApplyingRetention`). |
 | **Dictionary** | Vocabulary terms and "hear X → write Y" corrections, also editable as a plain text file. |
 | **Snippets** | Say a trigger phrase, get the expansion. |
-| **HUD** | A small dark pill at the bottom of the screen: waveform while listening, shimmer while processing, a check when done. Never takes focus. |
+| **HUD** | A small dark pill at the bottom of the screen: waveform while listening, shimmer while processing, a check when done, a distinct shape while polishing. Failures and notices (no speech heard, no words, copied instead of typed, polish skipped) appear as a message pill that can be clicked once the pointer moves to it: it opens the History row, the microphone picker or System Settings (`DictationFeedback`, `DictationController.FollowUp`). Never takes focus. |
 | **Onboarding** | Microphone → Accessibility → model download → shortcut → try it. |
 
 ## Layers
@@ -57,7 +57,7 @@ key down ─► DictationController.begin
               AudioRecorder.start  (16 kHz mono Float32, level meter, WAV on disk)
 key up   ─► AudioRecorder.stop → samples
               HistoryStore.add(record: audio saved, outcome pending)
-              silence? → outcome .empty, nothing typed
+              too short or silent under 1 s? → dropped; silent ≥ 1 s → "no speech" pill
               engine.transcribe(samples, vocabulary)          [Transcription]
               TextPipeline.prepare                            [MurmurKit]
               PolishService.polish (timeout, PolishGuard)     [Polish]

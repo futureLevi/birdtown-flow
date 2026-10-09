@@ -23,6 +23,7 @@ enum SnapshotRenderer {
     static func run(to directory: URL) async {
         try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         let shots = SnapshotCatalog.main + SnapshotCatalog.hud + SnapshotCatalog.setup
+            + SnapshotCatalog.labResults + SnapshotCatalog.menuBarWarnings + SnapshotCatalog.shortcuts
         print("[snapshots] rendering \(shots.count) screens into \(directory.path)")
         for shot in shots {
             for (suffix, appearance) in [("light", NSAppearance.Name.aqua), ("dark", .darkAqua)] {

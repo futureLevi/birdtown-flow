@@ -3,11 +3,6 @@ import Combine
 import MurmurKit
 import SwiftUI
 
-extension SetupKit {
-    /// The paste-last-dictation chord, drawn as keycaps in Settings and as text in the menu.
-    static let pasteLastKeys = ["⌃", "⌥", "V"]
-}
-
 // MARK: - General
 
 struct GeneralSettingsPane: View {
@@ -16,38 +11,77 @@ struct GeneralSettingsPane: View {
     @State private var launchAtLogin = false
     @State private var launchNeedsApproval = false
     @State private var launchError: String?
+    /// Why the last recorded shortcut was refused, or what to know about it, per row.
+    @State private var shortcutNotices: [ShortcutRole: ShortcutVerdict]
+    /// Snapshots only: draw this row's recorder as listening, with these keys held.
+    private let previewRecording: (role: ShortcutRole, held: [String])?
+
+    init(
+        shortcutNotices: [ShortcutRole: ShortcutVerdict] = [:],
+        previewRecording: (role: ShortcutRole, held: [String])? = nil
+    ) {
+        _shortcutNotices = State(initialValue: shortcutNotices)
+        self.previewRecording = previewRecording
+    }
 
     var body: some View {
         @Bindable var settings = model.settings
         SettingsPane {
             SettingsGroup(title: "Shortcuts") {
-                SettingsRow(title: "Push-to-talk key", detail: "Hold to dictate, let go to type.") {
-                    Picker("Push-to-talk key", selection: $settings.pushToTalkKey) {
-                        ForEach(SetupKit.orderedKeys, id: \.self) { key in
-                            Text(SetupKit.name(for: key)).tag(key)
+                SettingsRow(title: "Push-to-talk key", detail: "Hold to dictate, let go to type. Record any key you don't type with, or a combination.") {
+                    HStack(spacing: Spacing.s) {
+                        Picker("Push-to-talk key", selection: pushToTalkBinding) {
+                            ForEach(SetupKit.pickerKeys(including: settings.pushToTalkKey), id: \.self) { key in
+                                Text(SetupKit.name(for: key)).tag(key)
+                            }
                         }
+                        .labelsHidden()
+                        .fixedSize()
+                        recorder(.pushToTalk, look: .button("Record…")) { model.settings.pushToTalkKey = $0 }
                     }
-                    .labelsHidden()
-                    .fixedSize()
                 }
+                notice(for: .pushToTalk)
                 SettingsDivider()
-                SettingsRow(title: "Hands-free", detail: handsFreeDetail(settings.handsFreeShortcut, key: settings.pushToTalkKey)) {
-                    Picker("Hands-free", selection: $settings.handsFreeShortcut) {
-                        ForEach(HandsFreeShortcut.allCases) { shortcut in
-                            Text(shortcut.title(keyName: SetupKit.name(for: settings.pushToTalkKey))).tag(shortcut)
+                SettingsRow(title: "Hands-free", detail: handsFreeDetail(settings)) {
+                    HStack(spacing: Spacing.s) {
+                        Picker("Hands-free", selection: handsFreeBinding) {
+                            Text(HandsFreeShortcut.doubleTap.title(keyName: SetupKit.name(for: settings.pushToTalkKey)))
+                                .tag(HandsFreeChoice.doubleTap)
+                            Text(HandsFreeShortcut.controlOption.title(keyName: "")).tag(HandsFreeChoice.controlOption)
+                            if let chord = settings.handsFreeChord {
+                                Text(chord.displayName).tag(HandsFreeChoice.recorded)
+                            }
+                            Text(HandsFreeShortcut.off.title(keyName: "")).tag(HandsFreeChoice.off)
+                        }
+                        .labelsHidden()
+                        .fixedSize()
+                        recorder(.handsFree, look: .button("Record…")) { shortcut in
+                            guard let chord = shortcut.chord else { return }
+                            model.settings.handsFreeChord = chord
+                            model.settings.handsFreeShortcut = .controlOption
                         }
                     }
-                    .labelsHidden()
-                    .fixedSize()
                 }
+                notice(for: .handsFree)
                 SettingsDivider()
                 SettingsRow(title: "Paste last dictation", detail: "Pastes what you said last into any app, again.") {
                     HStack(spacing: Spacing.m) {
-                        SetupKit.KeyCombo(keys: SetupKit.pasteLastKeys)
-                            .opacity(settings.pasteLastShortcutEnabled ? 1 : Layout.Setup.disabledOpacity)
+                        if settings.pasteLastShortcut != .pasteLastDefault {
+                            IconButton(symbol: "arrow.uturn.backward", label: "Use \(KeyChord.pasteLastDefault.displayName) again") {
+                                model.settings.pasteLastShortcut = .pasteLastDefault
+                                shortcutNotices[.pasteLast] = nil
+                            }
+                        }
+                        recorder(.pasteLast, look: .field, current: .keys(settings.pasteLastShortcut)) { shortcut in
+                            guard let chord = shortcut.chord else { return }
+                            model.settings.pasteLastShortcut = chord
+                            model.settings.pasteLastShortcutEnabled = true
+                        }
+                        .opacity(settings.pasteLastShortcutEnabled ? 1 : Layout.Setup.disabledOpacity)
                         SettingsSwitch(label: "Paste last dictation", isOn: $settings.pasteLastShortcutEnabled)
                     }
                 }
+                notice(for: .pasteLast)
             }
 
             SettingsGroup(title: "Feedback") {
@@ -103,18 +137,111 @@ struct GeneralSettingsPane: View {
         }
         .onChange(of: settings.pushToTalkKey) { reloadShortcuts() }
         .onChange(of: settings.handsFreeShortcut) { reloadShortcuts() }
+        .onChange(of: settings.handsFreeChord) { reloadShortcuts() }
         .onChange(of: settings.pasteLastShortcutEnabled) { reloadShortcuts() }
+        .onChange(of: settings.pasteLastShortcut) { reloadShortcuts() }
+    }
+
+    // MARK: Shortcuts
+
+    /// The hands-free picker's choices: the recorded chord is its own row.
+    private enum HandsFreeChoice: Hashable {
+        case doubleTap, controlOption, recorded, off
+    }
+
+    /// Choosing from the picker clears a message left by the recorder beside it.
+    private var pushToTalkBinding: Binding<PushToTalkKey> {
+        Binding(
+            get: { model.settings.pushToTalkKey },
+            set: { key in
+                model.settings.pushToTalkKey = key
+                shortcutNotices[.pushToTalk] = nil
+            }
+        )
+    }
+
+    private var handsFreeBinding: Binding<HandsFreeChoice> {
+        let settings = model.settings
+        return Binding(
+            get: { () -> HandsFreeChoice in
+                switch settings.handsFreeShortcut {
+                case .doubleTap: return .doubleTap
+                case .controlOption: return settings.handsFreeChord == nil ? .controlOption : .recorded
+                case .off: return .off
+                }
+            },
+            set: { choice in
+                shortcutNotices[.handsFree] = nil
+                switch choice {
+                case .doubleTap:
+                    settings.handsFreeShortcut = .doubleTap
+                case .controlOption:
+                    // ⌃⌥ replaces a recorded chord; record again to get it back.
+                    settings.handsFreeChord = nil
+                    settings.handsFreeShortcut = .controlOption
+                case .recorded:
+                    settings.handsFreeShortcut = .controlOption
+                case .off:
+                    settings.handsFreeShortcut = .off
+                }
+            }
+        )
+    }
+
+    private func recorder(
+        _ role: ShortcutRole,
+        look: ShortcutRecorder.Look,
+        current: KeyShortcut? = nil,
+        onRecord: @escaping (KeyShortcut) -> Void
+    ) -> ShortcutRecorder {
+        ShortcutRecorder(
+            role: role,
+            look: look,
+            current: current,
+            inUse: model.settings.shortcutsInUse,
+            onListeningChange: pauseShortcuts,
+            onVerdict: { verdict in
+                if let verdict, verdict != .accepted {
+                    shortcutNotices[role] = verdict
+                } else {
+                    shortcutNotices[role] = nil
+                }
+            },
+            previewHeld: previewRecording?.role == role ? previewRecording?.held : nil,
+            onRecord: onRecord
+        )
+    }
+
+    @ViewBuilder private func notice(for role: ShortcutRole) -> some View {
+        if let verdict = shortcutNotices[role], verdict != .accepted {
+            ShortcutNotice(verdict: verdict)
+                .padding(.horizontal, Spacing.l)
+                .padding(.bottom, Spacing.m)
+        }
+    }
+
+    /// Birdtown Flow's own shortcuts would hear the keys being recorded first: pause them.
+    private func pauseShortcuts(_ listening: Bool) {
+        guard preview == nil else { return }
+        if listening {
+            model.controller.deactivate()
+        } else {
+            model.controller.activate()
+        }
     }
 
     /// Names the keys the same way the picker beside it does.
-    private func handsFreeDetail(_ shortcut: HandsFreeShortcut, key: PushToTalkKey) -> String {
-        switch shortcut {
+    private func handsFreeDetail(_ settings: Settings) -> String {
+        switch settings.handsFreeShortcut {
         case .doubleTap:
-            "Double-tap \(SetupKit.name(for: key)), or press Space while holding it, to keep listening. Tap again to finish."
+            return "Double-tap \(SetupKit.name(for: settings.pushToTalkKey)), or press Space while holding it, to keep listening. Tap again to finish."
         case .controlOption:
-            "Press Control and Option together to keep listening without holding a key. Press them again to finish."
+            if let chord = settings.handsFreeChord {
+                return "Press \(chord.displayName) to keep listening without holding a key. Press it again to finish."
+            }
+            return "Press Control and Option together to keep listening without holding a key. Press them again to finish."
         case .off:
-            "Only hold to dictate."
+            return "Only hold to dictate."
         }
     }
 
@@ -847,7 +974,7 @@ struct PrivacySettingsPane: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(RoundedRectangle(cornerRadius: Radius.m, style: .continuous).fill(Palette.sunken))
 
-            SettingsGroup(title: "History", footnote: "Older dictations are removed automatically when Birdtown Flow starts.") {
+            SettingsGroup(title: "History", footnote: "Older dictations are removed automatically.") {
                 SettingsRow(title: "Keep history", detail: "Text of every dictation, searchable in History.") {
                     Picker("Keep history", selection: $settings.historyRetentionDays) {
                         // Shortest first, like Keep audio below.
