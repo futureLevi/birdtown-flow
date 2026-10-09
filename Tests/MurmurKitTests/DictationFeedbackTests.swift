@@ -77,4 +77,26 @@ struct DictationFeedbackTests {
         #expect(DictationFeedback.polishNotice(for: "  ") == nil)
         #expect(DictationFeedback.polishNotice(for: "Rewrite rejected: it changed what was said") == nil)
     }
+
+    @Test("A dictation polished in parts, some kept as dictated, goes in without a notice")
+    func partialPolishSilent() {
+        #expect(DictationFeedback.polishNotice(for: "Partly polished · 1 of 4 parts kept as dictated (timed out)") == nil)
+        #expect(DictationFeedback.polishNotice(
+            for: DictationFeedback.partialPolishNote(keptAsDictated: 2, of: 5, reason: "No API key")) == nil)
+    }
+
+    @Test("The partial-polish note counts the parts and gives the first reason's opening clause", arguments: [
+        ("Timed out after 4 s", "Partly polished · 1 of 4 parts kept as dictated (timed out after 4 s)"),
+        ("Rewrite rejected: it changed what was said", "Partly polished · 1 of 4 parts kept as dictated (rewrite rejected)"),
+        ("No API key", "Partly polished · 1 of 4 parts kept as dictated (no API key)"),
+        ("Claude Code isn't installed", "Partly polished · 1 of 4 parts kept as dictated (Claude Code isn't installed)"),
+        ("Apple Intelligence failed.", "Partly polished · 1 of 4 parts kept as dictated (Apple Intelligence failed)"),
+        ("", "Partly polished · 1 of 4 parts kept as dictated"),
+    ])
+    func partialPolishNote(reason: String, expected: String) {
+        let note = DictationFeedback.partialPolishNote(keptAsDictated: 1, of: 4, reason: reason)
+        #expect(note == expected)
+        // History shows it as is: it has no ":" to be shortened at.
+        #expect(!note.contains(":"))
+    }
 }

@@ -515,8 +515,25 @@ final class DictationController {
     }
 
     /// The polisher for a long recording's finished parts, or `nil` when it won't be used.
+    /// It starts once the frontmost context, and so the style and its Lab configuration, is
+    /// known; a style whose configuration turns polish off leaves it idle.
     private func makeProgressivePolisher(contextTask: Task<AppContext, Never>) -> ProgressivePolisher? {
-        nil
+        guard settings.polishWhileSpeaking, settings.polishInParts, settings.polishProvider != .off else { return nil }
+        let progressive = ProgressivePolisher(service: PolishService(settings: settings), settings: settings)
+        Task { [weak self, weak progressive] in
+            let context = await contextTask.value
+            guard let self, let progressive else { return }
+            let style = self.settings.style(for: context.category)
+            let configuration = self.lab.configuration(for: style)
+            guard (configuration?.provider ?? self.settings.polishProvider) != .off else { return }
+            // The request key-up will make for each part, but for its text (`polishStage`).
+            progressive.configure(
+                template: self.polishRequest(text: "", style: style, context: context, configuration: configuration),
+                configuration: configuration,
+                options: self.currentPipelineOptions
+            )
+        }
+        return progressive
     }
 
     /// The recording is gone (Esc, discarded, dropped, failed): stop its work and leave no trace.
@@ -1199,7 +1216,9 @@ final class DictationController {
                 await service.polishLong(request, using: configuration, progressive: progressive)
             }
         } catch {
-            return (PolishService.Outcome(text: request.text, provider: nil, note: "timed out"), PolishReport())
+            var report = PolishReport()
+            report.line.tag("fallback", error is CancellationError ? "cancelled" : "watchdog")
+            return (PolishService.Outcome(text: request.text, provider: nil, note: "timed out"), report)
         }
     }
 

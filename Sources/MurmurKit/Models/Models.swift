@@ -202,10 +202,15 @@ public struct PolishRequest: Sendable, Hashable {
     public var level: PolishLevel
     /// A system prompt to use instead of the built-in one: a Lab configuration's.
     public var instructions: String?
+    /// One part of a long dictation (`PolishChunker`): the end of the part before it, as
+    /// dictated. The model reads it for sense and leaves it out of its reply.
+    public var context: String?
+    /// One part of a long dictation, and not the last: the text goes on after it.
+    public var continues: Bool
 
     public init(
         text: String, style: WritingStyle, category: AppCategory, appName: String?, vocabulary: [String],
-        level: PolishLevel = .full, instructions: String? = nil
+        level: PolishLevel = .full, instructions: String? = nil, context: String? = nil, continues: Bool = false
     ) {
         self.text = text
         self.style = style
@@ -214,6 +219,8 @@ public struct PolishRequest: Sendable, Hashable {
         self.vocabulary = vocabulary
         self.level = level
         self.instructions = instructions
+        self.context = context
+        self.continues = continues
     }
 }
 

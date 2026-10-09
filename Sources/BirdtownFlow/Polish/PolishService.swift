@@ -11,6 +11,8 @@ final class PolishService {
         var provider: PolishProvider?
         /// Why polish wasn't used, for History ("timed out", "no API key"…). `nil` on success or when off.
         var note: String?
+        /// The model answered and `PolishGuard` turned it down: asking again won't help.
+        var rejectedByGuard = false
     }
 
     private let settings: Settings
@@ -45,35 +47,182 @@ final class PolishService {
             Log.polish.info("polish skipped: \(unavailable.note, privacy: .public)")
             return Outcome(text: request.text, provider: nil, note: unavailable.note)
         }
+        return await polishOne(
+            request, client: client, provider: provider, deadline: ContinuousClock.now + .seconds(timeLimit))
+    }
 
-        let limit = timeLimit
+    /// One request, finished by `deadline`: the guarded rewrite, or the request's own text
+    /// with a note for History. The parts of a long dictation share one deadline, so together
+    /// they take no longer than one request would.
+    func polishOne(
+        _ request: PolishRequest, client: any PolishClient, provider: PolishProvider,
+        deadline: ContinuousClock.Instant
+    ) async -> Outcome {
         let clock = ContinuousClock()
         let started = clock.now
         do {
-            let output = try await HardDeadline.run(within: .seconds(limit)) {
+            // A part still queued when time is up isn't sent at all.
+            let remaining = deadline - started
+            guard remaining > .zero else { throw HardDeadline.Exceeded() }
+            let output = try await HardDeadline.run(within: max(remaining, .milliseconds(1))) {
                 try await client.polish(request)
             }
             let elapsed = Self.seconds(clock.now - started)
-            guard let accepted = PolishGuard.accept(output, original: request.text, vocabulary: request.vocabulary) else {
+            guard let accepted = PolishGuard.accept(
+                output, original: request.text, vocabulary: request.vocabulary, context: request.context
+            ) else {
                 Log.polish.info("\(provider.rawValue, privacy: .public) rewrite rejected by the guard")
-                return Outcome(text: request.text, provider: nil, note: "Rewrite rejected: it changed what was said")
+                return Outcome(
+                    text: request.text, provider: nil, note: "Rewrite rejected: it changed what was said",
+                    rejectedByGuard: true)
             }
             Log.polish.info("\(provider.rawValue, privacy: .public) polished in \(elapsed, format: .fixed(precision: 2))s")
             return Outcome(text: accepted, provider: provider, note: nil)
         } catch {
-            let note = Self.note(for: error, limit: limit)
+            let note = Self.note(for: error, limit: timeLimit)
             Log.polish.info("polish fell back (\(provider.rawValue, privacy: .public)): \(note, privacy: .public)")
             return Outcome(text: request.text, provider: nil, note: note)
         }
     }
 
-    /// `polish`, for a dictation of any length: long texts will be polished in parts, some of
-    /// them while the person was still talking (`progressive`). For now it is `polish`.
+    /// `polish`, for a dictation of any length.
+    ///
+    /// From `PolishChunker.minimumWords` prepared words on (with `Settings.polishInParts`), the
+    /// text is polished in parts at the same time, under one deadline: parts `progressive`
+    /// polished while the person talked are reused, the one it's still polishing is awaited,
+    /// and the rest are sent in parallel. Each part is guarded and falls back on its own; the
+    /// note says how many kept their dictated text. Shorter texts go to `polish`.
     func polishLong(
         _ request: PolishRequest, using configuration: PolishConfiguration?, progressive: ProgressivePolisher?
     ) async -> (Outcome, PolishReport) {
-        let outcome = await polish(request, using: configuration)
-        return (outcome, PolishReport())
+        var report = PolishReport()
+        let chunks = settings.polishInParts ? PolishChunker.chunks(request.text) : []
+        guard chunks.count > 1, let polisher = polisher(using: configuration) else {
+            progressive?.stop(keeping: [])
+            report.line.count("chunks", 1)
+            return (await polish(request, using: configuration), report)
+        }
+
+        let deadline = ContinuousClock.now + .seconds(timeLimit)
+        let requests = chunks.map { chunk in
+            var part = request
+            part.text = chunk.text
+            part.context = chunk.context
+            part.continues = chunk.continues
+            return part
+        }
+        // What was polished while the person talked counts only if it came from this provider
+        // (Settings can change during a recording).
+        let earlier = progressive.flatMap { $0.provider == polisher.provider ? $0 : nil }
+        progressive?.stop(keeping: earlier == nil ? [] : requests)
+
+        var outcomes = [Outcome?](repeating: nil, count: requests.count)
+        var awaited: [(index: Int, task: Task<Outcome, Never>)] = []
+        var fresh: [Int] = []
+        for (index, part) in requests.enumerated() {
+            if let done = earlier?.cache[part] {
+                outcomes[index] = done
+            } else if let inFlight = earlier?.inFlight, inFlight.request == part {
+                awaited.append((index, inFlight.task))
+            } else {
+                fresh.append(index)
+            }
+        }
+        // The part still in flight counts against the provider's limit, but never holds back
+        // the first fresh part.
+        let local = endpointURL.map { Self.isLocal($0) } ?? false
+        let limit = PolishChunker.concurrency(for: polisher.provider, localEndpoint: local)
+        let parallel = min(max(1, limit - awaited.count), fresh.count)
+        let client = polisher.client
+        let provider = polisher.provider
+        let polishPart: @Sendable (Int) async -> Outcome = { [requests] index in
+            await self.polishOne(requests[index], client: client, provider: provider, deadline: deadline)
+        }
+
+        let results = await withTaskGroup(of: PartResult.self, returning: [PartResult].self) { group in
+            for (index, task) in awaited {
+                group.addTask {
+                    let started = ContinuousClock.now
+                    var outcome = await withTaskCancellationHandler {
+                        await task.value
+                    } onCancel: {
+                        task.cancel()
+                    }
+                    // It timed out or failed against its own, earlier deadline: like a part
+                    // that failed while the person talked, it gets what's left of this one.
+                    if outcome.provider == nil, !outcome.rejectedByGuard, !Task.isCancelled {
+                        outcome = await polishPart(index)
+                    }
+                    return PartResult(index: index, outcome: outcome, wait: ContinuousClock.now - started)
+                }
+            }
+            var queue = fresh[...]
+            for _ in 0..<parallel {
+                guard let index = queue.popFirst() else { break }
+                group.addTask {
+                    let started = ContinuousClock.now
+                    let outcome = await polishPart(index)
+                    return PartResult(index: index, outcome: outcome, wait: ContinuousClock.now - started)
+                }
+            }
+            var results: [PartResult] = []
+            while let result = await group.next() {
+                results.append(result)
+                // A part finished, awaited or fresh: the next one takes its place.
+                if let index = queue.popFirst() {
+                    group.addTask {
+                        let started = ContinuousClock.now
+                        let outcome = await polishPart(index)
+                        return PartResult(index: index, outcome: outcome, wait: ContinuousClock.now - started)
+                    }
+                }
+            }
+            return results
+        }
+
+        for result in results { outcomes[result.index] = result.outcome }
+        let parts = zip(requests, outcomes).map { part, outcome in
+            outcome ?? Outcome(text: part.text, provider: nil, note: nil)
+        }
+        let keptAsDictated = parts.count { $0.provider == nil }
+        let firstNote = parts.lazy.compactMap(\.note).first
+        let outcome: Outcome
+        if keptAsDictated == parts.count {
+            outcome = Outcome(text: request.text, provider: nil, note: firstNote)
+        } else {
+            outcome = Outcome(
+                text: PolishChunker.join(parts.map(\.text), chunks: chunks, style: request.style),
+                provider: provider,
+                note: keptAsDictated == 0 ? nil : DictationFeedback.partialPolishNote(
+                    keptAsDictated: keptAsDictated, of: parts.count, reason: firstNote ?? ""))
+        }
+
+        report.line.count("chunks", parts.count)
+        report.line.count("cached", parts.count - awaited.count - fresh.count)
+        report.line.count("awaited", awaited.count)
+        report.line.count("fresh", fresh.count)
+        report.line.count("parallel", parallel)
+        report.line.count("fallbacks", keptAsDictated)
+        report.line.ms("slowest", results.map(\.wait).max().map { Self.milliseconds($0) })
+        return (outcome, report)
+    }
+
+    /// One part of `polishLong`, and how long key-up waited for it.
+    private struct PartResult: Sendable {
+        let index: Int
+        let outcome: Outcome
+        let wait: Duration
+    }
+
+    /// The client a dictation with `configuration` (or Settings) is polished with, and its
+    /// provider; `nil` when polish is off or the provider can't run (`polish` notes why).
+    func polisher(using configuration: PolishConfiguration?) -> (client: any PolishClient, provider: PolishProvider)? {
+        let provider = configuration?.provider ?? settings.polishProvider
+        guard settings.polishProvider != .off, provider != .off,
+              case .success(let client) = makeClient(
+                  for: provider, model: configuration?.model, effort: configuration?.effort)
+        else { return nil }
+        return (client, provider)
     }
 
     /// Gets the provider ready for a dictation that's starting, while the person talks: loads
@@ -304,7 +453,7 @@ final class PolishService {
 
     /// The user's setting, kept within sane bounds: a zero or negative value would make polish
     /// always fail, and a huge one would hold every dictation hostage to a stalled server.
-    private var timeLimit: Double {
+    var timeLimit: Double {
         min(max(settings.polishTimeout, 0.5), 30)
     }
 
