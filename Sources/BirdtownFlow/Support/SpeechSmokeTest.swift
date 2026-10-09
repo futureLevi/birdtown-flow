@@ -75,10 +75,9 @@ enum SpeechSmokeTest {
     /// 1.0% of words changed, no words doubled at a seam. Speed is checked against the whole
     /// pass on the same machine, since CI's virtual Mac is much slower than a real one: the
     /// windows together take at most 1.75× the whole pass (their overlap alone adds about a
-    /// quarter), and no window takes over 2.5 s, far less than the ~12 s of speech it adds
-    /// while recording. Each `--term <phrase>` is boosted and must come out of both;
-    /// `--expect-forced` asks for at least one cut made without a pause. Any failed check
-    /// exits non-zero.
+    /// quarter), and no window more than twice the whole pass's time for 15 s of audio. Each
+    /// `--term <phrase>` is boosted and must come out of both; `--expect-forced` asks for at
+    /// least one cut made without a pause. Any failed check exits non-zero.
     private static func compareSegmented(
         _ samples: [Float], engine: any TranscriptionEngine, models: ModelManager, arguments: [String]
     ) async throws -> Int32 {
@@ -137,8 +136,11 @@ enum SpeechSmokeTest {
         check("no word doubled at a seam", doubled.isEmpty, doubled.isEmpty ? "none" : doubled.joined(separator: ", "))
         let cost = Self.seconds(windowsTime) / max(Self.seconds(wholeTime), 0.001)
         check("windows ≤ 1.75× the whole pass", cost <= 1.75, String(format: "%.2f×", cost))
-        check("slowest window ≤ 2.5 s", segmented.slowestWindowMs <= 2500,
-              "\(segmented.slowestWindowMs) ms, \(segmented.windows) windows")
+        // A window holds at most 15 s of audio: twice the whole pass's pace for that much.
+        let pace = Self.seconds(wholeTime) / max(Double(samples.count) / 16_000, 1)
+        let slowestLimit = Int((2 * 15 * pace * 1000).rounded())
+        check("slowest window ≤ 2× the whole pass's pace", segmented.slowestWindowMs <= slowestLimit,
+              "\(segmented.slowestWindowMs) ms of \(slowestLimit) ms, \(segmented.windows) windows")
         if arguments.contains("--expect-forced") {
             check("a cut without a pause", segmented.forcedCuts >= 1, "\(segmented.forcedCuts) forced")
         }
