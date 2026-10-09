@@ -211,9 +211,10 @@ final class AppModel {
     }
 
     /// Brings the main window forward with Settings open over it, on `tab`. Settings is a
-    /// modal inside the main window, not a window of its own.
-    func showSettings(_ tab: SettingsTab = .general) {
-        settingsTab = tab
+    /// modal inside the main window, not a window of its own. Without a tab it opens where it
+    /// already is (⌘, while it's open keeps the section), or on General.
+    func showSettings(_ tab: SettingsTab? = nil) {
+        settingsTab = tab ?? settingsTab ?? .general
         bringMainWindowForward()
     }
 
