@@ -77,8 +77,16 @@ final class DictationController {
         static let recorderStop: Duration = .seconds(5)
         /// Waiting for a model that's still loading.
         static let modelWait: Duration = .seconds(30)
-        static let transcription: Duration = .seconds(60)
-        /// Added to `Settings.polishTimeout` as a backstop to PolishService's own timeout.
+        /// Speech to text: at least a minute, more for a long recording, by how fast `engine`
+        /// is (`TranscriptionTimeLimit`), so a slow Mac doesn't fail a long dictation, or its
+        /// Retry, that is still being transcribed.
+        static func transcription(samples: Int, engine: any TranscriptionEngine) -> Duration {
+            let kind: TranscriptionTimeLimit.Engine = engine is AppleSpeechEngine ? .appleSpeech : .parakeet
+            let audioSeconds = Double(samples) / AudioRecorder.sampleRate
+            return .seconds(TranscriptionTimeLimit.seconds(audioSeconds: audioSeconds, engine: kind))
+        }
+        /// Added to PolishService's limit for the text (`PolishService.overallTimeLimit(for:using:)`)
+        /// as a backstop to its own timeout.
         static let polishGrace: Double = 3
     }
 
@@ -1101,7 +1109,10 @@ final class DictationController {
     ) async throws -> (Transcript, TranscriptionReport) {
         let transcriber = live?.transcriber
         let settings = self.settings
-        return try await Watchdog.run(within: Timing.transcription) {
+        // Scaled to the whole recording: a live dictation usually has only its tail left, but
+        // any fallback transcribes all of it.
+        let limit = Timing.transcription(samples: samples.count, engine: engine)
+        return try await Watchdog.run(within: limit) {
             try await LongTranscription.transcript(
                 samples, engine: engine, vocabulary: vocabulary,
                 live: transcriber, purpose: purpose, settings: settings
@@ -1210,7 +1221,9 @@ final class DictationController {
         _ request: PolishRequest, using configuration: PolishConfiguration?, progressive: ProgressivePolisher?
     ) async -> (PolishService.Outcome, PolishReport) {
         let service = PolishService(settings: settings)
-        let limit = Duration.seconds(max(1, settings.polishTimeout) + Timing.polishGrace)
+        // The limit PolishService works to for this text, parts and all, so a long dictation's
+        // polish isn't cut short here.
+        let limit = Duration.seconds(service.overallTimeLimit(for: request, using: configuration) + Timing.polishGrace)
         do {
             return try await Watchdog.run(within: limit) {
                 await service.polishLong(request, using: configuration, progressive: progressive)

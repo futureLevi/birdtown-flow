@@ -228,13 +228,16 @@ actor SegmentedTranscriber {
     ) async throws -> (cutMs: Int, tail: (ms: Int, boostMs: Int)) {
         let clock = ContinuousClock()
         let cutStart = clock.now
+        // Esc, or the watchdog, stops the loop between windows rather than after the last.
         while let cut = planner.nextCut(after: lastCut, audio: rest[...], offset: base) {
+            try Task.checkCancellation()
             let window = planner.window(from: lastCut, to: cut.sample, total: total)
             cuts.append(cut)
             let audio = Array(rest[(window.audio.lowerBound - base)..<(window.audio.upperBound - base)])
             _ = try await decodeForResult(window, audio: audio, index: cuts.count, cut: cut)
         }
         let cutMs = Self.milliseconds(cutStart.duration(to: clock.now))
+        try Task.checkCancellation()
 
         let tailStart = clock.now
         let window = planner.window(from: lastCut, to: nil, total: total)

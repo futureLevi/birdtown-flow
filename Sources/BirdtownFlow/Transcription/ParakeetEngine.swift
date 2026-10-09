@@ -20,8 +20,11 @@ actor ParakeetEngine: TranscriptionEngine {
     /// One transcription at a time. An actor alone doesn't guarantee that: `transcribe`
     /// suspends while `AsrManager` works, and a second call could start in that gap. The
     /// manager's progress session and shared buffers aren't reentrant, so callers queue here.
+    /// A caller cancelled while queued (Esc, a window past its limit) leaves the queue at
+    /// once, rather than keep its place for work nobody wants.
     private var busy = false
-    private var waiters: [CheckedContinuation<Void, Never>] = []
+    private var waiters: [(id: Int, continuation: CheckedContinuation<Void, Error>)] = []
+    private var lastWaiterID = 0
 
     /// FluidAudio rejects anything under 0.3 s (`ASRConstants.minimumAudioDurationSeconds`).
     /// A quick "yes" can be shorter than that, so short clips are padded with silence to a
@@ -78,7 +81,7 @@ actor ParakeetEngine: TranscriptionEngine {
     func transcript(_ samples: [Float], vocabulary: [String]) async throws -> Transcript {
         guard !samples.isEmpty else { return Transcript(text: "") }
 
-        await acquire()
+        try await acquire()
         defer { release() }
         try Task.checkCancellation()
 
@@ -99,6 +102,8 @@ actor ParakeetEngine: TranscriptionEngine {
         }
         var text = result.text.trimmingCharacters(in: .whitespacesAndNewlines)
         let recognized = clock.now
+        // Recognition of a long recording takes a while; nobody wants it boosted after Esc.
+        try Task.checkCancellation()
 
         let terms = Self.boostTerms(from: vocabulary)
         var boosted: [AppliedCorrection] = []
@@ -133,11 +138,14 @@ actor ParakeetEngine: TranscriptionEngine {
     ) async -> VocabularyBooster.Rescored? {
         let booster = self.booster
         let audioSeconds = Double(audio.count) / Self.sampleRate
-        let budget = Duration.milliseconds(Int(1_000 + audioSeconds * 60))
+        let budget = Duration.seconds(TranscriptionTimeLimit.boost(audioSeconds: audioSeconds))
         do {
             return try await HardDeadline.run(within: budget) {
                 await booster.rescore(text: text, tokenTimings: timings, samples: audio, terms: terms)
             }
+        } catch is CancellationError {
+            // The transcription it was for is being thrown away.
+            return nil
         } catch {
             Log.speech.info("vocabulary boosting skipped for this dictation (over its time budget)")
             return nil
@@ -186,20 +194,45 @@ actor ParakeetEngine: TranscriptionEngine {
         return samples + [Float](repeating: 0, count: minimumSamples - samples.count)
     }
 
-    private func acquire() async {
+    /// Waits for the model, in turn. A caller cancelled while it waits gets `CancellationError`
+    /// and leaves the queue without the model.
+    private func acquire() async throws {
         guard busy else {
             busy = true
             return
         }
-        await withCheckedContinuation { waiters.append($0) }
+        lastWaiterID += 1
+        let id = lastWaiterID
+        try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+                // Cancelled before it got in line: the handler has already run and found
+                // nothing to remove.
+                guard !Task.isCancelled else {
+                    continuation.resume(throwing: CancellationError())
+                    return
+                }
+                waiters.append((id: id, continuation: continuation))
+            }
+        } onCancel: {
+            Task { await self.cancelWaiter(id) }
+        }
+    }
+
+    /// A queued caller was cancelled: it leaves the queue. Nothing to do when `release` has
+    /// already handed it the model.
+    private func cancelWaiter(_ id: Int) {
+        guard let index = waiters.firstIndex(where: { $0.id == id }) else { return }
+        waiters.remove(at: index).continuation.resume(throwing: CancellationError())
     }
 
     private func release() {
         if waiters.isEmpty {
             busy = false
         } else {
-            // Ownership passes straight to the next caller; `busy` stays true.
-            waiters.removeFirst().resume()
+            // Ownership passes straight to the next caller; `busy` stays true. One cancelled
+            // a moment ago, before `cancelWaiter` reached it, checks for cancellation before
+            // using the model and passes it straight on.
+            waiters.removeFirst().continuation.resume()
         }
     }
 
@@ -218,7 +251,7 @@ extension ParakeetEngine: WindowedTranscriptionEngine {
     /// Behind the same gate as `transcript`, so windows, a Retry and a whole-buffer fallback
     /// never overlap on the model.
     func transcribeWindow(_ request: WindowRequest) async throws -> WindowTranscript {
-        await acquire()
+        try await acquire()
         defer { release() }
         try Task.checkCancellation()
 
@@ -240,6 +273,8 @@ extension ParakeetEngine: WindowedTranscriptionEngine {
             throw ParakeetError.recognitionFailed(name)
         }
         let decoded = clock.now
+        // The window was given up (Esc, its time limit) while it decoded: don't boost it.
+        try Task.checkCancellation()
 
         // Words are placed by their tokens, so the tokens must spell the text exactly. Both
         // come from the same token ids; anything else is a vocabulary FluidAudio couldn't map.
