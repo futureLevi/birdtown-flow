@@ -1,5 +1,6 @@
 import FluidAudio
 import Foundation
+import MurmurDictionary
 
 /// Dictionary-word boosting for Parakeet: FluidAudio's CTC keyword spotter rescoring the
 /// transcript against the audio (`VocabularyBoostingSession`).
@@ -10,6 +11,12 @@ import Foundation
 /// anything at all goes wrong, `rescore` returns `nil` and the dictation uses the plain
 /// transcript. Boosting must never cost the user a dictation, or make one wait for a download.
 actor VocabularyBooster {
+    /// A transcript boosting changed, and the words it rewrote.
+    struct Rescored: Sendable {
+        let text: String
+        let replacements: [AppliedCorrection]
+    }
+
     private var models: CtcModels?
     private var loading: Task<Void, Never>?
     /// A failed fetch isn't retried on every dictation; offline, that would be a request per
@@ -22,6 +29,30 @@ actor VocabularyBooster {
     private var building: (terms: [String], task: Task<VocabularyBoostingSession?, Never>)?
     /// The terms `prepare(terms:)` last asked for, built as soon as the model is loaded.
     private var wantedTerms: [String]?
+
+    /// How sure the rescorer must be before it rewrites a word. FluidAudio's defaults are tuned
+    /// for keyword-spotting benchmarks, where missing a term costs more than inventing one. In
+    /// dictation it's the other way round: a dictionary word written over something the user
+    /// actually said is worse than a misspelling, and a mishearing that keeps coming back
+    /// belongs in a "when you hear X, write Y" correction, which is exact.
+    ///
+    /// - No spotter-anchored rescue. That pass rewrites words on acoustic evidence alone, at
+    ///   any string similarity. FluidAudio measures it as the main source of false insertions
+    ///   (about 94 down to 19 on its short-distractor set when off), at no recall cost on
+    ///   distinctive names (FluidAudio #702, #724).
+    /// - Short terms get less boost (taper below 5 tokens, exponent 2), so a one-token name can't
+    ///   beat a correctly heard common word on the flat boost alone (#702's recommended values).
+    static let rescorerConfig = VocabularyRescorer.Config(
+        shortTermCbwTaperPivot: 5,
+        shortTermCbwTaperExponent: 2.0,
+        spotterRescueEnabled: false
+    )
+
+    /// The string similarity a heard word needs to its replacement. FluidAudio uses 0.50–0.55
+    /// for vocabularies this size; 0.60 is its own setting for large, distractor-heavy lists,
+    /// which is what a personal dictionary is in practice: most of its words aren't in any
+    /// given dictation.
+    static let minimumSimilarity: Float = 0.60
 
     private static let retryInterval: Duration = .seconds(120)
     /// A wedged warm-up pass mustn't keep boosting from ever coming on.
@@ -44,8 +75,8 @@ actor VocabularyBooster {
         buildWantedSession()
     }
 
-    /// The transcript with dictionary terms restored where the audio supports them, or `nil`
-    /// when boosting can't run yet or changed nothing.
+    /// The transcript with dictionary terms restored where the audio supports them, and what
+    /// was rewritten, or `nil` when boosting can't run yet or changed nothing.
     ///
     /// - Parameter terms: deduplicated, stably ordered, so an unchanged dictionary reuses the
     ///   configured session.
@@ -54,7 +85,7 @@ actor VocabularyBooster {
         tokenTimings: [TokenTiming],
         samples: [Float],
         terms: [String]
-    ) async -> String? {
+    ) async -> Rescored? {
         guard let models else {
             startLoading()
             return nil
@@ -68,7 +99,28 @@ actor VocabularyBooster {
         else { return nil }
 
         let rescored = output.text.trimmingCharacters(in: .whitespacesAndNewlines)
-        return rescored.isEmpty ? nil : rescored
+        guard !rescored.isEmpty else { return nil }
+        let replacements = Self.applied(output.replacements)
+        let rewritten = replacements.reduce(0) { $0 + $1.count }
+        Log.speech.info("vocabulary boosting rewrote \(rewritten, privacy: .public) word(s)")
+        return Rescored(text: rescored, replacements: replacements)
+    }
+
+    /// The replacements that fired, one entry per distinct rewrite, in the order first seen.
+    private static func applied(_ results: [VocabularyRescorer.RescoringResult]) -> [AppliedCorrection] {
+        var order: [String] = []
+        var found: [String: (from: String, to: String, count: Int)] = [:]
+        for result in results where result.shouldReplace {
+            guard let to = result.replacementWord, to != result.originalWord else { continue }
+            let key = result.originalWord.lowercased() + "\u{1F}" + to
+            if let seen = found[key] {
+                found[key] = (seen.from, seen.to, seen.count + 1)
+            } else {
+                found[key] = (result.originalWord, to, 1)
+                order.append(key)
+            }
+        }
+        return order.compactMap { found[$0] }.map { AppliedCorrection(from: $0.from, to: $0.to, count: $0.count) }
     }
 
     /// The configured session for `terms`: cached, joined if already being built, or built now.
@@ -78,8 +130,12 @@ actor VocabularyBooster {
 
         let task = Task<VocabularyBoostingSession?, Never> {
             do {
-                let vocabulary = CustomVocabularyContext(terms: terms.map { CustomVocabularyTerm(text: $0) })
-                return try await VocabularyBoostingSession(vocabulary: vocabulary, ctcModels: models)
+                let vocabulary = CustomVocabularyContext(
+                    terms: terms.map { CustomVocabularyTerm(text: $0) },
+                    minSimilarity: Self.minimumSimilarity
+                )
+                return try await VocabularyBoostingSession(
+                    vocabulary: vocabulary, ctcModels: models, config: Self.rescorerConfig)
             } catch {
                 Log.speech.error("vocabulary boosting setup failed: \(error.localizedDescription, privacy: .public)")
                 return nil
