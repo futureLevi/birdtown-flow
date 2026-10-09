@@ -1,0 +1,7 @@
+sha=0a603328588fb1d3bf0f35e92b14b297029918ef
+branch=5/merge
+build=success
+test=success
+snapshots=success
+speech=success
+release=skipped
