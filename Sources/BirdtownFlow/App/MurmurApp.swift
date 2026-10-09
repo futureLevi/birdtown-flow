@@ -14,7 +14,11 @@ struct MurmurApp: App {
         .defaultSize(width: Layout.windowIdealWidth, height: Layout.windowIdealHeight)
         // No title bar: the traffic lights sit over the sidebar, under them the app's name.
         .windowStyle(.hiddenTitleBar)
-        .commands { MurmurCommands() }
+        .commands {
+            MurmurCommands()
+            // View › Toggle Sidebar (⌃⌘S): the only way to collapse it now the toolbar's gone.
+            SidebarCommands()
+        }
 
         MenuBarExtra {
             MenuBarContent()
