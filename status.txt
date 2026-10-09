@@ -1,0 +1,7 @@
+sha=37d2169d8e4e2327a66e7d1d3e3dca39e07675c4
+branch=design/sidebar-chrome
+build=success
+test=success
+snapshots=success
+speech=failure
+release=skipped
