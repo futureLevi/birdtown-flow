@@ -68,7 +68,7 @@ extension SnapshotCatalog {
             SnapshotRenderer.Shot("lab-empty", size: size) { labEmpty(records: records, preview: sample) },
             // The sidebar column on its own: macOS 26 hosts it in a glass panel that offscreen
             // rendering can't capture, so it gets a shot of its own (with each status state).
-            SnapshotRenderer.Shot("main-sidebar", size: CGSize(width: 4 * Layout.sidebarWidth, height: 520)) {
+            SnapshotRenderer.Shot("main-sidebar", size: CGSize(width: 4 * Layout.sidebarWidth, height: 580)) {
                 sidebars(records: records)
             },
             // Settings as a modal over the window, on General and on Text & AI.
@@ -85,9 +85,8 @@ extension SnapshotCatalog {
             ) {
                 settingsModal(.audio, records: records, preview: sample)
             },
-            // The toolbar never renders in window shots, so its contents (a mock of the bar)
-            // and the shared controls get a sheet of their own.
-            SnapshotRenderer.Shot("main-components", size: CGSize(width: 760, height: 470)) {
+            // The shared controls, on a sheet of their own.
+            SnapshotRenderer.Shot("main-components", size: CGSize(width: 760, height: 400)) {
                 components(records: records)
             },
         ] + library(size: size, records: records, preview: sample)  // SnapshotCatalog+Library.swift
@@ -98,7 +97,6 @@ extension SnapshotCatalog {
 
     private static func components(records: [HistoryRecord]) -> some View {
         VStack(alignment: .leading, spacing: Spacing.xl) {
-            toolbarMock
             HStack(spacing: Spacing.m) {
                 Button("Continue Setup") {}.buttonStyle(.flowPrimary).controlSize(.small)
                 Button("Open Settings") {}.buttonStyle(.flowSecondary)
@@ -142,40 +140,6 @@ extension SnapshotCatalog {
         .background(Palette.canvas)
         .environment(previewModel(records: records, section: .home))
         .transaction { $0.disablesAnimations = true }
-    }
-
-    /// The window's toolbar as macOS lays it out: traffic lights and the sidebar button on the
-    /// left, the wordmark centred. Settings lives at the foot of the sidebar, not here. Only the wordmark is the real view; the
-    /// glass buttons are drawn here because offscreen rendering can't capture the toolbar.
-    private static var toolbarMock: some View {
-        ZStack {
-            HStack(spacing: Spacing.s) {
-                ForEach(0..<3, id: \.self) { _ in
-                    Circle().fill(Palette.hairlineStrong).frame(width: MockChrome.light, height: MockChrome.light)
-                }
-                Spacer().frame(width: Spacing.l)
-                Image(systemName: "sidebar.left")
-                    .font(Typography.bodyEmphasis)
-                    .foregroundStyle(Palette.inkSecondary)
-                    .frame(width: MockChrome.button, height: MockChrome.button)
-                    .background(Circle().fill(Palette.surface))
-                    .overlay(Circle().strokeBorder(Palette.hairline, lineWidth: Layout.Main.hairline))
-                Spacer()
-            }
-            ToolbarWordmark()
-        }
-        .padding(.horizontal, Spacing.m)
-        .frame(height: MockChrome.bar)
-        .background(RoundedRectangle(cornerRadius: Radius.m, style: .continuous).fill(Palette.canvas))
-        .overlay(RoundedRectangle(cornerRadius: Radius.m, style: .continuous)
-            .strokeBorder(Palette.hairline, lineWidth: Layout.Main.hairline))
-    }
-
-    /// Sizes of the system chrome the toolbar mock draws: traffic lights, glass buttons, the bar.
-    private enum MockChrome {
-        static let light: CGFloat = 12
-        static let button: CGFloat = 32
-        static let bar: CGFloat = 52
     }
 
     /// The Lab mid-session: a draft open, three styles assigned and four results.

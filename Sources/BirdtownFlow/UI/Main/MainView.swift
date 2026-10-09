@@ -15,6 +15,8 @@ struct MainView: View {
         NavigationSplitView {
             MainSidebar(status: status)
                 .navigationSplitViewColumnWidth(Layout.sidebarWidth)
+                // No title bar to hold it, and the sidebar is where the app's name now lives.
+                .toolbar(removing: .sidebarToggle)
         } detail: {
             ZStack {
                 page(status: status)
@@ -25,14 +27,6 @@ struct MainView: View {
             .background(Palette.canvas)
             // Pages cross-fade; the window never slides.
             .animation(Motion.resolve(Motion.smooth, reduceMotion: reduceMotion), value: model.section)
-            .toolbar {
-                // The name, centred, where a document window would show its title.
-                ToolbarItem(placement: .principal) {
-                    ToolbarWordmark()
-                }
-                // A wordmark, not a control: no glass capsule behind it.
-                .sharedBackgroundVisibility(.hidden)
-            }
         }
         // Signal blue for every system control: sidebar selection, toggles, focus rings.
         .tint(Palette.accent)
@@ -77,14 +71,16 @@ struct MainView: View {
     }
 }
 
-/// The app icon and name, centred in the toolbar.
-struct ToolbarWordmark: View {
+/// The app icon and name, at the top of the sidebar above Home.
+struct SidebarWordmark: View {
     var body: some View {
         HStack(spacing: Spacing.s) {
-            AppIconArtwork(size: Layout.Main.toolbarIcon, showsShadow: false)
+            AppIconArtwork(size: Layout.Main.sidebarLogo, showsShadow: false)
             Text("Birdtown Flow")
-                .font(Typography.headline)
+                .font(Typography.wordmark)
+                .tracking(Tracking.title)
                 .foregroundStyle(Palette.ink)
+                .lineLimit(1)
                 .fixedSize()
         }
         .accessibilityElement(children: .ignore)
@@ -137,19 +133,30 @@ struct MainSidebar: View {
             }
         }
         .listStyle(.sidebar)
+        // Under the traffic lights, above Home; it doesn't scroll with the list.
+        .safeAreaInset(edge: .top, spacing: 0) {
+            SidebarWordmark()
+                .padding(.horizontal, Spacing.l)
+                .padding(.top, Spacing.xs)
+                .padding(.bottom, Spacing.m)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        // Settings, then the status card at the very bottom.
         .safeAreaInset(edge: .bottom, spacing: 0) {
             VStack(alignment: .leading, spacing: Spacing.s) {
-                SidebarStatusView(status: status)
                 SidebarSettingsButton()
+                SidebarStatusView(status: status)
             }
             .padding(Spacing.m)
         }
     }
 
+    /// Arrow keys can still reach the list while Settings covers it; the page behind the
+    /// modal stays put until Settings closes.
     private var selection: Binding<SidebarSection?> {
         Binding(
             get: { model.section },
-            set: { if let section = $0 { model.section = section } }
+            set: { if let section = $0, model.settingsTab == nil { model.section = section } }
         )
     }
 }

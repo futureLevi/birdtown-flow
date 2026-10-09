@@ -544,8 +544,8 @@ extension Layout {
         static let progressBarHeight: CGFloat = 4
         /// The logo's bars beside a snippet's trigger.
         static let triggerMark: CGFloat = 10
-        /// The app icon in the toolbar wordmark (its tile is about 80 % of this).
-        static let toolbarIcon: CGFloat = 22
+        /// The app icon in the sidebar wordmark (its tile is about 80 % of this).
+        static let sidebarLogo: CGFloat = 28
     }
 
     /// The Lab: polish configurations, their editor, the test text and results.
@@ -565,6 +565,8 @@ extension Layout {
 }
 
 extension Typography {
+    /// The app's name beside its icon at the top of the sidebar.
+    static let wordmark = Font.system(size: 15, weight: .bold)
     /// The unit beside a stat numeral ("words", "wpm").
     static let statUnit = Font.system(size: 13, weight: .semibold)
 }
