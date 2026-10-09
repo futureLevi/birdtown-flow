@@ -247,6 +247,11 @@ final class Settings {
     var audioRetentionDays: Int {
         didSet { defaults.set(audioRetentionDays, forKey: Keys.audioRetentionDays) }
     }
+    /// History's Timings view: every row shows how long transcription, polish and the rest
+    /// took, in milliseconds. For testing speed; off by default.
+    var historyShowsTimings: Bool {
+        didSet { defaults.set(historyShowsTimings, forKey: Keys.historyShowsTimings) }
+    }
 
     // MARK: Lifecycle
 
@@ -284,6 +289,7 @@ final class Settings {
         static let polishTimeout = "polishTimeout"
         static let historyRetentionDays = "historyRetentionDays"
         static let audioRetentionDays = "audioRetentionDays"
+        static let historyShowsTimings = "historyShowsTimings"
         static let hasCompletedOnboarding = "hasCompletedOnboarding"
         static let appearance = "appearance"
     }
@@ -324,6 +330,7 @@ final class Settings {
         polishTimeout = defaults.object(forKey: Keys.polishTimeout) as? Double ?? 4
         historyRetentionDays = defaults.object(forKey: Keys.historyRetentionDays) as? Int ?? 0
         audioRetentionDays = defaults.object(forKey: Keys.audioRetentionDays) as? Int ?? 7
+        historyShowsTimings = defaults.bool(forKey: Keys.historyShowsTimings)
         hasCompletedOnboarding = defaults.bool(forKey: Keys.hasCompletedOnboarding)
         appearance = AppearancePreference(rawValue: defaults.string(forKey: Keys.appearance) ?? "") ?? .system
     }

@@ -244,6 +244,20 @@ public struct DictationTimings: Codable, Hashable, Sendable {
         self.polishMs = polishMs
         self.totalMs = totalMs
     }
+
+    /// Whether anything was measured. Failed and cancelled dictations can have no timings.
+    public var isEmpty: Bool { transcribeMs == 0 && polishMs == 0 && totalMs == 0 }
+
+    /// Time outside transcription and polish: handing the audio over, cleanup, the dictionary
+    /// and typing the text. Never negative, even if the parts were rounded past the total.
+    public var otherMs: Int { max(0, totalMs - transcribeMs - polishMs) }
+
+    /// How many times faster than real time the engine transcribed `audioSeconds` of speech
+    /// (40 means a minute of audio took 1.5 s), or `nil` when either side wasn't measured.
+    public func realtimeFactor(audioSeconds: Double) -> Double? {
+        guard audioSeconds > 0, transcribeMs > 0 else { return nil }
+        return audioSeconds * 1000 / Double(transcribeMs)
+    }
 }
 
 /// One dictation, as stored in history.
