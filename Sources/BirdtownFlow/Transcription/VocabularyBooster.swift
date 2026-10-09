@@ -29,6 +29,11 @@ actor VocabularyBooster {
     private var building: (terms: [String], task: Task<VocabularyBoostingSession?, Never>)?
     /// The terms `prepare(terms:)` last asked for, built as soon as the model is loaded.
     private var wantedTerms: [String]?
+    /// One CTC pass at a time. Rescoring suspends here while CoreML runs, so a second call
+    /// could otherwise start on the same models: a boost that outlived its budget is still
+    /// running when the next window of a long recording asks for its own.
+    private var ctcBusy = false
+    private var ctcWaiters: [CheckedContinuation<Void, Never>] = []
 
     /// How sure the rescorer must be before it rewrites a word. FluidAudio's defaults are tuned
     /// for keyword-spotting benchmarks, where missing a term costs more than inventing one. In
@@ -93,6 +98,12 @@ actor VocabularyBooster {
 
         guard let session = await configuredSession(for: terms, models: models) else { return nil }
 
+        // Waiting counts against the caller's time budget; a caller that gave up while
+        // waiting has nothing left to rescore for.
+        await acquireCtc()
+        defer { releaseCtc() }
+        guard !Task.isCancelled else { return nil }
+
         guard
             let output = await session.rescore(text: text, tokenTimings: tokenTimings, audioSamples: samples),
             output.wasModified
@@ -104,6 +115,36 @@ actor VocabularyBooster {
         let rewritten = replacements.reduce(0) { $0 + $1.count }
         Log.speech.info("vocabulary boosting rewrote \(rewritten, privacy: .public) word(s)")
         return Rescored(text: rescored, replacements: replacements)
+    }
+
+    /// Loads the CTC model and builds the session for `terms`, waiting for both, and says
+    /// whether boosting is ready. For the speech smoke test, which mustn't race the
+    /// background load; dictations use `prepare(terms:)` and never wait.
+    func ready(terms: [String]) async -> Bool {
+        if models == nil {
+            lastFailure = nil
+            startLoading()
+            await loading?.value
+        }
+        guard let models else { return false }
+        return await configuredSession(for: terms, models: models) != nil
+    }
+
+    private func acquireCtc() async {
+        guard ctcBusy else {
+            ctcBusy = true
+            return
+        }
+        await withCheckedContinuation { ctcWaiters.append($0) }
+    }
+
+    private func releaseCtc() {
+        if ctcWaiters.isEmpty {
+            ctcBusy = false
+        } else {
+            // Ownership passes straight to the next caller; `ctcBusy` stays true.
+            ctcWaiters.removeFirst().resume()
+        }
     }
 
     /// The replacements that fired, one entry per distinct rewrite, in the order first seen.

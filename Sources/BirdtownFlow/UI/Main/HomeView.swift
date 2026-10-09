@@ -32,17 +32,19 @@ struct HomeView: View {
             : pendingStats.value(for: PendingStatsKey(records: records, pending: pending)) { key in
                 DictationStats.compute(from: key.records.filter { !key.pending.contains($0.id) })
             }
-        // The same array, uncopied, when nothing is pending.
+        // The same array, uncopied, when nothing is hidden.
         let visible = model.historyDeletion.visible(records)
         let recentRecords = Array(visible.prefix(Layout.Main.recentCount))
+        // A first dictation still being recorded has a row already, but not one to show.
+        let isFirstRun = visible.isEmpty && pending.isEmpty
         ScrollView {
             VStack(alignment: .leading, spacing: Spacing.xxl) {
-                header(stats: stats, isFirstRun: records.isEmpty)
+                header(stats: stats, isFirstRun: isFirstRun)
                 // An empty banner stack would still take a slot and double the gap.
                 if HomeBanners.isVisible(status: status, hasCompletedOnboarding: model.settings.hasCompletedOnboarding) {
                     HomeBanners(status: status)
                 }
-                if records.isEmpty {
+                if isFirstRun {
                     FirstRunCard(keyName: status.pushToTalkKey)
                 } else {
                     tiles(stats: stats, records: visible)

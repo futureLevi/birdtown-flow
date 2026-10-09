@@ -11,10 +11,17 @@ import Observation
 ///
 /// Audio is written *before* transcription starts (see `DictationController`), so a crash
 /// or an engine failure never loses what the user said — the record shows "Retry".
+///
+/// A long recording saves its row before the key comes up, while its audio is still being
+/// appended (`LiveDictation`). Until the dictation takes the row over, its id is in
+/// `inProgress` and lists leave it out (`HistoryDeletion.visible`). The set isn't saved: after
+/// a crash the row shows as "Interrupted", with the audio recorded so far, and Retry works.
 @MainActor
 @Observable
 public final class HistoryStore {
     public private(set) var records: [HistoryRecord] = []
+    /// Rows of recordings still in progress: saved, but not shown or counted yet.
+    public private(set) var inProgress: Set<UUID> = []
 
     public let directory: URL
     public var recordingsDirectory: URL { directory.appendingPathComponent("recordings", isDirectory: true) }
@@ -114,11 +121,13 @@ public final class HistoryStore {
         return stats
     }
 
-    /// Dictations that failed and can be retried — the History badge.
+    /// Dictations that failed and can be retried — the History badge. A recording still in
+    /// progress isn't one, though its row reads "Interrupted" until it's taken over.
     public var failedCount: Int {
         let records = self.records
+        let inProgress = self.inProgress
         if let cache = failedCache, cache.revision == revision { return cache.count }
-        let count = records.reduce(0) { $0 + ($1.outcome == .failed ? 1 : 0) }
+        let count = records.reduce(0) { $0 + ($1.outcome == .failed && !inProgress.contains($1.id) ? 1 : 0) }
         failedCache = (revision: revision, count: count)
         return count
     }
@@ -152,6 +161,7 @@ public final class HistoryStore {
             removeAudio(of: record)
         }
         records.removeAll { ids.contains($0.id) }
+        if !inProgress.isDisjoint(with: ids) { inProgress.subtract(ids) }
         revision &+= 1
         scheduleSave()
     }
@@ -159,8 +169,22 @@ public final class HistoryStore {
     public func deleteAll() {
         for record in records { removeAudio(of: record) }
         records.removeAll()
+        if !inProgress.isEmpty { inProgress.removeAll() }
         revision &+= 1
         scheduleSave()
+    }
+
+    /// Hides the row `id` while its recording is still going. Mark it before adding the row,
+    /// so it's never shown.
+    public func markInProgress(_ id: UUID) {
+        guard inProgress.insert(id).inserted else { return }
+        revision &+= 1
+    }
+
+    /// The recording is over and its dictation owns the row: it's shown and counted again.
+    public func clearInProgress(_ id: UUID) {
+        guard inProgress.remove(id) != nil else { return }
+        revision &+= 1
     }
 
     /// Drops text older than `textDays` and audio older than `audioDays`. `nil` keeps forever;
@@ -168,8 +192,9 @@ public final class HistoryStore {
     ///
     /// Records in `sparing` are left alone, text and audio: something is still working on
     /// them (a "Transcribe Again" reading the audio), and removing one mid-way would let that
-    /// work write it back.
+    /// work write it back. So are recordings still in progress.
     public func applyRetention(textDays: Int?, audioDays: Int?, sparing: Set<UUID> = [], now: Date = Date()) {
+        let sparing = inProgress.isEmpty ? sparing : sparing.union(inProgress)
         var changed = false
         if let textDays {
             let cutoff = now.addingTimeInterval(-Double(textDays) * 86_400)

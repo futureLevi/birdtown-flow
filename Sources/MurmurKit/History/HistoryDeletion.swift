@@ -24,9 +24,21 @@ public final class HistoryDeletion {
 
     public func isPending(_ id: UUID) -> Bool { pending.contains(id) }
 
-    /// `records` without the ones waiting out the undo window, in the same order.
+    /// What lists leave out: deletes waiting out the undo window, and the rows of recordings
+    /// still in progress (`HistoryStore.inProgress`).
+    public var hidden: Set<UUID> {
+        let inProgress = store.inProgress
+        return inProgress.isEmpty ? pending : pending.union(inProgress)
+    }
+
+    public func isHidden(_ id: UUID) -> Bool {
+        pending.contains(id) || store.inProgress.contains(id)
+    }
+
+    /// `records` without the hidden ones, in the same order.
     public func visible(_ records: [HistoryRecord]) -> [HistoryRecord] {
-        pending.isEmpty ? records : records.filter { !pending.contains($0.id) }
+        let hidden = self.hidden
+        return hidden.isEmpty ? records : records.filter { !hidden.contains($0.id) }
     }
 
     /// Hides `ids` now and removes them for good once the undo window closes. Anything

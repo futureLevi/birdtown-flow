@@ -1,6 +1,7 @@
 import FluidAudio
 import Foundation
 import MurmurDictionary
+import MurmurKit
 
 /// NVIDIA Parakeet TDT 0.6B (Ultra, v3 or v2), compiled to CoreML and run on the Neural
 /// Engine through FluidAudio's `AsrManager`.
@@ -205,6 +206,79 @@ actor ParakeetEngine: TranscriptionEngine {
     static func seconds(_ duration: Duration) -> Double {
         let parts = duration.components
         return Double(parts.seconds) + Double(parts.attoseconds) / 1e18
+    }
+}
+
+// MARK: - Windows
+
+extension ParakeetEngine: WindowedTranscriptionEngine {
+    /// One window of a long recording: decoded in a single model pass, its kept words chosen
+    /// by their timings, and those boosted against the window's own audio.
+    ///
+    /// Behind the same gate as `transcript`, so windows, a Retry and a whole-buffer fallback
+    /// never overlap on the model.
+    func transcribeWindow(_ request: WindowRequest) async throws -> WindowTranscript {
+        await acquire()
+        defer { release() }
+        try Task.checkCancellation()
+
+        let clock = ContinuousClock()
+        let started = clock.now
+        let audio = Self.padded(request.audio)
+        let result: ASRResult
+        do {
+            let layers = await manager.decoderLayerCount
+            var decoderState = try TdtDecoderState(decoderLayers: layers)
+            result = try await manager.transcribe(audio, decoderState: &decoderState)
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch {
+            Log.speech.error("""
+                \(self.name, privacy: .public) failed on window #\(request.index): \
+                \(error.localizedDescription, privacy: .public)
+                """)
+            throw ParakeetError.recognitionFailed(name)
+        }
+        let decoded = clock.now
+
+        // Words are placed by their tokens, so the tokens must spell the text exactly. Both
+        // come from the same token ids; anything else is a vocabulary FluidAudio couldn't map.
+        let timings = result.tokenTimings ?? []
+        let spelled = timings.map(\.token).joined().trimmingCharacters(in: .whitespacesAndNewlines)
+        guard spelled == result.text.trimmingCharacters(in: .whitespacesAndNewlines) else {
+            Log.speech.error("window #\(request.index): its token timings don't spell its text")
+            throw StitchMismatch()
+        }
+        let tokens = timings.enumerated().map { index, timing in
+            SegmentStitcher.TimedToken(text: timing.token, start: timing.startTime + request.startSeconds, index: index)
+        }
+        let kept = SegmentStitcher.keep(tokens, in: request.keep, after: request.previous)
+
+        // Only the kept words are offered for rewriting, with their timings on the window's
+        // own clock and the window's audio, as `VocabularyBoostingSession` asks of a window
+        // cut from a longer stream. The context on either side still informs the CTC pass.
+        var text = kept.text
+        var boosted: [AppliedCorrection] = []
+        let terms = Self.boostTerms(from: request.vocabulary)
+        if !kept.text.isEmpty, !terms.isEmpty, await boostingEnabled(),
+           let rescored = await boost(
+               text: kept.text, timings: kept.tokens.map { timings[$0.index] }, audio: audio, terms: terms
+           ) {
+            text = rescored.text
+            boosted = rescored.replacements
+        }
+
+        return WindowTranscript(
+            kept: kept,
+            text: text,
+            boosted: boosted,
+            decodeMs: Self.milliseconds(decoded - started),
+            boostMs: Self.milliseconds(clock.now - decoded)
+        )
+    }
+
+    private static func milliseconds(_ duration: Duration) -> Int {
+        Int((seconds(duration) * 1000).rounded())
     }
 }
 

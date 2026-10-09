@@ -45,7 +45,7 @@ struct MenuBarContent: View {
     }
     /// Lazily, so a long history isn't scanned in full every time the menu draws.
     private var recent: [HistoryRecord] {
-        Array(model.history.records.lazy.filter { $0.hasText && !model.historyDeletion.isPending($0.id) }.prefix(3))
+        Array(model.history.records.lazy.filter { $0.hasText && !model.historyDeletion.isHidden($0.id) }.prefix(3))
     }
 
     var body: some View {

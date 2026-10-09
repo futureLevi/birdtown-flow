@@ -86,7 +86,8 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/Library/Application Support/FluidAudio/Models
-          key: fluidaudio-models-ultra-v1
+          # Ultra for the smoke test; v3 and the CTC boosting model for the long-recording check.
+          key: fluidaudio-models-ultra-v3-ctc-v1
 
       - name: Speech smoke test
         id: speech
@@ -99,6 +100,41 @@ jobs:
           set -o pipefail
           .build/debug/BirdtownFlow --transcribe "$PWD/speech.wav" parakeetUltra 2>&1 | tee speech.log
           grep -qi "dictation" speech.log
+
+      # A long recording transcribed whole and in windows must agree (`--compare-segmented`):
+      # under 1% of words changed, no word doubled at a seam, no window over 600 ms, at least
+      # one cut made without a pause, and the dictionary term out of both.
+      - name: Long recording check
+        id: segmented
+        if: steps.build.outcome == 'success'
+        continue-on-error: true
+        timeout-minutes: 20
+        run: |
+          # About 100 s in three paragraphs, 0.6 s apart. The second has no punctuation, so it
+          # has no pause to cut at; the third says the dictionary term about a second after
+          # the gap before it, where a window is likely to start.
+          say -o long.aiff "Good morning everyone. Before we get into the numbers, I want to thank the support team for a remarkable quarter. \
+          They answered more tickets than ever before, and our satisfaction scores went up at the same time. \
+          That is not an accident. It comes from the training sessions we started in the spring, and from the new routing rules. \
+          We will keep both, and next month we will add a weekly review of the hardest cases, so that everyone learns from them. \
+          I also want to welcome the four people who joined us this quarter. Some of you have met them already. \
+          If you have not, please find a moment this week to say hello, and show them how we work. \
+          [[slnc 600]] \
+          the second thing I want to cover is the launch plan for the autumn release which moves the beta \
+          to the first week of October and the public release to the middle of November and gives the design team \
+          two extra weeks to finish the onboarding flow and the new settings screens while engineering focuses on \
+          performance and the long list of small fixes that customers keep asking about in every survey we send \
+          [[slnc 600]] \
+          Finally, Birdtown Flow will be part of the release, and we will dictate the release notes with it as a test. \
+          If it does well, we will use it for the documentation too. The budget for next year is due at the end of the month. \
+          Every team lead should have the template by now. Please keep the estimates honest, and tell me early if something \
+          is likely to slip, because surprises in December help nobody. We have a lot to be proud of, and a lot still to do. \
+          Please send me your questions before Friday, and I will answer them at the next meeting. \
+          Thank you all for listening, and have a great week."
+          afconvert -f WAVE -d LEI16@16000 -c 1 long.aiff long.wav
+          set -o pipefail
+          .build/debug/BirdtownFlow --transcribe "$PWD/long.wav" parakeetV3 --compare-segmented \
+            --term "Birdtown Flow" --expect-forced 2>&1 | tee segmented.log
 
       - name: Build release app
         id: release
@@ -123,7 +159,7 @@ jobs:
           BR="snapshots/${GITHUB_REF_NAME}"
           rm -rf out && mkdir -p out
           [ -d snapshots ] && cp -R snapshots out/ || true
-          for f in build.log test.log snapshots.log release.log icon.log speech.log export-icon.log; do [ -f "$f" ] && cp "$f" out/ || true; done
+          for f in build.log test.log snapshots.log release.log icon.log speech.log segmented.log export-icon.log; do [ -f "$f" ] && cp "$f" out/ || true; done
           grep -E "error:" build.log | sort -u | head -200 > out/errors.txt 2>/dev/null || true
           {
             echo "sha=${GITHUB_SHA}"
@@ -132,6 +168,7 @@ jobs:
             echo "test=${{ steps.test.outcome }}"
             echo "snapshots=${{ steps.snapshots.outcome }}"
             echo "speech=${{ steps.speech.outcome }}"
+            echo "segmented=${{ steps.segmented.outcome }}"
             echo "release=${{ steps.release.outcome }}"
           } > out/status.txt
           if [ -f dist/BirdtownFlow.zip ]; then cp dist/BirdtownFlow.zip out/; fi

@@ -226,6 +226,20 @@ final class ModelManager {
         throw TranscriptionError.modelNotReady
     }
 
+    /// The selected engine if it's loaded, without waiting or starting a load. A long
+    /// recording's live windows use it; when it's `nil` they don't start, and the dictation
+    /// is transcribed at key-up as usual.
+    var loadedEngine: (any TranscriptionEngine)? {
+        guard let loaded, loaded.choice == settings.engine else { return nil }
+        return loaded.engine
+    }
+
+    /// Waits until dictionary words boost recognition (CTC model loaded, session built for
+    /// `vocabulary`). Only the speech smoke test waits; dictations boost when they can.
+    func prepareBoosting(for vocabulary: [String]) async -> Bool {
+        await booster.ready(terms: ParakeetEngine.boostTerms(from: vocabulary))
+    }
+
     // MARK: - Loading
 
     private func load(_ choice: SpeechEngineChoice, id: Int) async {
