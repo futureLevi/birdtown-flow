@@ -51,6 +51,9 @@ struct HUDState: Equatable, Sendable {
     /// Why a finished dictation went to the clipboard ("Copied · press ⌘V to paste").
     /// Shown beside the check; `nil` when the text was typed.
     var notice: String?
+    /// What clicking a failure or a notice does ("Show in History"). `nil` when the message
+    /// has no next step; otherwise the pill takes clicks and shows a trailing chevron.
+    var actionLabel: String?
 
     var kind: Kind {
         switch phase {
@@ -78,12 +81,24 @@ struct HUDState: Equatable, Sendable {
         }
     }
 
-    /// States that accept the pointer: the idle pill (hover hint, click to start) and the
-    /// hands-free controls. Everything else lets clicks fall through to the app below.
+    /// States that accept the pointer: the idle pill (hover hint, click to start), the
+    /// hands-free controls, and a message with a next step. Everything else lets clicks fall
+    /// through to the app below.
     var isInteractive: Bool {
         switch kind {
         case .idle, .hint, .handsFree: true
+        case .done, .failed: hasAction
         default: false
+        }
+    }
+
+    /// A message pill (a failure, or a notice beside the check) that links somewhere.
+    var hasAction: Bool {
+        guard actionLabel != nil else { return false }
+        switch kind {
+        case .failed: return true
+        case .done: return notice != nil
+        default: return false
         }
     }
 
@@ -131,21 +146,28 @@ enum HUDMetrics {
         case .handsFree:
             return CGSize(width: Layout.HUD.handsFreeWidth, height: height)
         case .done:
-            if let notice = state.notice { return messageSize(notice) }
+            if let notice = state.notice {
+                return messageSize(notice, lineLimit: Layout.HUD.failureLineLimit, hasAction: state.hasAction)
+            }
             return CGSize(width: height, height: height)
         case .cancelled:
             return CGSize(width: height, height: height)
         case .failed:
-            return messageSize(state.failureMessage ?? "", lineLimit: Layout.HUD.failureLineLimit)
+            return messageSize(state.failureMessage ?? "", lineLimit: Layout.HUD.failureLineLimit,
+                               hasAction: state.hasAction)
         }
     }
 
-    /// A glyph and text up to `messageMaxWidth`. A message that fits stays on one line at the
-    /// standard height; a longer one wraps to at most `lineLimit` lines and the pill grows
-    /// taller (up to `messageMaxHeight`) rather than cutting off the end of the sentence.
-    static func messageSize(_ message: String, lineLimit: Int = 1) -> CGSize {
+    /// A glyph and text up to `messageMaxWidth`, and a trailing chevron when the message links
+    /// somewhere. A message that fits stays on one line at the standard height; a longer one
+    /// wraps to at most `lineLimit` lines and the pill grows taller (up to `messageMaxHeight`)
+    /// rather than cutting off the end of the sentence.
+    static func messageSize(_ message: String, lineLimit: Int = 1, hasAction: Bool = false) -> CGSize {
         let text = min(textWidth(message, pointSize: Layout.HUD.labelPointSize), Layout.HUD.messageMaxWidth)
-        let width = Layout.HUD.contentPadding * 2 + Layout.HUD.failureGlyph + Spacing.s + text
+        var width = Layout.HUD.contentPadding * 2 + Layout.HUD.failureGlyph + Spacing.s + text
+        if hasAction {
+            width += Spacing.s + Layout.HUD.actionDisc
+        }
         var height = Layout.HUD.height
         let lines = messageLines(message, lineLimit: lineLimit)
         if lines > 1 {
@@ -196,6 +218,9 @@ enum HUDMetrics {
             if abs(x - layout.cancel) <= reach { return .cancel }
             if abs(x - layout.stop) <= reach { return .stop }
             return .pill
+        case .done, .failed:
+            guard state.hasAction else { return nil }
+            return frame.contains(point) ? .pill : nil
         default:
             return nil
         }

@@ -1,5 +1,6 @@
 import FluidAudio
 import Foundation
+import MurmurKit
 import Network
 import Observation
 
@@ -25,6 +26,23 @@ final class ModelManager {
     /// Describes the engine selected in Settings, and converges on `.ready` for it.
     private(set) var state: State = .notDownloaded
 
+    /// The engine dictations run on while the selected one isn't ready: the model still loaded
+    /// from before a switch, or Apple Speech. `nil` once the selected engine is ready, or when
+    /// nothing can stand in (Apple Speech selected and not ready). The UI names it so the user
+    /// knows what's transcribing; `engine()` makes the same choice.
+    var standInName: String? {
+        let selected = settings.engine
+        return EngineFallback.standIn(
+            selected: selected.engineName,
+            selectedIsDownloadable: selected.isParakeet,
+            selectedReady: state == .ready,
+            loaded: loadedName
+        )
+    }
+
+    /// Mirrors `loaded`, which is unobserved, so `standInName` updates when it changes.
+    private var loadedName: String? = nil
+
     private let settings: Settings
 
     private struct Loaded {
@@ -41,7 +59,9 @@ final class ModelManager {
     /// The engine serving dictations. A previous engine stays here until its replacement is
     /// warmed up, so switching never leaves a window where a dictation has nothing to run on.
     /// Dropping the reference releases the model once any transcription still using it ends.
-    @ObservationIgnored private var loaded: Loaded?
+    @ObservationIgnored private var loaded: Loaded? {
+        didSet { loadedName = loaded?.choice.engineName }
+    }
     @ObservationIgnored private var inflight: Inflight?
     /// Loads cancelled by an engine switch, by choice. Cancellation is cooperative, so a
     /// cancelled download can still be writing its `.partial` files for a moment; a new load
@@ -225,10 +245,7 @@ final class ModelManager {
                     // Resolve its locale and install its assets now, alongside the download,
                     // rather than inside the first dictation. A dictation arriving mid-way
                     // joins the same resolution.
-                    if loaded == nil {
-                        let apple = appleStandIn()
-                        Task { try? await apple.prepare() }
-                    }
+                    prewarmStandIn()
                     try await download(version, id: id)
                 }
                 try Task.checkCancellation()
@@ -413,6 +430,22 @@ final class ModelManager {
         let engine = AppleSpeechEngine()
         appleFallback = engine
         return engine
+    }
+
+    /// While Parakeet downloads, Apple Speech transcribes, and macOS may first need to fetch
+    /// its speech assets for the user's language. Fetch them now, alongside the download, so
+    /// the first dictation (often the onboarding try) doesn't wait on them. Failures are only
+    /// logged: the dictation that needs the stand-in tries again and reports its own error.
+    private func prewarmStandIn() {
+        guard loaded == nil else { return }
+        let apple = appleStandIn()
+        Task.detached(priority: .utility) {
+            do {
+                try await apple.prepare()
+            } catch {
+                Log.speech.notice("Apple Speech couldn't get ready as a stand-in: \(error.localizedDescription, privacy: .public)")
+            }
+        }
     }
 
     // MARK: - Settings

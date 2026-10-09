@@ -165,20 +165,26 @@ public final class HistoryStore {
 
     /// Drops text older than `textDays` and audio older than `audioDays`. `nil` keeps forever;
     /// `0` audio days means audio isn't kept past the dictation that produced it.
-    public func applyRetention(textDays: Int?, audioDays: Int?, now: Date = Date()) {
+    ///
+    /// Records in `sparing` are left alone, text and audio: something is still working on
+    /// them (a "Transcribe Again" reading the audio), and removing one mid-way would let that
+    /// work write it back.
+    public func applyRetention(textDays: Int?, audioDays: Int?, sparing: Set<UUID> = [], now: Date = Date()) {
         var changed = false
         if let textDays {
             let cutoff = now.addingTimeInterval(-Double(textDays) * 86_400)
-            let expired = records.filter { $0.createdAt < cutoff }
+            let isExpired = { (record: HistoryRecord) in record.createdAt < cutoff && !sparing.contains(record.id) }
+            let expired = records.filter(isExpired)
             for record in expired { removeAudio(of: record) }
             if !expired.isEmpty {
-                records.removeAll { $0.createdAt < cutoff }
+                records.removeAll(where: isExpired)
                 changed = true
             }
         }
         if let audioDays {
             let cutoff = now.addingTimeInterval(-Double(audioDays) * 86_400)
             for index in records.indices where records[index].audioFileName != nil && records[index].createdAt < cutoff {
+                guard !sparing.contains(records[index].id) else { continue }
                 // Failed dictations keep their audio — it's the only copy of what was said.
                 guard records[index].outcome != .failed else { continue }
                 removeAudio(of: records[index])
@@ -190,6 +196,11 @@ public final class HistoryStore {
             revision &+= 1
             scheduleSave()
         }
+    }
+
+    /// Applies a retention policy read from Settings. See `HistoryRetention`.
+    public func applyRetention(_ policy: HistoryRetention, sparing: Set<UUID> = [], now: Date = Date()) {
+        applyRetention(textDays: policy.textDays, audioDays: policy.audioDays, sparing: sparing, now: now)
     }
 
     /// Writes immediately. Call on quit so a debounced save isn't lost.
@@ -314,4 +325,32 @@ private struct LegacyRecord: Decodable {
             audioDuration: audioDuration ?? 0, timings: timings ?? DictationTimings(),
             outcome: outcome ?? .inserted, errorMessage: errorMessage)
     }
+}
+
+/// How long History keeps text and audio, decoded from the two Settings pickers.
+///
+/// Settings stores plain integers with sentinels, and the two use different ones: "Keep
+/// history" saves `0` for Forever, "Keep audio" saves `0` for Don't keep and `-1` for
+/// Forever. This is the one place that reads them.
+public struct HistoryRetention: Equatable, Sendable {
+    /// Days of text to keep; `nil` keeps forever.
+    public var textDays: Int?
+    /// Days of audio to keep; `nil` keeps forever, `0` keeps none past the dictation.
+    public var audioDays: Int?
+
+    public init(textDays: Int?, audioDays: Int?) {
+        self.textDays = textDays
+        self.audioDays = audioDays
+    }
+
+    /// From Settings' `historyRetentionDays` and `audioRetentionDays`.
+    public init(settingsHistoryDays: Int, settingsAudioDays: Int) {
+        textDays = settingsHistoryDays > 0 ? settingsHistoryDays : nil
+        audioDays = settingsAudioDays >= 0 ? settingsAudioDays : nil
+    }
+
+    /// How often a long-running app re-applies the policy. Records age past the cutoff one
+    /// by one, so this bounds how long anything outlives its limit; the work is a scan of
+    /// History in memory and is skipped entirely when nothing has expired.
+    public static let sweepInterval: TimeInterval = 60 * 60
 }

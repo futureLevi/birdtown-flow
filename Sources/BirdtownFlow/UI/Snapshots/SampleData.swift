@@ -21,18 +21,24 @@ enum SampleData {
         .term("Kubernetes"),
     ]
 
-    static let snippets: [Snippet] = [
-        Snippet(trigger: "my calendly link", expansion: "https://calendly.com/levi/30min"),
-        Snippet(trigger: "my address", expansion: "2301 SE Division St, Portland, OR 97202"),
-        Snippet(trigger: "standup template", expansion: "Yesterday:\nToday:\nBlockers:"),
-        Snippet(trigger: "email sign off", expansion: "Thanks so much,\nLevi"),
-        Snippet(trigger: "zoom link", expansion: "https://zoom.us/j/4155550142"),
-        Snippet(
-            trigger: "bug report",
-            expansion: "Steps to reproduce:\n1. \n\nExpected:\n\nActual:",
-            isEnabled: false
-        ),
-    ]
+    /// Created well before every sample record: `LibraryUsage` only counts a snippet's uses
+    /// from its `createdAt` on, so a snippet "made" at render time would show "Not used yet".
+    static let snippets: [Snippet] = {
+        let created = Date().addingTimeInterval(-60 * 86_400)
+        return [
+            Snippet(trigger: "my calendly link", expansion: "https://calendly.com/levi/30min", createdAt: created),
+            Snippet(trigger: "my address", expansion: "2301 SE Division St, Portland, OR 97202", createdAt: created),
+            Snippet(trigger: "standup template", expansion: "Yesterday:\nToday:\nBlockers:", createdAt: created),
+            Snippet(trigger: "email sign off", expansion: "Thanks so much,\nLevi", createdAt: created),
+            Snippet(trigger: "zoom link", expansion: "https://zoom.us/j/4155550142", createdAt: created),
+            Snippet(
+                trigger: "bug report",
+                expansion: "Steps to reproduce:\n1. \n\nExpected:\n\nActual:",
+                isEnabled: false,
+                createdAt: created
+            ),
+        ]
+    }()
 
     private enum App {
         static let slack = AppContext(bundleID: "com.tinyspeck.slackmacgap", appName: "Slack", category: .work)

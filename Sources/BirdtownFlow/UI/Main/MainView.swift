@@ -56,7 +56,11 @@ struct MainView: View {
         case .home:
             HomeView(status: status)
         case .history:
-            HistoryView(initialQuery: preview.historyQuery, originalRecordID: preview.originalRecordID)
+            HistoryView(
+                initialQuery: preview.historyQuery,
+                originalRecordID: preview.originalRecordID,
+                initialSelection: preview.historySelection
+            )
         case .dictionary:
             DictionaryView()
         case .snippets:
@@ -125,7 +129,12 @@ struct MainSidebar: View {
     @Environment(AppModel.self) private var model
 
     var body: some View {
-        let failed = model.history.failedCount
+        // Cached in the store; a failed record waiting out a delete's undo window doesn't
+        // count. Only the few pending ids are looked up, and only while a delete is pending.
+        let pending = model.historyDeletion.pending
+        let failed = model.history.failedCount - (pending.isEmpty ? 0 : pending.reduce(0) { count, id in
+            count + (model.history.record(id: id)?.outcome == .failed ? 1 : 0)
+        })
         List(selection: selection) {
             ForEach(SidebarSection.everyday) { section in
                 Label(section.title, systemImage: section.symbol)

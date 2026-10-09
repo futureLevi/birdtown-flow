@@ -28,6 +28,20 @@ final class LabBench {
         /// It failed for something only Settings can fix, such as a missing API key, so the
         /// result can link there.
         var needsSettings = false
+
+        /// What it ran on: runs with the same test input are compared together.
+        var testInput: TestInput {
+            TestInput(text: input, style: style, category: category, appName: appName)
+        }
+    }
+
+    /// The text a run polished and the dictation it stood in for. Runs that share one are a
+    /// fair comparison; runs on another are from an earlier test.
+    struct TestInput: Equatable {
+        let text: String
+        let style: WritingStyle
+        let category: AppCategory
+        let appName: String?
     }
 
     /// Newest first.
@@ -140,6 +154,20 @@ final class LabBench {
         if let category = record.context?.category { sampleCategory = category }
         sampleAppName = record.context?.appName
         sampleStyle = record.style ?? settings.style(for: sampleCategory)
+        schedulePrewarm()
+    }
+
+    /// What Run would test right now.
+    var currentTestInput: TestInput {
+        TestInput(text: sample, style: sampleStyle, category: sampleCategory, appName: sampleAppName)
+    }
+
+    /// Puts an earlier result's text, style and app back in the test card, to run it again.
+    func useTestInput(of run: Run) {
+        sample = run.input
+        sampleStyle = run.style
+        sampleCategory = run.category
+        sampleAppName = run.appName
         schedulePrewarm()
     }
 

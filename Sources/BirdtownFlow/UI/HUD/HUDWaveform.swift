@@ -38,11 +38,17 @@ enum HUDWave {
         case .transcribing, .polishing:
             // The orb's spinning ring says "thinking", so the bars step back: a low dome that
             // breathes slowly instead of a second moving thing competing with the ring.
+            // Polishing (a network model, up to the polish timeout) is a different shape, not
+            // a different motion: the bars rise into a taller, flatter plateau, so a slow
+            // polish never looks like a stuck transcription, with or without Reduce Motion.
+            let polishing = kind == .polishing
+            let lift = polishing ? Layout.HUD.polishingLift : Layout.HUD.thinkingLift
+            let falloff = polishing ? Layout.HUD.polishingDomeFalloff : Layout.HUD.thinkingDomeFalloff
             let breath = reduceMotion ? 0.5 : 0.5 + 0.5 * sin(2 * .pi * time * Motion.thinkingFrequency)
             for index in 0..<count {
                 let edge = abs(Double(index) - centre) / centre
-                let dome = 1 - 0.55 * edge * edge
-                heights[index] = minHeight + Layout.HUD.thinkingLift * CGFloat(dome)
+                let dome = 1 - falloff * edge * edge
+                heights[index] = minHeight + lift * CGFloat(dome)
                 opacities[index] = (0.26 + 0.18 * breath) * (0.7 + 0.3 * dome)
             }
         default:

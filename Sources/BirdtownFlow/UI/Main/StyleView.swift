@@ -6,6 +6,8 @@ import SwiftUI
 /// pipeline run on the same spoken sentence, so what you pick is what you get.
 struct StyleView: View {
     @Environment(AppModel.self) private var model
+    @Environment(\.openSettings) private var openSettings
+    @Environment(\.mainPreview) private var preview
 
     var body: some View {
         let settings = model.settings
@@ -59,11 +61,15 @@ struct StyleView: View {
                 }
             }
             Spacer(minLength: Spacing.m)
-            SettingsLink {
-                Text("Open Settings")
+            // Straight to Settings › Text & AI, where polish is turned on and chosen.
+            Button(provider == .off ? "Turn On AI Polish…" : "Text & AI Settings…") {
+                guard preview.status == nil else { return }
+                model.requestSettings(.text)
+                openSettings()
             }
             .buttonStyle(.flowSecondary)
             .controlSize(.small)
+            .help("Opens Settings › Text & AI")
         }
         .padding(Spacing.l)
         .cardSurface(radius: Radius.m)

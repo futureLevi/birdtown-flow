@@ -75,6 +75,10 @@ struct HistoryDay: Identifiable {
 }
 
 /// Every dictation, searchable and grouped by day, with undoable deletes.
+///
+/// Behaves like a Mac list once it has focus: click, ⌘-click and ⇧-click select; ↑/↓ (with ⇧
+/// to extend) move; ⌘A selects everything listed; ⌘C copies the selected transcripts; Return
+/// pastes the selected one again; Delete deletes (with undo); Esc clears the selection.
 struct HistoryView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -84,11 +88,12 @@ struct HistoryView: View {
     /// rescan every dictation. Clearing applies straight away.
     @State private var appliedQuery: String
     @State private var filter: HistoryFilter = .all
-    @State private var selection: Set<UUID> = []
+    @State private var selection = ListSelection<UUID>()
     @State private var highlighted: UUID?
-    /// Deleted but still undoable; hidden from the list until the undo window closes.
-    @State private var pendingDeletion: Set<UUID> = []
-    @State private var commitTask: Task<Void, Never>?
+    /// A revealed row to scroll to once the list shows it.
+    @State private var scrollTarget: UUID?
+    /// The selection a "Delete N dictations?" confirmation is about.
+    @State private var bulkDeletion: Set<UUID> = []
     @State private var isConfirmingBulkDelete = false
     @State private var player = AudioPlayback()
     @State private var searchMemo = ViewMemo<SearchKey, SearchResult>()
@@ -97,24 +102,30 @@ struct HistoryView: View {
 
     private let originalRecordID: UUID?
 
-    init(initialQuery: String = "", originalRecordID: UUID? = nil) {
+    init(initialQuery: String = "", originalRecordID: UUID? = nil, initialSelection: [UUID] = []) {
         _query = State(initialValue: initialQuery)
         _appliedQuery = State(initialValue: initialQuery)
+        var selection = ListSelection<UUID>()
+        selection.selectAll(initialSelection)
+        _selection = State(initialValue: selection)
         self.originalRecordID = originalRecordID
     }
 
     var body: some View {
         // Selecting, highlighting and playing re-run body too; only a new search, filter or
-        // history change redoes the search and the grouping.
-        let searchKey = SearchKey(records: model.history.records, query: appliedQuery, hidden: pendingDeletion)
+        // history change redoes the search and the grouping. Deletes still inside their undo
+        // window are hidden (see `AppModel.historyDeletion`), and a new or undone delete
+        // changes the key, so the memo never serves a list with them in it or missing.
+        let searchKey = SearchKey(records: model.history.records, query: appliedQuery, hidden: model.historyDeletion.pending)
         let result = searchMemo.value(for: searchKey) { key in
             Self.runSearch(key, in: model.history)
         }
         let list = listMemo.value(for: ListKey(search: searchKey, filter: filter)) { key in
             let visible = result.searched.filter(key.filter.matches)
-            return ListResult(visible: visible, days: HistoryDay.group(visible))
+            return ListResult(visible: visible, order: visible.map(\.id), days: HistoryDay.group(visible))
         }
         let visible = list.visible
+        let order = list.order
         ScrollViewReader { proxy in
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: Spacing.l, pinnedViews: [.sectionHeaders]) {
@@ -125,7 +136,7 @@ struct HistoryView: View {
                     } else {
                         ForEach(list.days) { day in
                             Section {
-                                dayCard(day)
+                                dayCard(day, order: order)
                             } header: {
                                 dayHeader(day)
                             }
@@ -134,16 +145,41 @@ struct HistoryView: View {
                 }
                 .pageLayout()
             }
+            // The floating bar covers the bottom of the list; room to scroll the last row clear.
+            .contentMargins(.bottom, showsBottomBar(order: order) ? Layout.Main.floatingBarClearance : 0, for: .scrollContent)
             .focusable()
             .focusEffectDisabled()
             .focused($listFocused)
             // Only what's on screen: a search may have hidden rows selected earlier.
-            .onDeleteCommand { requestDelete(selection.intersection(visible.map(\.id))) }
-            .onExitCommand { selection = [] }
-            .onChange(of: appliedQuery) { _, _ in selection = [] }
-            .onChange(of: filter) { _, _ in selection = [] }
+            .onDeleteCommand { requestDelete(Set(selection.ordered(in: order))) }
+            .onExitCommand { selection.clear() }
+            .onKeyPress(keys: [.upArrow, .downArrow]) { press in
+                move(press.key == .upArrow ? -1 : 1, extending: press.modifiers.contains(.shift),
+                     order: order, proxy: proxy)
+            }
+            .onKeyPress(.return) { pasteAgain(order: order, records: visible) }
+            // Edit › Copy and Select All, so the menu items light up and show their shortcuts.
+            .onCopyCommand(perform: copyCommand(order: order, records: visible))
+            .onCommand(#selector(NSText.selectAll(_:))) {
+                selection.selectAll(order)
+            }
+            // Like Finder: rows a search or filter hides drop out of the selection; rows that
+            // stay listed stay selected (so a reveal that clears the search keeps its row).
+            // The applied query, not the field: the list only changes once typing pauses.
+            .onChange(of: appliedQuery) { _, _ in selection.prune(to: order) }
+            .onChange(of: filter) { _, _ in selection.prune(to: order) }
             .onChange(of: model.focusedRecordID, initial: true) { _, id in
-                reveal(id, proxy: proxy)
+                reveal(id)
+            }
+            // Scroll once the list has been rebuilt: a reveal may have just cleared the search
+            // or filter (the row wasn't listed yet), or the page may be appearing for it.
+            .task(id: scrollTarget) {
+                guard let id = scrollTarget else { return }
+                await Task.yield()
+                withAnimation(Motion.resolve(Motion.smooth, reduceMotion: reduceMotion)) {
+                    proxy.scrollTo(id, anchor: .center)
+                }
+                scrollTarget = nil
             }
         }
         .task(id: query) {
@@ -155,22 +191,21 @@ struct HistoryView: View {
             guard !Task.isCancelled else { return }
             appliedQuery = query
         }
-        .overlay(alignment: .bottom) { undoToast }
-        .animation(Motion.resolve(Motion.smooth, reduceMotion: reduceMotion), value: pendingDeletion)
+        .overlay(alignment: .bottom) { bottomBar(order: order, records: visible) }
+        .animation(Motion.resolve(Motion.smooth, reduceMotion: reduceMotion), value: model.historyDeletion.pending)
+        .animation(Motion.resolve(Motion.smooth, reduceMotion: reduceMotion), value: selection.count > 1)
         .animation(Motion.resolve(Motion.snappy, reduceMotion: reduceMotion), value: filter)
         .confirmationDialog(
-            "Delete \(selection.count) dictations?",
+            "Delete \(bulkDeletion.count) dictations?",
             isPresented: $isConfirmingBulkDelete
         ) {
-            Button("Delete \(selection.count) Dictations", role: .destructive) { delete(selection) }
+            Button("Delete \(bulkDeletion.count) Dictations", role: .destructive) { delete(bulkDeletion) }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("Their audio is deleted too.")
+            Text("You can undo this for a few seconds. Their audio is deleted too.")
         }
-        .onDisappear {
-            commitPendingDeletion()
-            player.stop()
-        }
+        // A pending delete outlives the page (Home shows the same Undo); only playback stops.
+        .onDisappear { player.stop() }
     }
 
     // MARK: - Header
@@ -197,14 +232,18 @@ struct HistoryView: View {
             }
             HStack(spacing: Spacing.s) {
                 ForEach(HistoryFilter.allCases) { option in
+                    let count = option == .all ? nil : counts[option, default: 0]
                     FilterChip(
                         title: option.title,
                         symbol: option.symbol,
-                        count: option == .all ? nil : counts[option, default: 0],
+                        count: count,
                         isSelected: filter == option
                     ) {
                         filter = option
                     }
+                    // Still clickable (its empty state explains), but it shouldn't look as
+                    // inviting as a chip with something behind it.
+                    .opacity(count == 0 && filter != option ? Interaction.dimmedOpacity : 1)
                 }
             }
         }
@@ -212,7 +251,7 @@ struct HistoryView: View {
 
     // MARK: - List
 
-    private func dayCard(_ day: HistoryDay) -> some View {
+    private func dayCard(_ day: HistoryDay, order: [UUID]) -> some View {
         VStack(spacing: 0) {
             ForEach(Array(day.records.enumerated()), id: \.element.id) { index, record in
                 if index > 0 {
@@ -224,8 +263,14 @@ struct HistoryView: View {
                     isSelected: selection.contains(record.id),
                     isHighlighted: highlighted == record.id,
                     showsOriginal: record.id == originalRecordID,
-                    onSelect: { additive in select(record.id, additive: additive) },
-                    onDelete: { requestDelete(selection.contains(record.id) ? selection : [record.id]) }
+                    // What the list matched, so highlights agree with the rows shown.
+                    query: appliedQuery,
+                    onSelect: { click in select(record.id, click, order: order) },
+                    onDelete: {
+                        requestDelete(selection.contains(record.id)
+                            ? Set(selection.ordered(in: order))
+                            : [record.id])
+                    }
                 )
                 .id(record.id)
             }
@@ -281,7 +326,7 @@ struct HistoryView: View {
             ) {
                 HStack(spacing: Spacing.s) {
                     if !trimmed.isEmpty {
-                        Button("Clear Search") { query = "" }
+                        Button("Clear Search") { clearQuery() }
                             .buttonStyle(.flowSecondary)
                     }
                     Button("Show All") { filter = .all }
@@ -302,51 +347,106 @@ struct HistoryView: View {
         }
     }
 
-    // MARK: - Undo toast
+    // MARK: - Bottom bar
 
+    /// Whether `bottomBar` shows anything: the undo toast or the selection bar.
+    private func showsBottomBar(order: [UUID]) -> Bool {
+        !model.historyDeletion.pending.isEmpty || selection.ordered(in: order).count > 1
+    }
+
+    /// The undo toast while a delete can be undone; otherwise, with several rows selected,
+    /// what can be done to them all.
     @ViewBuilder
-    private var undoToast: some View {
-        if !pendingDeletion.isEmpty {
-            HStack(spacing: Spacing.m) {
-                Image(systemName: "trash")
-                    .foregroundStyle(Palette.inkSecondary)
-                Text(pendingDeletion.count == 1 ? "Dictation deleted" : "\(pendingDeletion.count) dictations deleted")
+    private func bottomBar(order: [UUID], records: [HistoryRecord]) -> some View {
+        let selected = selection.ordered(in: order)
+        if !model.historyDeletion.pending.isEmpty {
+            HistoryUndoToast()
+        } else if selected.count > 1 {
+            HistoryFloatingBar {
+                Text("\(selected.count) selected")
                     .font(Typography.bodyEmphasis)
                     .foregroundStyle(Palette.ink)
-                Button("Undo") { undoDeletion() }
+                    .monospacedDigit()
+                Button("Copy") { copy(order: order, records: records) }
                     .buttonStyle(.flowGhost)
                     .controlSize(.small)
-                    .keyboardShortcut("z", modifiers: .command)
-                    .accessibilityHint("Command-Z")
+                    .help("Copy the selected dictations (⌘C)")
+                Button("Delete…") { requestDelete(Set(selected)) }
+                    .buttonStyle(.flowGhost)
+                    .controlSize(.small)
+                    .help("Delete the selected dictations (⌫)")
+                IconButton(symbol: "xmark", label: "Clear Selection") { selection.clear() }
+                    .help("Clear the selection (Esc)")
             }
-            .padding(.leading, Spacing.l)
-            .padding(.trailing, Spacing.s)
-            .padding(.vertical, Spacing.s)
-            .background(Capsule().fill(Palette.surface))
-            .overlay(Capsule().strokeBorder(Palette.hairline, lineWidth: Layout.Main.hairline))
-            .elevation(Elevation.raised)
-            .padding(.bottom, Spacing.xl)
-            .transition(reduceMotion ? AnyTransition.opacity
-                                     : AnyTransition.move(edge: .bottom).combined(with: .opacity))
         }
     }
 
     // MARK: - Actions
 
-    private func select(_ id: UUID, additive: Bool) {
-        if additive {
-            if selection.contains(id) { selection.remove(id) } else { selection.insert(id) }
-        } else {
-            selection = [id]
-        }
+    private func select(_ id: UUID, _ click: ListSelection<UUID>.Click, order: [UUID]) {
+        selection.click(id, click, in: order)
         listFocused = true
+    }
+
+    private func move(_ step: Int, extending: Bool, order: [UUID], proxy: ScrollViewProxy) -> KeyPress.Result {
+        guard let target = selection.move(step, in: order, extending: extending) else { return .ignored }
+        // No anchor: scroll only as far as it takes to bring the row into view.
+        withAnimation(Motion.resolve(Motion.snappy, reduceMotion: reduceMotion)) {
+            proxy.scrollTo(target)
+        }
+        return .handled
+    }
+
+    /// Return: paste the one selected dictation again, as its Paste Again button does.
+    private func pasteAgain(order: [UUID], records: [HistoryRecord]) -> KeyPress.Result {
+        // Only from the list itself: Return in the search field must never paste.
+        guard listFocused,
+              let id = selection.single(in: order),
+              let record = records.first(where: { $0.id == id }),
+              record.hasText
+        else { return .ignored }
+        model.controller.insert(record)
+        return .handled
+    }
+
+    /// The selected transcripts, top to bottom, separated by blank lines.
+    private func selectedText(order: [UUID], records: [HistoryRecord]) -> String? {
+        let byID = Dictionary(uniqueKeysWithValues: records.map { ($0.id, $0) })
+        let texts = selection.ordered(in: order)
+            .compactMap { byID[$0] }
+            .filter(\.hasText)
+            .map(\.finalText)
+        return texts.isEmpty ? nil : texts.joined(separator: "\n\n")
+    }
+
+    /// ⌘C's handler, or `nil` (Copy greyed out) when nothing listed is selected.
+    private func copyCommand(order: [UUID], records: [HistoryRecord]) -> (() -> [NSItemProvider])? {
+        guard !selection.ordered(in: order).isEmpty else { return nil }
+        return {
+            guard let text = selectedText(order: order, records: records) else { return [] }
+            announceCopied(order: order)
+            return [NSItemProvider(object: text as NSString)]
+        }
+    }
+
+    private func copy(order: [UUID], records: [HistoryRecord]) {
+        guard let text = selectedText(order: order, records: records) else { return }
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        pasteboard.setString(text, forType: .string)
+        announceCopied(order: order)
+    }
+
+    private func announceCopied(order: [UUID]) {
+        let count = selection.ordered(in: order).count
+        AccessibilityNotification.Announcement(count == 1 ? "Copied" : "Copied \(count) dictations").post()
     }
 
     /// One dictation deletes straight away (with undo); several ask first.
     private func requestDelete(_ ids: Set<UUID>) {
         guard !ids.isEmpty else { return }
         if ids.count > 1 {
-            selection = ids
+            bulkDeletion = ids
             isConfirmingBulkDelete = true
         } else {
             delete(ids)
@@ -355,47 +455,24 @@ struct HistoryView: View {
 
     private func delete(_ ids: Set<UUID>) {
         guard !ids.isEmpty else { return }
-        commitPendingDeletion()
-        if let playing = player.playingID, ids.contains(playing) { player.stop() }
-        pendingDeletion = ids
-        selection.subtract(ids)
-        // The toast is easy to miss without sight, and it only lasts the undo window.
-        let announcement: String = ids.count == 1
-            ? "Dictation deleted. Press Command-Z to undo."
-            : "\(ids.count) dictations deleted. Press Command-Z to undo."
-        AccessibilityNotification.Announcement(announcement).post()
-        commitTask = Task {
-            try? await Task.sleep(for: Motion.undoWindow)
-            guard !Task.isCancelled else { return }
-            commitPendingDeletion()
-        }
+        HistoryUndoToast.delete(ids, model: model, player: player)
+        selection.remove(ids)
+        bulkDeletion = []
     }
 
-    private func undoDeletion() {
-        commitTask?.cancel()
-        commitTask = nil
-        pendingDeletion = []
-    }
-
-    private func commitPendingDeletion() {
-        commitTask?.cancel()
-        commitTask = nil
-        guard !pendingDeletion.isEmpty else { return }
-        model.history.delete(ids: pendingDeletion)
-        pendingDeletion = []
-    }
-
-    /// Scrolls to a record opened from elsewhere (Home, the menu bar) and flashes it.
-    private func reveal(_ id: UUID?, proxy: ScrollViewProxy) {
+    /// Scrolls to a record opened from elsewhere (Home, the HUD, the menu bar), selects it so
+    /// the keyboard carries on from there, and flashes it.
+    private func reveal(_ id: UUID?) {
         guard let id else { return }
         model.focusedRecordID = nil
-        if model.history.record(id: id) != nil, !visibleIDs.contains(id) {
+        guard model.history.record(id: id) != nil, !model.historyDeletion.isPending(id) else { return }
+        if !visibleIDs.contains(id) {
             clearQuery()
             filter = .all
         }
-        withAnimation(Motion.resolve(Motion.smooth, reduceMotion: reduceMotion)) {
-            proxy.scrollTo(id, anchor: .center)
-        }
+        selection.select(id)
+        listFocused = true
+        scrollTarget = id
         highlighted = id
         Task {
             try? await Task.sleep(for: Motion.highlight)
@@ -440,6 +517,8 @@ struct HistoryView: View {
 
     private struct ListResult {
         let visible: [HistoryRecord]
+        /// `visible`'s ids, top to bottom: what selection and the keyboard move through.
+        let order: [UUID]
         let days: [HistoryDay]
     }
 

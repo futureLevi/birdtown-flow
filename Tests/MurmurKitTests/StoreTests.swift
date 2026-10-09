@@ -104,6 +104,60 @@ struct HistoryStoreTests {
         #expect(!FileManager.default.fileExists(atPath: store.newRecordingURL(for: ancient.id).path))
     }
 
+    @Test("Retention spares records still being worked on")
+    func retentionSparing() throws {
+        let directory = temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = HistoryStore(directory: directory)
+        func make(_ text: String, daysAgo: Double) throws -> HistoryRecord {
+            let id = UUID()
+            let audio = store.newRecordingURL(for: id)
+            try Data([0, 1, 2]).write(to: audio)
+            return HistoryRecord(id: id, createdAt: now.addingTimeInterval(-daysAgo * 86_400), finalText: text,
+                                 audioFileName: audio.lastPathComponent, outcome: .inserted)
+        }
+        let retrying = try make("retrying", daysAgo: 40)
+        let expired = try make("expired", daysAgo: 41)
+        let audioOnly = try make("audio only", daysAgo: 10)
+        let busyAudio = try make("busy audio", daysAgo: 10.5)
+        for record in [retrying, expired, audioOnly, busyAudio] { store.add(record) }
+
+        store.applyRetention(textDays: 30, audioDays: 7, sparing: [retrying.id, busyAudio.id], now: now)
+
+        #expect(store.records.map(\.finalText) == ["audio only", "busy audio", "retrying"])
+        #expect(store.audioURL(for: store.record(id: retrying.id)!) != nil)
+        #expect(store.audioURL(for: store.record(id: busyAudio.id)!) != nil)
+        #expect(store.record(id: audioOnly.id)?.audioFileName == nil)
+        #expect(!FileManager.default.fileExists(atPath: store.newRecordingURL(for: expired.id).path))
+    }
+
+    @Test("Retention is safe to repeat: a second sweep with nothing expired changes nothing")
+    func retentionRepeats() {
+        let store = HistoryStore(previewRecords: [
+            HistoryRecord(createdAt: now.addingTimeInterval(-86_400), finalText: "yesterday"),
+            HistoryRecord(createdAt: now.addingTimeInterval(-8 * 86_400), finalText: "last week"),
+        ])
+        let policy = HistoryRetention(settingsHistoryDays: 7, settingsAudioDays: 7)
+        store.applyRetention(policy, now: now)
+        #expect(store.records.map(\.finalText) == ["yesterday"])
+        store.applyRetention(policy, now: now)
+        #expect(store.records.map(\.finalText) == ["yesterday"])
+        // A day later, yesterday's is still inside the week.
+        store.applyRetention(policy, now: now.addingTimeInterval(86_400))
+        #expect(store.records.map(\.finalText) == ["yesterday"])
+    }
+
+    @Test("Retention policy decodes the Settings sentinels")
+    func retentionPolicy() {
+        // Keep history: 0 is Forever. Keep audio: 0 is Don't keep, -1 is Forever.
+        #expect(HistoryRetention(settingsHistoryDays: 0, settingsAudioDays: -1)
+            == HistoryRetention(textDays: nil, audioDays: nil))
+        #expect(HistoryRetention(settingsHistoryDays: 7, settingsAudioDays: 0)
+            == HistoryRetention(textDays: 7, audioDays: 0))
+        #expect(HistoryRetention(settingsHistoryDays: 90, settingsAudioDays: 30)
+            == HistoryRetention(textDays: 90, audioDays: 30))
+    }
+
     @Test("Search covers final text, raw text and app name, ignoring case and accents")
     func search() {
         let store = HistoryStore(previewRecords: [

@@ -8,13 +8,33 @@ struct HomeView: View {
 
     @Environment(AppModel.self) private var model
     @Environment(\.mainPreview) private var preview
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var player = AudioPlayback()
+    @State private var pendingStats = ViewMemo<PendingStatsKey, DictationStats>()
+
+    /// What Home's numbers depend on while a delete can still be undone.
+    private struct PendingStatsKey: Equatable {
+        var records: [HistoryRecord]
+        var pending: Set<UUID>
+    }
 
     var body: some View {
         let records = model.history.records
+        // A delete waiting out its undo window is hidden here as on History, and left out of
+        // the numbers too.
+        let pending = model.historyDeletion.pending
         // Cached in the store: this body re-runs on every history change, and the full
-        // computation scans the whole history.
-        let stats = model.history.stats()
+        // computation scans the whole history. While a delete is pending (a few seconds) the
+        // store's cache would still count it, so the numbers come from a memo keyed by what
+        // they depend on instead.
+        let stats = pending.isEmpty
+            ? model.history.stats()
+            : pendingStats.value(for: PendingStatsKey(records: records, pending: pending)) { key in
+                DictationStats.compute(from: key.records.filter { !key.pending.contains($0.id) })
+            }
+        // The same array, uncopied, when nothing is pending.
+        let visible = model.historyDeletion.visible(records)
+        let recentRecords = Array(visible.prefix(Layout.Main.recentCount))
         ScrollView {
             VStack(alignment: .leading, spacing: Spacing.xxl) {
                 header(stats: stats, isFirstRun: records.isEmpty)
@@ -25,12 +45,17 @@ struct HomeView: View {
                 if records.isEmpty {
                     FirstRunCard(keyName: status.pushToTalkKey)
                 } else {
-                    tiles(stats: stats, records: records)
-                    recent(Array(records.prefix(Layout.Main.recentCount)))
+                    tiles(stats: stats, records: visible)
+                    recent(recentRecords)
                 }
             }
             .pageLayout()
         }
+        // Room to scroll the last row clear of the undo toast while it's up.
+        .contentMargins(.bottom, pending.isEmpty ? 0 : Layout.Main.floatingBarClearance, for: .scrollContent)
+        // The same Undo as History's, so a delete from Recent can be taken back (⌘Z too).
+        .overlay(alignment: .bottom) { HistoryUndoToast() }
+        .animation(Motion.resolve(Motion.smooth, reduceMotion: reduceMotion), value: model.historyDeletion.pending)
         .onDisappear { player.stop() }
     }
 
@@ -110,9 +135,17 @@ struct HomeView: View {
                     if index > 0 {
                         RowDivider(leadingInset: HistoryRow.textInset)
                     }
-                    HistoryRow(record: record, player: player) {
-                        if player.isPlaying(record.id) { player.stop() }
-                        model.history.delete(ids: [record.id])
+                    HistoryRow(
+                        record: record,
+                        player: player,
+                        // A click opens the dictation in History, with all its actions and
+                        // Show Original; the hover buttons still work in place.
+                        onSelect: { _ in model.showHistory(revealing: record.id) },
+                        onDelete: { HistoryUndoToast.delete([record.id], model: model, player: player) }
+                    )
+                    .accessibilityHint("Opens in History")
+                    .accessibilityAction(named: "Open in History") {
+                        model.showHistory(revealing: record.id)
                     }
                 }
             }
@@ -277,7 +310,7 @@ private struct FirstRunCard: View {
     private var handsFreeTip: String? {
         switch model.settings.handsFreeShortcut {
         case .doubleTap: "Tip: double-tap \(keyName) to keep talking without holding it."
-        case .controlOption: "Tip: press ⌃⌥ to keep talking without holding a key."
+        case .controlOption: "Tip: press \(SetupKit.handsFreeName(model.settings)) to keep talking without holding a key."
         case .off: nil
         }
     }
