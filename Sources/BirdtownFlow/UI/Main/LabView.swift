@@ -39,9 +39,7 @@ struct LabView: View {
                             message: "Configurations still run here, but dictation won't use them until AI polish is on.",
                             tone: .info
                         ) {
-                            SettingsLink {
-                                Text("Open Settings")
-                            }
+                            Button("Open Settings") { model.showSettings(.text) }
                             .buttonStyle(.flowSecondary)
                             .controlSize(.small)
                         }
@@ -778,6 +776,7 @@ private struct LabRunCard: View {
     /// Dictation's polish time limit, in seconds.
     let timeLimit: Double
 
+    @Environment(AppModel.self) private var model
     @State private var showsReply = false
     @State private var didCopy = false
 
@@ -848,9 +847,7 @@ private struct LabRunCard: View {
                     .textSelection(.enabled)
                     .frame(maxWidth: .infinity, alignment: .leading)
                 if run.needsSettings {
-                    SettingsLink {
-                        Text("Open Settings")
-                    }
+                    Button("Open Settings") { model.showSettings(.text) }
                     .buttonStyle(.flowSecondary)
                     .controlSize(.small)
                 }

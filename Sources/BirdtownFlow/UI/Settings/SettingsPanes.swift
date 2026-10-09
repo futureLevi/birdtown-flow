@@ -528,7 +528,6 @@ private struct EngineRow: View {
 struct TextSettingsPane: View {
     @Environment(AppModel.self) private var model
     @Environment(\.setupPreview) private var preview
-    @Environment(\.openWindow) private var openWindow
     @State private var keyDraft = ""
     @State private var keySaved = false
     @State private var testing = false
@@ -639,7 +638,7 @@ struct TextSettingsPane: View {
             SettingsRow(title: "Prompt Lab", detail: detail) {
                 Button("Open Lab") {
                     guard preview == nil else { return }
-                    openWindow(id: "main")
+                    // Closes Settings and lands on the Lab in the window behind it.
                     model.show(.lab)
                 }
                 .buttonStyle(SetupKit.SecondaryButtonStyle())
@@ -1046,15 +1045,6 @@ struct AboutSettingsPane: View {
         Credit(title: "murmur-youtube", detail: "The open-source project Birdtown Flow grew from.", link: "https://github.com/per-simmons/murmur-youtube"),
     ]
 
-    private var version: String {
-        let info = Bundle.main.infoDictionary
-        guard let short = info?["CFBundleShortVersionString"] as? String else { return "Development build" }
-        if let build = info?["CFBundleVersion"] as? String, build != short {
-            return "Version \(short) (\(build))"
-        }
-        return "Version \(short)"
-    }
-
     var body: some View {
         SettingsPane {
             VStack(spacing: Spacing.s) {
@@ -1067,7 +1057,7 @@ struct AboutSettingsPane: View {
                 Text("Speak anywhere. It types for you.")
                     .font(Typography.body)
                     .foregroundStyle(Palette.inkSecondary)
-                Text(version)
+                Text(AppVersion.display)
                     .font(Typography.callout)
                     .foregroundStyle(Palette.inkTertiary)
                     .textSelection(.enabled)

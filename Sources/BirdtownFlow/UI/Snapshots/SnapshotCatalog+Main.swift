@@ -67,6 +67,20 @@ extension SnapshotCatalog {
             SnapshotRenderer.Shot("main-sidebar", size: CGSize(width: 4 * Layout.sidebarWidth, height: 520)) {
                 sidebars(records: records)
             },
+            // Settings as a modal over the window, on General and on Text & AI.
+            SnapshotRenderer.Shot("settings-modal", size: size) {
+                settingsModal(.general, records: records, preview: sample)
+            },
+            SnapshotRenderer.Shot("settings-modal-text", size: size) {
+                settingsModal(.text, records: records, preview: sample)
+            },
+            // The window at its smallest: the card shrinks and its pane scrolls.
+            SnapshotRenderer.Shot(
+                "settings-modal-small",
+                size: CGSize(width: Layout.windowMinWidth, height: Layout.windowMinHeight)
+            ) {
+                settingsModal(.audio, records: records, preview: sample)
+            },
             // The toolbar never renders in window shots, so its contents (a mock of the bar)
             // and the shared controls get a sheet of their own.
             SnapshotRenderer.Shot("main-components", size: CGSize(width: 760, height: 470)) {
@@ -126,8 +140,8 @@ extension SnapshotCatalog {
         .transaction { $0.disablesAnimations = true }
     }
 
-    /// The window's toolbar as macOS lays it out: traffic lights, the sidebar button and
-    /// Settings on the left, the wordmark centred. Only the wordmark is the real view; the
+    /// The window's toolbar as macOS lays it out: traffic lights and the sidebar button on the
+    /// left, the wordmark centred. Settings lives at the foot of the sidebar, not here. Only the wordmark is the real view; the
     /// glass buttons are drawn here because offscreen rendering can't capture the toolbar.
     private static var toolbarMock: some View {
         ZStack {
@@ -136,14 +150,12 @@ extension SnapshotCatalog {
                     Circle().fill(Palette.hairlineStrong).frame(width: MockChrome.light, height: MockChrome.light)
                 }
                 Spacer().frame(width: Spacing.l)
-                ForEach(["sidebar.left", "gearshape"], id: \.self) { symbol in
-                    Image(systemName: symbol)
-                        .font(Typography.bodyEmphasis)
-                        .foregroundStyle(Palette.inkSecondary)
-                        .frame(width: MockChrome.button, height: MockChrome.button)
-                        .background(Circle().fill(Palette.surface))
-                        .overlay(Circle().strokeBorder(Palette.hairline, lineWidth: Layout.Main.hairline))
-                }
+                Image(systemName: "sidebar.left")
+                    .font(Typography.bodyEmphasis)
+                    .foregroundStyle(Palette.inkSecondary)
+                    .frame(width: MockChrome.button, height: MockChrome.button)
+                    .background(Circle().fill(Palette.surface))
+                    .overlay(Circle().strokeBorder(Palette.hairline, lineWidth: Layout.Main.hairline))
                 Spacer()
             }
             ToolbarWordmark()
@@ -245,6 +257,18 @@ extension SnapshotCatalog {
         return MainView()
             .environment(model)
             .environment(\.mainPreview, preview)
+            .transaction { $0.disablesAnimations = true }
+    }
+
+    /// Home with Settings open over it on `tab`. Settings' panes read faked service state
+    /// (permissions, model, login item) so the shot doesn't depend on the CI machine.
+    private static func settingsModal(_ tab: SettingsTab, records: [HistoryRecord], preview: MainPreview) -> some View {
+        let model = previewModel(records: records, section: .home)
+        model.settingsTab = tab
+        return MainView()
+            .environment(model)
+            .environment(\.mainPreview, preview)
+            .environment(\.setupPreview, SetupPreview())
             .transaction { $0.disablesAnimations = true }
     }
 

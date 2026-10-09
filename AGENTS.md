@@ -36,7 +36,9 @@ make snapshots      # every screen to ./snapshots, light and dark
   navy pills; Signal blue is for selection, focus and links. See `docs/brand.md`.
 - **Every animation goes through `Motion`** so Reduce Motion is honoured.
 - **Settings live in `Support/Settings.swift`.** Our `Settings` class shadows SwiftUI's
-  scene of the same name; write `SwiftUI.Settings` for the scene.
+  scene of the same name. The app doesn't use that scene: the Settings screen is a modal in
+  the main window, opened with `AppModel.showSettings(_:)`, so never `openSettings` or
+  `SettingsLink`.
 
 ## macOS traps
 

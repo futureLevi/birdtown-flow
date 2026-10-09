@@ -15,11 +15,6 @@ struct MurmurApp: App {
         .windowToolbarStyle(.unified(showsTitle: false))
         .commands { MurmurCommands() }
 
-        SwiftUI.Settings {
-            SettingsView()
-                .environment(AppModel.shared)
-        }
-
         MenuBarExtra {
             MenuBarContent()
                 .environment(AppModel.shared)
@@ -36,6 +31,12 @@ struct MurmurCommands: Commands {
     @Environment(\.openWindow) private var openWindow
 
     var body: some Commands {
+        // Settings is a modal in the main window, not a Settings scene: ⌘, opens the window
+        // (reopening it if it was closed) with Settings over it.
+        CommandGroup(replacing: .appSettings) {
+            Button("Settings…") { AppModel.shared.showSettings() }
+                .keyboardShortcut(",", modifiers: .command)
+        }
         // ⌘O brings up the main window from any of the app's windows, even after it was closed.
         CommandGroup(replacing: .newItem) {
             Button("Open Birdtown Flow") {

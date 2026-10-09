@@ -11,6 +11,7 @@ struct MainView: View {
 
     var body: some View {
         let status = preview.status ?? SystemStatus.live(model)
+        let settingsOpen = model.settingsTab != nil
         NavigationSplitView {
             MainSidebar(status: status)
                 .navigationSplitViewColumnWidth(Layout.sidebarWidth)
@@ -25,10 +26,6 @@ struct MainView: View {
             // Pages cross-fade; the window never slides.
             .animation(Motion.resolve(Motion.smooth, reduceMotion: reduceMotion), value: model.section)
             .toolbar {
-                // Settings one click away from anywhere in the window, at the leading edge.
-                ToolbarItem(placement: .navigation) {
-                    SettingsToolbarButton()
-                }
                 // The name, centred, where a document window would show its title.
                 ToolbarItem(placement: .principal) {
                     ToolbarWordmark()
@@ -43,6 +40,13 @@ struct MainView: View {
         // reads as one surface.
         .background(Palette.canvas)
         .background { SectionShortcuts() }
+        // Settings is modal: nothing behind it takes clicks, keys or focus while it's open.
+        .disabled(settingsOpen)
+        .accessibilityHidden(settingsOpen)
+        .overlay {
+            SettingsOverlay()
+                .animation(Motion.resolve(Motion.fade, reduceMotion: reduceMotion), value: settingsOpen)
+        }
         .onAppear { model.permissions.refresh() }
         // Accessibility is granted in System Settings; re-check when the user comes back.
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
@@ -70,22 +74,6 @@ struct MainView: View {
         case .lab:
             LabView()
         }
-    }
-}
-
-/// Opens Settings from the main window's toolbar, so it's never a trip through the menu bar.
-struct SettingsToolbarButton: View {
-    @Environment(\.openSettings) private var openSettings
-    @Environment(\.mainPreview) private var preview
-
-    var body: some View {
-        Button {
-            guard preview.status == nil else { return }
-            openSettings()
-        } label: {
-            Label("Settings", systemImage: "gearshape")
-        }
-        .help("Settings (⌘,)")
     }
 }
 
@@ -150,8 +138,11 @@ struct MainSidebar: View {
         }
         .listStyle(.sidebar)
         .safeAreaInset(edge: .bottom, spacing: 0) {
-            SidebarStatusView(status: status)
-                .padding(Spacing.m)
+            VStack(alignment: .leading, spacing: Spacing.s) {
+                SidebarStatusView(status: status)
+                SidebarSettingsButton()
+            }
+            .padding(Spacing.m)
         }
     }
 
@@ -160,6 +151,34 @@ struct MainSidebar: View {
             get: { model.section },
             set: { if let section = $0 { model.section = section } }
         )
+    }
+}
+
+/// Settings, at the foot of the sidebar: opens the Settings modal over the window (⌘,).
+struct SidebarSettingsButton: View {
+    @Environment(AppModel.self) private var model
+    @Environment(\.mainPreview) private var preview
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var isHovered = false
+
+    var body: some View {
+        let shape = RoundedRectangle(cornerRadius: Radius.s, style: .continuous)
+        Button {
+            guard preview.status == nil else { return }
+            model.showSettings()
+        } label: {
+            Label("Settings", systemImage: "gearshape")
+                .font(Typography.body)
+                .foregroundStyle(Palette.ink)
+                .padding(.horizontal, Spacing.s)
+                .frame(maxWidth: .infinity, minHeight: Layout.SettingsModal.rowHeight, alignment: .leading)
+                .background(shape.fill(isHovered ? Palette.surfaceHover : .clear))
+                .contentShape(shape)
+        }
+        .buttonStyle(.plain)
+        .onHover { isHovered = $0 }
+        .animation(Motion.resolve(Motion.fadeFast, reduceMotion: reduceMotion), value: isHovered)
+        .help("Settings (⌘,)")
     }
 }
 

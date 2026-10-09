@@ -237,23 +237,7 @@ final class HUDController {
         case .accessibilityAccess:
             Permissions.openAccessibilitySettings()
         case .inputDevice:
-            app.requestSettings(.audio)
-            openAppSettings()
-        }
-    }
-
-    /// The Settings window, through its own ⌘, menu item: SwiftUI opens the Settings scene
-    /// only through `openSettings`, which needs a view's environment the HUD doesn't have.
-    private static func openAppSettings() {
-        NSApp.activate()
-        for top in NSApp.mainMenu?.items ?? [] {
-            guard let menu = top.submenu,
-                  let index = menu.items.firstIndex(where: {
-                      $0.keyEquivalent == "," && $0.keyEquivalentModifierMask == .command && $0.isEnabled
-                  })
-            else { continue }
-            menu.performActionForItem(at: index)
-            return
+            app.showSettings(.audio)
         }
     }
 }
