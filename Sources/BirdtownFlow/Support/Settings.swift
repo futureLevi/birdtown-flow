@@ -227,6 +227,23 @@ final class Settings {
         didSet { defaults.set(polishTimeout, forKey: Keys.polishTimeout) }
     }
 
+    // MARK: Long dictations
+
+    /// Transcribe a long recording window by window while it's still going, so key-up only
+    /// waits for the last few seconds. Off: every recording is transcribed whole at key-up.
+    var liveTranscription: Bool {
+        didSet { defaults.set(liveTranscription, forKey: Keys.liveTranscription) }
+    }
+    /// Polish a long transcript in parts, several at once. Off: one request, as for short ones.
+    var polishInParts: Bool {
+        didSet { defaults.set(polishInParts, forKey: Keys.polishInParts) }
+    }
+    /// Polish the finished parts of a long dictation before key-up. Text reaches the polish
+    /// provider while the person is still talking, so Esc can't recall it.
+    var polishWhileSpeaking: Bool {
+        didSet { defaults.set(polishWhileSpeaking, forKey: Keys.polishWhileSpeaking) }
+    }
+
     // MARK: Appearance
 
     /// Applied to the whole app (`AppearancePreference.apply()`); the pill is navy either way.
@@ -282,6 +299,9 @@ final class Settings {
         static let openAIBaseURL = "openAIBaseURL"
         static let openAIModel = "openAIModel"
         static let polishTimeout = "polishTimeout"
+        static let liveTranscription = "liveTranscription"
+        static let polishInParts = "polishInParts"
+        static let polishWhileSpeaking = "polishWhileSpeaking"
         static let historyRetentionDays = "historyRetentionDays"
         static let audioRetentionDays = "audioRetentionDays"
         static let hasCompletedOnboarding = "hasCompletedOnboarding"
@@ -322,6 +342,9 @@ final class Settings {
         openAIBaseURL = defaults.string(forKey: Keys.openAIBaseURL) ?? "https://api.openai.com/v1"
         openAIModel = defaults.string(forKey: Keys.openAIModel) ?? "gpt-4.1-mini"
         polishTimeout = defaults.object(forKey: Keys.polishTimeout) as? Double ?? 4
+        liveTranscription = defaults.object(forKey: Keys.liveTranscription) as? Bool ?? true
+        polishInParts = defaults.object(forKey: Keys.polishInParts) as? Bool ?? true
+        polishWhileSpeaking = defaults.object(forKey: Keys.polishWhileSpeaking) as? Bool ?? true
         historyRetentionDays = defaults.object(forKey: Keys.historyRetentionDays) as? Int ?? 0
         audioRetentionDays = defaults.object(forKey: Keys.audioRetentionDays) as? Int ?? 7
         hasCompletedOnboarding = defaults.bool(forKey: Keys.hasCompletedOnboarding)

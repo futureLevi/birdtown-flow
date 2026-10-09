@@ -67,6 +67,15 @@ final class PolishService {
         }
     }
 
+    /// `polish`, for a dictation of any length: long texts will be polished in parts, some of
+    /// them while the person was still talking (`progressive`). For now it is `polish`.
+    func polishLong(
+        _ request: PolishRequest, using configuration: PolishConfiguration?, progressive: ProgressivePolisher?
+    ) async -> (Outcome, PolishReport) {
+        let outcome = await polish(request, using: configuration)
+        return (outcome, PolishReport())
+    }
+
     /// Gets the provider ready for a dictation that's starting, while the person talks: loads
     /// Apple's model, or opens the connection to a cloud endpoint. `request` has everything but
     /// the text. Claude Code is started by `ClaudeCodePolisher.prewarm` instead. Reads no keys,

@@ -119,6 +119,8 @@ final class DictationController {
     /// One press-to-release (or hands-free) recording.
     private struct Session {
         let generation: Int
+        /// The History record this recording becomes, from key-down on.
+        let id: UUID
         let startedAt: Date
         /// Whether the user has been told we're listening (phase, sound). False during the chord grace.
         var isVisible = false
@@ -128,6 +130,9 @@ final class DictationController {
         /// proves deliberate, so a shortcut never produces an error.
         var blocked: String?
         let contextTask: Task<AppContext, Never>
+        /// Work on a long recording while it's still going: windows transcribed, parts polished.
+        var live: LiveDictation?
+        var progressive: ProgressivePolisher?
     }
 
     /// What the key currently held down means.
@@ -345,6 +350,7 @@ final class DictationController {
         doubleTapTask = nil
 
         if let blocked = current.blocked {
+            endLive(current)
             recorder.cancel()
             fail(blocked, followUp: blockedFollowUp())
             return
@@ -354,7 +360,7 @@ final class DictationController {
 
         isStopping = true
         let releasedAt = Date()
-        let id = UUID()
+        let id = current.id
         let task = Task { [weak self] in
             guard let self else { return }
             await self.finish(current, releasedAt: releasedAt, id: id)
@@ -370,6 +376,7 @@ final class DictationController {
             armTask = nil
             doubleTapTask?.cancel()
             doubleTapTask = nil
+            endLive(current)
             recorder.cancel()
             if current.isVisible {
                 Sounds.play(.cancel)
@@ -424,7 +431,14 @@ final class DictationController {
         levels = Self.silentLevels
         recordingStartedAt = Date()
         isHandsFree = handsFree
-        session = Session(generation: generation, startedAt: Date(), blocked: blocked, contextTask: contextTask)
+        let id = UUID()
+        let startedAt = Date()
+        session = Session(
+            generation: generation, id: id, startedAt: startedAt, blocked: blocked, contextTask: contextTask
+        )
+        if blocked == nil, settings.liveTranscription {
+            startLive(generation: generation, id: id, contextTask: contextTask, startedAt: startedAt)
+        }
 
         if visible {
             announce(cue: .start)
@@ -445,6 +459,8 @@ final class DictationController {
 
         if let blocked = current.blocked {
             session = nil
+            // A microphone that failed during the chord grace blocks a session that had started.
+            endLive(current)
             recorder.cancel()
             if AVCaptureDevice.authorizationStatus(for: .audio) == .notDetermined {
                 Task { _ = await Permissions.requestMicrophone() }
@@ -462,14 +478,51 @@ final class DictationController {
     /// Drops the recording without a sound or a History row (shortcut chords, slips, a
     /// double-tap that never came).
     private func discardSession() {
-        guard session != nil else { return }
+        guard let current = session else { return }
         session = nil
+        endLive(current)
         armTask?.cancel()
         armTask = nil
         doubleTapTask?.cancel()
         doubleTapTask = nil
         recorder.cancel()
         resetToIdle()
+    }
+
+    // MARK: - Long recordings
+
+    /// Starts the work a long recording does before key-up: transcribing windows
+    /// (`LiveDictation`) and polishing the finished parts (`ProgressivePolisher`).
+    private func startLive(generation: Int, id: UUID, contextTask: Task<AppContext, Never>, startedAt: Date) {
+        let live = LiveDictation(
+            id: id, generation: generation, recorder: recorder, models: models, history: history,
+            settings: settings,
+            vocabulary: { [unowned self] in
+                self.settings.vocabularyBoosting ? self.dictionary.biasPhrases : []
+            },
+            placeholder: { [unowned self] in
+                let context = await contextTask.value
+                return self.makeRecord(id: id, startedAt: startedAt, context: context, audioDuration: 0)
+            }
+        )
+        let progressive = makeProgressivePolisher(contextTask: contextTask)
+        if let progressive {
+            live.onCommittedText = { [weak progressive] text in progressive?.committedTextDidChange(text) }
+        }
+        session?.live = live
+        session?.progressive = progressive
+        live.start()
+    }
+
+    /// The polisher for a long recording's finished parts, or `nil` when it won't be used.
+    private func makeProgressivePolisher(contextTask: Task<AppContext, Never>) -> ProgressivePolisher? {
+        nil
+    }
+
+    /// The recording is gone (Esc, discarded, dropped, failed): stop its work and leave no trace.
+    private func endLive(_ session: Session) {
+        session.live?.cancel()
+        session.progressive?.cancel()
     }
 
     private func lockHandsFree() {
@@ -638,6 +691,7 @@ final class DictationController {
                 session = nil
                 armTask?.cancel()
                 doubleTapTask?.cancel()
+                endLive(current)
                 fail(message, followUp: .inputDevice)
             } else {
                 current.blocked = message
@@ -653,10 +707,13 @@ final class DictationController {
     private func finish(_ session: Session, releasedAt: Date, id: UUID) async {
         // CoreAudio can wedge stopping a device that's being unplugged; never wait forever.
         let recorder = self.recorder
+        let clock = ContinuousClock()
+        let stopStart = clock.now
         let audio: CapturedAudio
         do {
             audio = try await Watchdog.run(within: Timing.recorderStop) { await recorder.stop() }
         } catch {
+            endLive(session)
             guard isCurrent(id) else { return }
             Log.audio.error("the recorder didn't hand over its audio in time")
             isStopping = false
@@ -664,7 +721,14 @@ final class DictationController {
             fail("The microphone stopped responding", followUp: .inputDevice)
             return
         }
-        guard isCurrent(id) else { return }
+        guard isCurrent(id) else {
+            endLive(session)
+            return
+        }
+        var timing = TimingLine("dictation \(id.uuidString.prefix(8))")
+        timing.seconds("audio", audio.duration)
+        timing.tag("engine", settings.engine.rawValue)
+        timing.ms("stop", Self.milliseconds(stopStart.duration(to: clock.now)))
         isStopping = false
         isHandsFree = false
         level = 0
@@ -678,6 +742,7 @@ final class DictationController {
         ) {
         case .drop:
             Log.audio.info("dropped: \(audio.duration, format: .fixed(precision: 2))s, peak \(audio.peakLevel, format: .fixed(precision: 2))")
+            endLive(session)
             processing = nil
             resetToIdle()
             return
@@ -685,6 +750,7 @@ final class DictationController {
             // Held long enough to mean it, and the mic heard nothing: a muted or wrong input
             // (AirPods that just connected). Say so, rather than look like a missed hotkey.
             Log.audio.info("no speech: \(audio.duration, format: .fixed(precision: 2))s, peak \(audio.peakLevel, format: .fixed(precision: 2))")
+            endLive(session)
             processing = nil
             fail(DictationFeedback.noSpeechMessage(deviceName: inputDeviceName()), followUp: .inputDevice)
             return
@@ -694,28 +760,53 @@ final class DictationController {
 
         Sounds.play(.stop)
         phase = .transcribing
+        let contextStart = clock.now
         let context = await session.contextTask.value
-        guard isCurrent(id) else { return }
+        timing.ms("context", Self.milliseconds(contextStart.duration(to: clock.now)))
+        guard isCurrent(id) else {
+            endLive(session)
+            return
+        }
         self.context = context
-        await process(audio, context: context, startedAt: session.startedAt, releasedAt: releasedAt, id: id)
+        // Stop cutting windows; one already being decoded keeps going for `process` to use.
+        if let live = session.live {
+            let liveStopStart = clock.now
+            await live.stop()
+            timing.ms("liveStop", Self.milliseconds(liveStopStart.duration(to: clock.now)))
+            guard isCurrent(id) else {
+                endLive(session)
+                return
+            }
+        }
+        await process(
+            audio, context: context, startedAt: session.startedAt, releasedAt: releasedAt, id: id,
+            live: session.live, progressive: session.progressive, timing: timing
+        )
     }
 
-    private func process(_ audio: CapturedAudio, context: AppContext, startedAt: Date, releasedAt: Date, id: UUID) async {
+    /// `timing` already holds what `finish` measured (stop, context, live stop); the summary
+    /// line goes to `Log.timing` however processing ends.
+    private func process(
+        _ audio: CapturedAudio, context: AppContext, startedAt: Date, releasedAt: Date, id: UUID,
+        live: LiveDictation?, progressive: ProgressivePolisher?, timing initialTiming: TimingLine
+    ) async {
         let style = settings.style(for: context.category)
-        var record = HistoryRecord(
-            id: id,
-            createdAt: startedAt,
-            context: context,
-            style: style,
-            engine: settings.engine.displayName,
-            audioDuration: audio.duration,
-            outcome: .failed,
-            errorMessage: "Interrupted"
-        )
+        var record = makeRecord(id: id, startedAt: startedAt, context: context, audioDuration: audio.duration)
+        let clock = ContinuousClock()
+        var timing = initialTiming
+        defer {
+            // Nothing polishes this dictation's parts any more.
+            progressive?.cancel()
+            timing.ms("total", Self.milliseconds(since: releasedAt))
+            timing.tag("outcome", record.outcome.rawValue)
+            Log.timing.notice("\(timing.text, privacy: .public)")
+        }
 
         // Audio first: from here on, a crash or an engine failure must not lose what was said.
+        // The same URL as any WAV written while recording, which this replaces in one piece.
         let url = history.newRecordingURL(for: id)
         let samples = audio.samples
+        let wavStart = clock.now
         do {
             try await Task.detached(priority: .userInitiated) {
                 try AudioRecorder.writeWAV(samples, to: url)
@@ -724,17 +815,24 @@ final class DictationController {
         } catch {
             Log.audio.error("couldn't save the recording: \(error.localizedDescription, privacy: .public)")
         }
-        history.add(record)
+        timing.ms("wav", Self.milliseconds(wavStart.duration(to: clock.now)))
+        // Adds the row, or replaces the placeholder a long recording saved before key-up.
+        let rowStart = clock.now
+        history.update(record)
+        live?.handOff()
+        timing.ms("row", Self.milliseconds(rowStart.duration(to: clock.now)))
 
         do {
             guard isCurrent(id) else { throw CancellationError() }
             // `record.engine` starts as the selected engine and becomes the one that actually ran
             // (Apple Speech stands in while Parakeet downloads), even if transcription then fails.
             let output = try await transcribeAndClean(
-                samples, context: context, style: style, engineName: &record.engine
+                samples, context: context, style: style, engineName: &record.engine,
+                live: live, progressive: progressive, purpose: .dictation
             ) { [weak self] in
                 if self?.isCurrent(id) == true { self?.phase = .polishing }
             }
+            output.addStages(to: &timing)
             guard isCurrent(id) else { throw CancellationError() }
             output.apply(to: &record)
 
@@ -754,7 +852,9 @@ final class DictationController {
                 return
             }
 
+            let insertStart = clock.now
             let outcome = await TextInjector.insert(text, restoreClipboard: settings.restoreClipboard)
+            timing.ms("insert", Self.milliseconds(insertStart.duration(to: clock.now)))
             var copiedNotice: String?
             var copiedFollowUp: FollowUp?
             switch outcome {
@@ -815,6 +915,21 @@ final class DictationController {
         }
     }
 
+    /// A dictation's History row before anything is known but its audio: it reads
+    /// "Interrupted" until processing settles it, so a crash leaves an honest record.
+    private func makeRecord(id: UUID, startedAt: Date, context: AppContext, audioDuration: Double) -> HistoryRecord {
+        HistoryRecord(
+            id: id,
+            createdAt: startedAt,
+            context: context,
+            style: settings.style(for: context.category),
+            engine: settings.engine.displayName,
+            audioDuration: audioDuration,
+            outcome: .failed,
+            errorMessage: "Interrupted"
+        )
+    }
+
     /// What the speech engine and the text pipeline made of one recording.
     private struct PipelineOutput {
         var engineName: String
@@ -826,8 +941,31 @@ final class DictationController {
         var polishNote: String?
         /// The Lab configuration this style used, by name.
         var polishConfiguration: String?
+        /// From key-up's point of view: engine wait included, as History has always shown it.
         var transcribeMs: Int
         var polishMs: Int
+        /// The timing summary's breakdown of the same work.
+        var engineWaitMs: Int
+        var transcriptionReport: TranscriptionReport
+        /// `nil` when polish didn't run.
+        var polishReport: PolishReport?
+        var prepareMs: Int
+        var finalizeMs: Int
+
+        /// Appends engine wait, transcription, prepare, polish and finalize to the summary.
+        func addStages(to line: inout TimingLine) {
+            line.ms("engineWait", engineWaitMs)
+            line.ms("transcribe", transcribeMs - engineWaitMs)
+            line.tag("path", transcriptionReport.path.rawValue)
+            if let reason = transcriptionReport.fallbackReason { line.tag("fallback", reason) }
+            line.group("transcribe", transcriptionReport.line)
+            line.ms("prepare", prepareMs)
+            if let polishReport {
+                line.ms("polish", polishMs)
+                line.group("polish", polishReport.line)
+            }
+            line.ms("finalize", finalizeMs)
+        }
 
         func apply(to record: inout HistoryRecord) {
             record.engine = engineName
@@ -858,47 +996,57 @@ final class DictationController {
     ///
     /// `engineName` is set to the engine that runs as soon as it's chosen, so a failed record
     /// still names it.
+    ///
+    /// `live` and `progressive` hold the work a long recording did before key-up; a Retry has
+    /// neither.
     private func transcribeAndClean(
         _ samples: [Float],
         context: AppContext,
         style: WritingStyle,
         engineName: inout String,
+        live: LiveDictation?,
+        progressive: ProgressivePolisher?,
+        purpose: TranscriptionPurpose,
         willPolish: () -> Void
     ) async throws -> PipelineOutput {
         let clock = ContinuousClock()
         let transcribeStart = clock.now
         let engine = try await readyEngine()
         engineName = engine.displayName
+        let engineWaitMs = Self.milliseconds(transcribeStart.duration(to: clock.now))
         let vocabulary = settings.vocabularyBoosting ? dictionary.biasPhrases : []
-        let transcript = try await Watchdog.run(within: Timing.transcription) {
-            try await engine.transcript(samples, vocabulary: vocabulary)
-        }
+        let (transcript, transcriptionReport) = try await transcribeStage(
+            samples, engine: engine, vocabulary: vocabulary, live: live, purpose: purpose
+        )
         let raw = transcript.text
         let transcribeMs = Self.milliseconds(transcribeStart.duration(to: clock.now))
         try Task.checkCancellation()
 
-        let options = PipelineOptions(removeFillers: settings.removeFillers, spokenCommands: settings.spokenCommands)
-        var text = TextPipeline.prepare(raw, options: options)
+        let prepareStart = clock.now
+        var text = TextPipeline.prepare(raw, options: currentPipelineOptions)
+        let prepareMs = Self.milliseconds(prepareStart.duration(to: clock.now))
         var polishedBy: PolishProvider?
         var polishNote: String?
         var polishConfiguration: String?
+        var polishReport: PolishReport?
         var polishMs = 0
 
         if settings.polishProvider != .off, !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             willPolish()
             let polishStart = clock.now
-            // A style can be handed to a Lab configuration; the rest follow Settings.
-            let configuration = lab.configuration(for: style)
-            let request = polishRequest(text: text, style: style, context: context, configuration: configuration)
-            let outcome = await polish(request, using: configuration)
+            let (outcome, report, configurationName) = await polishStage(
+                text, style: style, context: context, progressive: progressive
+            )
             text = outcome.text
             polishedBy = outcome.provider
             polishNote = outcome.note
-            polishConfiguration = configuration?.name
+            polishConfiguration = configurationName
+            polishReport = report
             polishMs = Self.milliseconds(polishStart.duration(to: clock.now))
             try Task.checkCancellation()
         }
 
+        let finalizeStart = clock.now
         let result = TextPipeline.finalize(
             text,
             style: style,
@@ -906,6 +1054,7 @@ final class DictationController {
             snippets: snippets.enabled,
             vocabulary: dictionary.biasPhrases
         )
+        let finalizeMs = Self.milliseconds(finalizeStart.duration(to: clock.now))
         return PipelineOutput(
             engineName: engine.displayName,
             raw: raw,
@@ -915,8 +1064,51 @@ final class DictationController {
             polishNote: polishNote,
             polishConfiguration: polishConfiguration,
             transcribeMs: transcribeMs,
-            polishMs: polishMs
+            polishMs: polishMs,
+            engineWaitMs: engineWaitMs,
+            transcriptionReport: transcriptionReport,
+            polishReport: polishReport,
+            prepareMs: prepareMs,
+            finalizeMs: finalizeMs
         )
+    }
+
+    /// Speech to text: today's whole-buffer call, or the windows of a long recording
+    /// (`LongTranscription`), under the transcription watchdog.
+    private func transcribeStage(
+        _ samples: [Float],
+        engine: any TranscriptionEngine,
+        vocabulary: [String],
+        live: LiveDictation?,
+        purpose: TranscriptionPurpose
+    ) async throws -> (Transcript, TranscriptionReport) {
+        let transcriber = live?.transcriber
+        let settings = self.settings
+        return try await Watchdog.run(within: Timing.transcription) {
+            try await LongTranscription.transcript(
+                samples, engine: engine, vocabulary: vocabulary,
+                live: transcriber, purpose: purpose, settings: settings
+            )
+        }
+    }
+
+    /// AI polish of the prepared text, with the style's Lab configuration if it has one.
+    private func polishStage(
+        _ text: String,
+        style: WritingStyle,
+        context: AppContext,
+        progressive: ProgressivePolisher?
+    ) async -> (PolishService.Outcome, PolishReport, configurationName: String?) {
+        // A style can be handed to a Lab configuration; the rest follow Settings.
+        let configuration = lab.configuration(for: style)
+        let request = polishRequest(text: text, style: style, context: context, configuration: configuration)
+        let (outcome, report) = await polish(request, using: configuration, progressive: progressive)
+        return (outcome, report, configuration?.name)
+    }
+
+    /// What `TextPipeline.prepare` does with the transcript, from Settings.
+    private var currentPipelineOptions: PipelineOptions {
+        PipelineOptions(removeFillers: settings.removeFillers, spokenCommands: settings.spokenCommands)
     }
 
     private func readyEngine() async throws -> any TranscriptionEngine {
@@ -997,13 +1189,17 @@ final class DictationController {
 
     /// PolishService never throws and has its own timeout; this is the backstop in case it
     /// hangs anyway. Any failure means the deterministic text is used.
-    private func polish(_ request: PolishRequest, using configuration: PolishConfiguration?) async -> PolishService.Outcome {
+    private func polish(
+        _ request: PolishRequest, using configuration: PolishConfiguration?, progressive: ProgressivePolisher?
+    ) async -> (PolishService.Outcome, PolishReport) {
         let service = PolishService(settings: settings)
         let limit = Duration.seconds(max(1, settings.polishTimeout) + Timing.polishGrace)
         do {
-            return try await Watchdog.run(within: limit) { await service.polish(request, using: configuration) }
+            return try await Watchdog.run(within: limit) {
+                await service.polishLong(request, using: configuration, progressive: progressive)
+            }
         } catch {
-            return PolishService.Outcome(text: request.text, provider: nil, note: "timed out")
+            return (PolishService.Outcome(text: request.text, provider: nil, note: "timed out"), PolishReport())
         }
     }
 
@@ -1153,15 +1349,28 @@ final class DictationController {
 
         let started = Date()
         var engineName = updated.engine
+        let clock = ContinuousClock()
+        var timing = TimingLine("retry \(record.id.uuidString.prefix(8))")
+        timing.tag("engine", settings.engine.rawValue)
+        defer {
+            timing.ms("total", Self.milliseconds(since: started))
+            timing.tag("outcome", updated.outcome.rawValue)
+            Log.timing.notice("\(timing.text, privacy: .public)")
+        }
         do {
+            let readStart = clock.now
             let samples = try await Task.detached(priority: .userInitiated) {
                 try AudioRecorder.readSamples(from: url)
             }.value
+            timing.seconds("audio", Double(samples.count) / AudioRecorder.sampleRate)
+            timing.ms("read", Self.milliseconds(readStart.duration(to: clock.now)))
             let context = updated.context ?? AppContext(bundleID: nil, appName: nil, category: .other)
             let style = updated.style ?? settings.style(for: context.category)
             let output = try await transcribeAndClean(
-                samples, context: context, style: style, engineName: &engineName
+                samples, context: context, style: style, engineName: &engineName,
+                live: nil, progressive: nil, purpose: .retry
             ) {}
+            output.addStages(to: &timing)
 
             updated = history.record(id: record.id) ?? updated
             output.apply(to: &updated)
