@@ -1,0 +1,7 @@
+sha=5c51553e8430acd4a7e121f150b5faf55c414919
+branch=design/settings-modal
+build=success
+test=success
+snapshots=success
+speech=failure
+release=skipped
