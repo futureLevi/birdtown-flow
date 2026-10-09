@@ -1,0 +1,36 @@
+[18:12:17.692] [INFO] [FluidAudio.AsrModels] Loading ASR models from: /Users/runner/Library/Application Support/FluidAudio/Models/parakeet-ultra
+[18:12:17.703] [INFO] [FluidAudio.DownloadUtils] Host environment: macOS Version 26.6.2 (Build 25G83), arch=arm64, chip=Apple M1 (Virtual), cores=3/3, mem=7 GB, rosetta=false
+[18:12:17.706] [INFO] [FluidAudio.DownloadUtils] Found parakeet-ultra locally, no download needed
+[18:12:17.796] [INFO] [FluidAudio.AsrModels] Loading ASR models from: /Users/runner/Library/Application Support/FluidAudio/Models/parakeet-ultra
+[18:12:17.796] [INFO] [FluidAudio.DownloadUtils] Found parakeet-ultra locally, no download needed
+[18:12:18.009] [INFO] [FluidAudio.DownloadUtils] Compiled model Preprocessor.mlmodelc in 301.85 ms :: macOS Version 26.6.2 (Build 25G83), arch=arm64, chip=Apple M1 (Virtual), cores=3/3, mem=7 GB, rosetta=false
+[18:12:18.009] [INFO] [FluidAudio.AsrModels] Loaded Preprocessor.mlmodelc with compute units: cpuOnly
+[18:12:18.009] [INFO] [FluidAudio.DownloadUtils] Compiled model Preprocessor.mlmodelc in 215.82 ms :: macOS Version 26.6.2 (Build 25G83), arch=arm64, chip=Apple M1 (Virtual), cores=3/3, mem=7 GB, rosetta=false
+[18:12:18.009] [INFO] [FluidAudio.AsrModels] Loaded Preprocessor.mlmodelc with compute units: cpuOnly
+[18:12:18.010] [INFO] [FluidAudio.DownloadUtils] Found parakeet-ultra locally, no download needed
+[18:12:18.010] [INFO] [FluidAudio.DownloadUtils] Found parakeet-ultra locally, no download needed
+[18:12:25.955] [INFO] [FluidAudio.DownloadUtils] Compiled model Encoder.mlmodelc in 7942.65 ms :: macOS Version 26.6.2 (Build 25G83), arch=arm64, chip=Apple M1 (Virtual), cores=3/3, mem=7 GB, rosetta=false
+[18:12:25.955] [INFO] [FluidAudio.AsrModels] Loaded Encoder.mlmodelc with compute units: cpuAndNeuralEngine
+[18:12:25.956] [INFO] [FluidAudio.DownloadUtils] Found parakeet-ultra locally, no download needed
+[18:12:26.007] [INFO] [FluidAudio.DownloadUtils] Compiled model Encoder.mlmodelc in 7994.05 ms :: macOS Version 26.6.2 (Build 25G83), arch=arm64, chip=Apple M1 (Virtual), cores=3/3, mem=7 GB, rosetta=false
+[18:12:26.007] [INFO] [FluidAudio.AsrModels] Loaded Encoder.mlmodelc with compute units: cpuAndNeuralEngine
+[18:12:26.007] [INFO] [FluidAudio.DownloadUtils] Found parakeet-ultra locally, no download needed
+[18:12:26.395] [INFO] [FluidAudio.DownloadUtils] Compiled model Decoder.mlmodelc in 437.51 ms :: macOS Version 26.6.2 (Build 25G83), arch=arm64, chip=Apple M1 (Virtual), cores=3/3, mem=7 GB, rosetta=false
+[18:12:26.395] [INFO] [FluidAudio.DownloadUtils] Found parakeet-ultra locally, no download needed
+[18:12:26.395] [INFO] [FluidAudio.DownloadUtils] Compiled model Decoder.mlmodelc in 389.94 ms :: macOS Version 26.6.2 (Build 25G83), arch=arm64, chip=Apple M1 (Virtual), cores=3/3, mem=7 GB, rosetta=false
+[18:12:26.395] [INFO] [FluidAudio.DownloadUtils] Found parakeet-ultra locally, no download needed
+[18:12:26.570] [INFO] [FluidAudio.DownloadUtils] Compiled model JointDecisionv3.mlmodelc in 175.19 ms :: macOS Version 26.6.2 (Build 25G83), arch=arm64, chip=Apple M1 (Virtual), cores=3/3, mem=7 GB, rosetta=false
+[18:12:26.570] [INFO] [FluidAudio.AsrModels] Loaded JointDecisionv3.mlmodelc
+[18:12:26.573] [INFO] [FluidAudio.DownloadUtils] Compiled model JointDecisionv3.mlmodelc in 176.37 ms :: macOS Version 26.6.2 (Build 25G83), arch=arm64, chip=Apple M1 (Virtual), cores=3/3, mem=7 GB, rosetta=false
+[18:12:26.573] [INFO] [FluidAudio.AsrModels] Loaded JointDecisionv3.mlmodelc
+[18:12:26.590] [INFO] [FluidAudio.AsrModels] Loaded vocabulary with 8192 tokens from /Users/runner/Library/Application Support/FluidAudio/Models/parakeet-ultra/parakeet_vocab.json
+[18:12:26.590] [INFO] [FluidAudio.AsrModels] Successfully loaded all ASR models with optimized compute units
+[18:12:26.590] [INFO] [FluidAudio.AsrModels] Loaded vocabulary with 8192 tokens from /Users/runner/Library/Application Support/FluidAudio/Models/parakeet-ultra/parakeet_vocab.json
+[18:12:26.590] [INFO] [FluidAudio.AsrModels] Successfully loaded all ASR models with optimized compute units
+[smoke] preparing Parakeet Ultra
+[smoke] model state ready after 9.970934 seconds
+[smoke] 86 samples, 0.01 s
+[smoke] pass 1 · Parakeet Ultra · 0.318264917 seconds
+[smoke] raw:   
+[smoke] final: 
+[smoke] FAIL: empty transcript
