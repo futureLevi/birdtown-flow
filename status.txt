@@ -1,0 +1,7 @@
+sha=7b3328811ae3011f746e6a982746a33fefa690f5
+branch=fix/boost-span-guard
+build=success
+test=success
+snapshots=success
+speech=failure
+release=skipped
