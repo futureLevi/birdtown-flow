@@ -69,9 +69,35 @@ public struct PolishConfiguration: Codable, Identifiable, Hashable, Sendable {
         notes = try container.decodeIfPresent(String.self, forKey: .notes) ?? ""
         provider = (try? container.decodeIfPresent(PolishProvider.self, forKey: .provider)) ?? .claudeCode
         model = try container.decodeIfPresent(String.self, forKey: .model) ?? Self.defaultModel(for: provider)
-        effort = (try? container.decodeIfPresent(PolishEffort.self, forKey: .effort)) ?? .standard
+        effort = Self.effort(
+            (try? container.decodeIfPresent(PolishEffort.self, forKey: Self.effortKey(for: provider))) ?? .standard,
+            offeredBy: provider)
         instructions = try container.decodeIfPresent(String.self, forKey: .instructions) ?? ""
         updatedAt = try container.decodeIfPresent(Date.self, forKey: .updatedAt) ?? Date(timeIntervalSince1970: 0)
+    }
+
+    /// As the synthesized one would, but with the effort under its provider's key.
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(id, forKey: .id)
+        try container.encode(name, forKey: .name)
+        try container.encode(notes, forKey: .notes)
+        try container.encode(provider, forKey: .provider)
+        try container.encode(model, forKey: .model)
+        try container.encode(effort, forKey: Self.effortKey(for: provider))
+        try container.encode(instructions, forKey: .instructions)
+        try container.encode(updatedAt, forKey: .updatedAt)
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, name, notes, provider, model, effort, reasoningEffort, instructions, updatedAt
+    }
+
+    /// An OpenAI-compatible configuration keeps its effort under a key of its own. Builds from
+    /// before those endpoints took one left a Claude level under `effort`, hidden, when a
+    /// configuration switched to them; nobody picked it for the endpoint, so it isn't read.
+    private static func effortKey(for provider: PolishProvider) -> CodingKeys {
+        provider == .openAICompatible ? .reasoningEffort : .effort
     }
 
     /// The model each provider starts with.
@@ -101,7 +127,42 @@ public struct PolishConfiguration: Codable, Identifiable, Hashable, Sendable {
 
     /// Whether the provider takes a model name and an effort level.
     public var usesModel: Bool { provider != .appleIntelligence && provider != .off }
-    public var usesEffort: Bool { provider == .claudeCode || provider == .anthropic }
+    public var usesEffort: Bool { !effortOptions.isEmpty }
+
+    /// The effort levels the Lab offers for this configuration's provider.
+    public var effortOptions: [PolishEffort] { Self.effortOptions(for: provider) }
+
+    /// Claude takes every level. OpenAI-compatible servers take low, medium and high, as
+    /// `reasoning_effort`, and only for reasoning models; others are asked again without it.
+    public static func effortOptions(for provider: PolishProvider) -> [PolishEffort] {
+        switch provider {
+        case .claudeCode, .anthropic: PolishEffort.allCases
+        case .openAICompatible: [.standard, .low, .medium, .high]
+        case .appleIntelligence, .off: []
+        }
+    }
+
+    /// `effort` as `provider` can take it: the strongest level it offers that's no
+    /// stronger, so Max becomes High on an OpenAI-compatible endpoint. Unchanged for a
+    /// provider that takes no effort.
+    public static func effort(_ effort: PolishEffort, offeredBy provider: PolishProvider) -> PolishEffort {
+        let options = effortOptions(for: provider)
+        guard !options.isEmpty, !options.contains(effort) else { return effort }
+        let order = PolishEffort.allCases
+        let rank = order.firstIndex(of: effort) ?? order.startIndex
+        return options.last { (order.firstIndex(of: $0) ?? order.startIndex) <= rank } ?? .standard
+    }
+
+    /// The effort a configuration keeps when it moves from one provider to another. Claude's
+    /// effort and `reasoning_effort` share names, not meaning, and models that don't reason
+    /// turn the field down, so a level never crosses to or from an OpenAI-compatible
+    /// endpoint: that starts at the model's default. Between Claude Code and the Claude API,
+    /// or by way of a provider that takes none, it stays.
+    public static func effort(
+        _ effort: PolishEffort, switchingFrom old: PolishProvider, to new: PolishProvider
+    ) -> PolishEffort {
+        (old == .openAICompatible) == (new == .openAICompatible) ? effort : .standard
+    }
 
     /// "Claude Code · claude-haiku-5-5 · Low effort"
     public var summary: String {

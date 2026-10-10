@@ -375,7 +375,8 @@ struct PolishClientTests {
 
         let body = try json(urlRequest.httpBody)
         #expect(body["model"] as? String == AnthropicClient.defaultModel)
-        #expect(body["temperature"] as? Double == 0)
+        // Haiku 5.5 turns down any temperature but its default.
+        #expect(body["temperature"] == nil)
         #expect(body["max_tokens"] as? Int == 512)
         #expect((body["system"] as? String)?.contains("copy editor") == true)
         let messages = try #require(body["messages"] as? [[String: Any]])
@@ -547,6 +548,7 @@ struct PolishClientTests {
         let body = try json(urlRequest.httpBody)
         #expect(body["model"] as? String == "gpt-4.1-mini")
         #expect(body["temperature"] as? Double == 0)
+        #expect(body["reasoning_effort"] == nil)
         let messages = try #require(body["messages"] as? [[String: Any]])
         #expect(messages.map { $0["role"] as? String } == ["system", "user"])
     }
@@ -554,7 +556,7 @@ struct PolishClientTests {
     @Test("Local servers get no Authorization header; temperature can be omitted")
     func openAILocal() throws {
         let client = OpenAICompatibleClient(baseURL: URL(string: "http://localhost:11434/v1")!, apiKey: "", model: "llama3.2")
-        let urlRequest = try client.makeRequest(for: request(), temperature: nil)
+        let urlRequest = try client.makeRequest(for: request(), leavingOut: [.temperature])
         #expect(urlRequest.value(forHTTPHeaderField: "Authorization") == nil)
         #expect(urlRequest.url?.absoluteString == "http://localhost:11434/v1/chat/completions")
         #expect(try json(urlRequest.httpBody)["temperature"] == nil)
@@ -615,12 +617,13 @@ struct PolishClientTests {
         #expect(log.claim("https://example.com/", unlessWithin: .zero))
     }
 
-    @Test("A temperature rejection is remembered per endpoint and model")
+    @Test("A rejected field is remembered per endpoint and model")
     func temperatureMemo() {
-        let key = OpenAICompatibleClient.temperatureMemoKey(baseURL: URL(string: "https://api.openai.com/v1/")!, model: " gpt-5 ")
-        #expect(key == OpenAICompatibleClient.temperatureMemoKey(
+        let key = OpenAICompatibleClient.memoKey(baseURL: URL(string: "https://api.openai.com/v1/")!, model: " gpt-5 ")
+        #expect(key == OpenAICompatibleClient.memoKey(
             baseURL: URL(string: "https://api.openai.com/v1/chat/completions")!, model: "gpt-5"))
-        #expect(key != OpenAICompatibleClient.temperatureMemoKey(baseURL: URL(string: "https://api.openai.com/v1")!, model: "gpt-4.1-mini"))
+        #expect(key != OpenAICompatibleClient.memoKey(baseURL: URL(string: "https://api.openai.com/v1")!, model: "gpt-4.1-mini"))
+        #expect(OpenAICompatibleClient.memoEntry(key, .temperature) != OpenAICompatibleClient.memoEntry(key, .reasoningEffort))
         let memo = LockedSet()
         #expect(!memo.contains(key))
         memo.insert(key)

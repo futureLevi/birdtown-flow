@@ -308,7 +308,7 @@ private struct LabEditor: View {
                 if configuration.usesEffort {
                     LabField(label: "Effort") {
                         Picker("Effort", selection: binding(\.effort)) {
-                            ForEach(PolishEffort.allCases) { effort in
+                            ForEach(configuration.effortOptions) { effort in
                                 Text(effort.shortTitle).tag(effort)
                             }
                         }
@@ -348,12 +348,13 @@ private struct LabEditor: View {
     }
 
     /// A Claude model name means nothing to an OpenAI endpoint and the reverse, so switching
-    /// between them starts from that provider's usual model.
+    /// between them starts from that provider's usual model, at the model's own effort.
     private func switchProvider(_ provider: PolishProvider) {
         var edited = model.bench.version(of: configuration.id) ?? configuration
         guard edited.provider != provider else { return }
         let claude: Set<PolishProvider> = [.claudeCode, .anthropic]
         let keepsModel = claude.contains(edited.provider) && claude.contains(provider) && !edited.model.isEmpty
+        edited.effort = PolishConfiguration.effort(edited.effort, switchingFrom: edited.provider, to: provider)
         edited.provider = provider
         if !keepsModel {
             let fromSettings = model.settings.openAIModel.trimmingCharacters(in: .whitespacesAndNewlines)
