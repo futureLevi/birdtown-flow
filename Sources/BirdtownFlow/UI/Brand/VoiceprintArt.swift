@@ -12,8 +12,10 @@ import SwiftUI
 /// away from it.
 ///
 /// Cost: between sweeps nothing redraws (the timeline is paused). During a sweep or the
-/// opening, two canvases of about 130 small shapes redraw at up to 60 Hz. The blurred haze and
-/// glows are static layers the GPU only composites.
+/// opening, two canvases of about 130 small shapes redraw at up to 60 Hz. The haze and glows
+/// are static layers the GPU only composites. The design's soft light (its CSS blurs) is
+/// painted as gradients rather than blurred, so it costs nothing per frame and snapshots
+/// show what people see.
 struct VoiceprintArt: View {
     /// Seconds into a sweep to draw instead of animating, for snapshots.
     var sweepPhase: Double?
@@ -44,7 +46,6 @@ struct VoiceprintArt: View {
                 let look = motionFrame(at: context.date)
                 ZStack {
                     Canvas { context, _ in Voiceprint.drawBloom(in: &context, frame: look) }
-                        .blur(radius: Voiceprint.Bloom.blur)
                         .opacity(Voiceprint.Bloom.opacity)
                         .blendMode(.screen)
                     Canvas { context, _ in Voiceprint.drawLines(in: &context, frame: look) }
@@ -59,19 +60,34 @@ struct VoiceprintArt: View {
 
     // MARK: Static layers
 
-    /// A broad spectral haze behind the swell.
+    /// A broad spectral haze behind the swell: the design's ellipse with its horizontal
+    /// spectrum, softened as its blur would soften it.
     private var haze: some View {
         let haze = Voiceprint.haze
-        return Ellipse()
-            .fill(LinearGradient(
-                stops: haze.stops.map { .init(color: Color(hex: $0.color, alpha: $0.alpha), location: $0.location) },
-                startPoint: .leading,
-                endPoint: .trailing
-            ))
-            .frame(width: haze.rect.width, height: haze.rect.height)
-            .blur(radius: haze.blur)
+        let rect = haze.rect.insetBy(dx: -Voiceprint.Soft.reach * haze.blur, dy: -Voiceprint.Soft.reach * haze.blur)
+        // The spectrum's stops, moved into the wider frame (it runs past its ends in the end
+        // colours, as the blur spreads them).
+        let colors = haze.stops.map {
+            Gradient.Stop(color: Color(hex: $0.color, alpha: $0.alpha),
+                          location: (haze.rect.minX - rect.minX + $0.location * haze.rect.width) / rect.width)
+        }
+        return Rectangle()
+            .fill(LinearGradient(stops: colors, startPoint: .leading, endPoint: .trailing))
+            .mask {
+                LinearGradient(
+                    stops: Voiceprint.Soft.blurredBand(halfWidth: haze.rect.width / 2, sigma: haze.blur),
+                    startPoint: .leading, endPoint: .trailing
+                )
+            }
+            .mask {
+                LinearGradient(
+                    stops: Voiceprint.Soft.blurredBand(halfWidth: haze.rect.height / 2, sigma: haze.blur),
+                    startPoint: .top, endPoint: .bottom
+                )
+            }
+            .frame(width: rect.width, height: rect.height)
             .opacity(haze.opacity)
-            .position(x: haze.rect.midX, y: haze.rect.midY)
+            .position(x: rect.midX, y: rect.midY)
             .blendMode(.screen)
     }
 
@@ -80,23 +96,26 @@ struct VoiceprintArt: View {
     private var glows: some View {
         ZStack {
             ForEach(Array(Voiceprint.glows.enumerated()), id: \.offset) { _, glow in
-                let color = Color(hex: glow.color)
+                let rect = glow.rect.insetBy(dx: -Voiceprint.Soft.reach * Voiceprint.Bloom.glowBlur,
+                                             dy: -Voiceprint.Soft.reach * Voiceprint.Bloom.glowBlur)
                 Ellipse()
                     .fill(EllipticalGradient(
-                        colors: [color.opacity(glow.alpha), color.opacity(0)],
+                        stops: Voiceprint.Soft.blurredGlow(
+                            color: Color(hex: glow.color), alpha: glow.alpha,
+                            halfWidth: glow.rect.width / 2, sigma: Voiceprint.Bloom.glowBlur
+                        ),
                         center: .center,
                         startRadiusFraction: 0,
                         endRadiusFraction: 0.5
                     ))
-                    .frame(width: glow.rect.width, height: glow.rect.height)
-                    .blur(radius: Voiceprint.Bloom.glowBlur)
+                    .frame(width: rect.width, height: rect.height)
                     .scaleEffect(x: 1, y: openingPending ? 0.01 : 1)
                     .opacity(openingPending ? 0 : 1)
                     .animation(
                         Motion.heroGlowRise.delay(VoiceprintMotion.opening(delayAt: Double(glow.centerX))),
                         value: openingPending
                     )
-                    .position(x: glow.rect.midX, y: glow.rect.midY)
+                    .position(x: rect.midX, y: rect.midY)
                     .blendMode(.screen)
             }
         }
@@ -270,9 +289,12 @@ enum Voiceprint {
         context.opacity = 1
     }
 
-    /// The loud lines again as round-capped strokes, for the blurred bloom layer.
+    /// The loud lines again as soft, round-capped strokes: the design's blurred bloom, painted
+    /// as a few widening, fainter strokes instead of blurred.
     static func drawBloom(in context: inout GraphicsContext, frame: Frame) {
-        let style = StrokeStyle(lineWidth: Bloom.width, lineCap: .round)
+        let passes = bloomPasses.map {
+            (style: StrokeStyle(lineWidth: Bloom.width + $0.spread * Bloom.blur, lineCap: .round), alpha: $0.alpha)
+        }
         for (index, line) in lines.enumerated() where line.x > bloomFromX {
             let sheen = frame.sheen(at: line.x)
             let amp = line.amp * VoiceprintMotion.heightFactor(sheen: sheen) * frame.rise(at: line.x)
@@ -282,10 +304,68 @@ enum Voiceprint {
             var path = Path()
             path.move(to: CGPoint(x: line.x, y: Double(centerY - half)))
             path.addLine(to: CGPoint(x: line.x, y: Double(centerY + half)))
-            context.opacity = VoiceprintMotion.clamp(line.bloomAlpha * weight * (1 + 0.6 * sheen))
-            context.stroke(path, with: .color(colors[index].bloom), style: style)
+            let strength = VoiceprintMotion.clamp(line.bloomAlpha * weight * (1 + 0.6 * sheen))
+            for pass in passes {
+                context.opacity = strength * pass.alpha
+                context.stroke(path, with: .color(colors[index].bloom), style: pass.style)
+            }
         }
         context.opacity = 1
+    }
+
+    /// The bloom's blur as strokes: each pass is wider by `spread` blur radii and adds `alpha`
+    /// of the light, so the centre gets about a third of a sharp line's, as a blur gives it.
+    private struct BloomPass {
+        let spread: CGFloat
+        let alpha: Double
+    }
+
+    private static let bloomPasses = [
+        BloomPass(spread: 0, alpha: 0.12),
+        BloomPass(spread: 1.2, alpha: 0.12),
+        BloomPass(spread: 2.6, alpha: 0.12),
+    ]
+
+    /// Painted stand-ins for the design's gaussian blurs (CSS `blur(r)` is a gaussian with
+    /// sigma r).
+    enum Soft {
+        /// How far, in sigmas, painted light reaches past the shape it softens.
+        static let reach: CGFloat = 2.5
+        private static let samples = 16
+
+        /// A band `2 * halfWidth` wide, blurred, across a span `reach` sigmas wider on each
+        /// side: alpha stops for a mask.
+        static func blurredBand(halfWidth: CGFloat, sigma: CGFloat) -> [Gradient.Stop] {
+            let extent = halfWidth + reach * sigma
+            let scale = Double(sigma) * 2.0.squareRoot()
+            return (0...samples).map { index in
+                let location = Double(index) / Double(samples)
+                let x = (location * 2 - 1) * Double(extent)
+                let alpha = 0.5 * (erf((x + Double(halfWidth)) / scale) - erf((x - Double(halfWidth)) / scale))
+                return Gradient.Stop(color: .white.opacity(alpha), location: location)
+            }
+        }
+
+        /// A radial glow fading linearly from `alpha` at its centre to nothing at `halfWidth`,
+        /// blurred: colour stops from the centre out to `reach` sigmas past its edge.
+        static func blurredGlow(color: Color, alpha: Double, halfWidth: CGFloat, sigma: CGFloat) -> [Gradient.Stop] {
+            let extent = Double(halfWidth + reach * sigma)
+            let half = Double(halfWidth)
+            let sigma = Double(sigma)
+            let cone = { (x: Double) in max(0, 1 - abs(x) / half) }
+            // Sample the blur along one axis; the glow's ellipse carries it around.
+            let step = 0.5
+            let kernel = stride(from: -3 * sigma, through: 3 * sigma, by: step).map { offset in
+                (offset, exp(-offset * offset / (2 * sigma * sigma)))
+            }
+            let total = kernel.reduce(0) { $0 + $1.1 }
+            return (0...samples).map { index in
+                let location = Double(index) / Double(samples)
+                let x = location * extent
+                let value = kernel.reduce(0) { $0 + cone(x - $1.0) * $1.1 } / total
+                return Gradient.Stop(color: color.opacity(alpha * value), location: location)
+            }
+        }
     }
 
     private static func fill(
