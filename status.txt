@@ -1,0 +1,9 @@
+sha=103e7b1799a8af9b3c6a93b32e0b0d92a0629d6d
+branch=feature/voiceprint-hero
+build=success
+test=success
+snapshots=success
+synth=success
+speech=success
+segmented=success
+release=skipped
