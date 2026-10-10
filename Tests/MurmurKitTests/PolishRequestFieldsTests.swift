@@ -160,8 +160,11 @@ struct PolishRequestFieldsTests {
     @Test("A server that doesn't know reasoning_effort is asked again without it, and later dictations leave it out")
     func effortRetry() async throws {
         let client = makeClient(effort: .low, model: "llama-3.3-70b-versatile")
+        #expect(client.sentReasoningEffort == "low")
         let server = FakeServer([(400, errorBody(effortRejection)), (200, finished)])
         let text = try await client.polish(dictation(), send: server.send)
+        // What History records as sent from now on.
+        #expect(client.sentReasoningEffort == nil)
         #expect(text == "So I think we should go.")
         #expect(server.sent.count == 2)
         #expect(server.sent[0]["reasoning_effort"] as? String == "low")

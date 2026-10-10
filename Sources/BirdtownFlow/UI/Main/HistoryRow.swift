@@ -711,22 +711,33 @@ struct OriginalPanel: View {
 struct TimingsLine: View {
     let record: HistoryRecord
 
-    /// How much a line says beyond the numbers. A narrow window steps down a level before
-    /// anything is clipped.
+    /// How much the numbers line says beyond the numbers. A narrow window steps down a level
+    /// before anything is clipped.
     private enum Detail {
-        /// The speed, how polish went (a cold start, the model's own time, the model and its
-        /// effort) and how long the microphone took to start.
-        case full
         /// The speed and the polisher's name.
         case brief
         case numbersOnly
     }
 
     var body: some View {
-        ViewThatFits(in: .horizontal) {
-            line(.full)
-            line(.brief)
-            line(.numbersOnly)
+        VStack(alignment: .leading, spacing: Spacing.xs) {
+            ViewThatFits(in: .horizontal) {
+                line(.brief)
+                line(.numbersOnly)
+            }
+            if let details {
+                HStack(spacing: Spacing.l) {
+                    // Lines the details up under the numbers.
+                    Image(systemName: "stopwatch")
+                        .hidden()
+                        .accessibilityHidden(true)
+                    Text(details)
+                        .foregroundStyle(Palette.inkTertiary)
+                        .monospacedDigit()
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                }
+            }
         }
         .font(Typography.caption)
         .help("Measured from when you let go of the key. Other is cleanup, the dictionary and typing the text. "
@@ -756,28 +767,31 @@ struct TimingsLine: View {
                     item("Other", timings.otherMs)
                 }
                 item("Total", timings.totalMs, emphasized: true)
-                // Before key-up, so not part of the total.
-                if detail == .full, let micLiveMs = timings.micLiveMs {
-                    item("Mic", micLiveMs)
-                }
             }
         }
         .fixedSize()
     }
 
-    /// "(cold start, model 1,180 ms, <model> low)" in full; the polisher's name
-    /// when that's all there is, or the line is short of room.
+    /// "(Claude Code)": the polisher's name, while the line has room for it.
     private func polishDetail(_ detail: Detail) -> String? {
-        let named = polisher.map { "(\($0))" }
-        switch detail {
-        case .numbersOnly:
-            return nil
-        case .brief:
-            return named
-        case .full:
-            let details = record.timings.polishDetails(format: Self.format)
-            return details.isEmpty ? named : "(\(details.joined(separator: ", ")))"
+        detail == .brief ? polisher.map { "(\($0))" } : nil
+    }
+
+    /// "Polish: cold start, model 1,180 ms, <model> low · Mic 45 ms", under the numbers: how
+    /// polish went, and how long the microphone took to start (before key-up, so not part of
+    /// the total). `nil` when neither was recorded.
+    private var details: String? {
+        let timings = record.timings
+        guard !timings.isEmpty else { return nil }
+        var parts: [String] = []
+        let polish = timings.polishDetails(format: Self.format)
+        if timings.polishMs > 0, !polish.isEmpty {
+            parts.append("Polish: " + polish.joined(separator: ", "))
         }
+        if let micLiveMs = timings.micLiveMs {
+            parts.append("Mic \(Self.format(micLiveMs))")
+        }
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
     }
 
     private func item(_ label: String, _ milliseconds: Int, detail: String? = nil, emphasized: Bool = false) -> some View {

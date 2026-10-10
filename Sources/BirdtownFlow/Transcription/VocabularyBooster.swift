@@ -156,12 +156,21 @@ actor VocabularyBooster {
                   !candidate.wordRange.isEmpty
             else { continue }
             let heard = Array(evidence.baseWords[candidate.wordRange])
-            if let kept = BoostGuard.span(heard: heard, term: candidate.canonicalTerm) {
-                let start = candidate.wordRange.lowerBound
-                accepted.append(Rewrite(candidate: candidate, replaced: (start + kept.lowerBound)..<(start + kept.upperBound)))
-            } else {
+            guard let kept = BoostGuard.span(heard: heard, term: candidate.canonicalTerm) else {
                 vetoed += 1
+                continue
             }
+            let start = candidate.wordRange.lowerBound
+            let replaced = (start + kept.lowerBound)..<(start + kept.upperBound)
+            // FluidAudio may have compared exactly the narrowed words with this term already,
+            // and found the audio favours them as heard ("cloud code" inside "cloud code. It").
+            if replaced != candidate.wordRange, evidence.candidates.contains(where: {
+                $0.wordRange == replaced && $0.canonicalTerm == candidate.canonicalTerm && !$0.comparisonPassed
+            }) {
+                vetoed += 1
+                continue
+            }
+            accepted.append(Rewrite(candidate: candidate, replaced: replaced))
         }
         if vetoed > 0 {
             Log.speech.info("vocabulary boosting: \(vetoed, privacy: .public) rewrite(s) vetoed by BoostGuard")

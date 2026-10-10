@@ -56,6 +56,7 @@ public enum BoostGuard {
     /// "BirdTown Flow" and rewrite all three words, dropping "will" (seen in CI). When the
     /// heard words outnumber the term's and leaving some out at either end spells the term
     /// better, and at least `narrowedSimilarity`, only those are replaced and the others stay.
+    /// The caller still checks the rescorer didn't already turn the narrowed words down.
     public static func span(heard: [String], term: String) -> Range<Int>? {
         let written = words(of: term)
         if heard.count > written.count, !written.isEmpty {

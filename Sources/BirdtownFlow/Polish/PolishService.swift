@@ -86,6 +86,8 @@ final class PolishService {
                 return ClaudeCodeReply(text: try await client.polish(request))
             }
             if client is ClaudeCodePolisher { diagnostics.record(reply) }
+            // A server that turned `reasoning_effort` down was just asked again without it.
+            if let compatible = client as? OpenAICompatibleClient { diagnostics.effort = compatible.sentReasoningEffort }
             let output = reply.text
             let elapsed = Self.seconds(clock.now - started)
             guard let accepted = PolishGuard.accept(
@@ -104,6 +106,7 @@ final class PolishService {
             // No model or session time without an answer, but how the session started is known.
             let start = claudeStart.withLock { $0 }
             if let start { diagnostics.record(start) }
+            if let compatible = client as? OpenAICompatibleClient { diagnostics.effort = compatible.sentReasoningEffort }
             return Outcome(
                 text: request.text, provider: nil, note: note, rejected: Self.isUnusableReply(error),
                 diagnostics: diagnostics)
@@ -126,8 +129,7 @@ final class PolishService {
             return PolishDiagnostics(model: anthropic.modelID, effort: anthropic.sentEffort)
         }
         if let compatible = client as? OpenAICompatibleClient {
-            // What was asked for: a server that turns `reasoning_effort` down gets the request again without it.
-            return PolishDiagnostics(model: named(compatible.model), effort: compatible.reasoningEffort)
+            return PolishDiagnostics(model: named(compatible.model), effort: compatible.sentReasoningEffort)
         }
         return PolishDiagnostics()
     }

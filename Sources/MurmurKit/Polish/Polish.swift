@@ -884,6 +884,14 @@ public struct OpenAICompatibleClient: PolishClient {
     /// `reasoning_effort` for the picked effort; `nil` when none was.
     public var reasoningEffort: String? { effort.flatMap(Self.reasoningEffort(for:)) }
 
+    /// The `reasoning_effort` a request to this endpoint and model goes out with now: `nil`
+    /// once the server has turned it down and answered without it (`rejectedFields`).
+    public var sentReasoningEffort: String? {
+        let entry = Self.memoEntry(Self.memoKey(baseURL: baseURL, model: model), .reasoningEffort)
+        guard let reasoningEffort, !Self.rejectedFields.contains(entry) else { return nil }
+        return reasoningEffort
+    }
+
     /// Servers know low, medium and high, so Max asks for high.
     static func reasoningEffort(for effort: PolishEffort) -> String? {
         switch effort {
