@@ -129,8 +129,9 @@ actor VocabularyBooster {
     ) async -> Rescored? {
         let evidence: VocabularyRescorer.CandidateEvidenceOutput
         do {
+            // No terms: the log-probs don't depend on them, and the per-term search goes unused.
             let spotted = try await session.spotter.spotKeywordsWithLogProbs(
-                audioSamples: samples, customVocabulary: session.vocabulary, minScore: nil)
+                audioSamples: samples, customVocabulary: CustomVocabularyContext(terms: []))
             guard !spotted.logProbs.isEmpty else { return nil }
             // The same call `VocabularyBoostingSession.rescore` makes, minus applying the result.
             evidence = session.rescorer.ctcTokenEvaluateCandidates(

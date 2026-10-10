@@ -76,8 +76,9 @@ enum SpeechSmokeTest {
     /// pass on the same machine, since CI's virtual Mac is much slower than a real one: the
     /// windows together take at most 1.75× the whole pass (their overlap alone adds about a
     /// quarter), and no window more than twice the whole pass's time for 15 s of audio. Each
-    /// `--term <phrase>` is boosted and must come out of both; `--expect-forced` asks for at
-    /// least one cut made without a pause. Any failed check exits non-zero.
+    /// `--term <phrase>` is boosted (the CTC model must load) and must come out of both, and
+    /// what boosting rewrote in each is printed; `--expect-forced` asks for at least one cut
+    /// made without a pause. Any failed check exits non-zero.
     private static func compareSegmented(
         _ samples: [Float], engine: any TranscriptionEngine, models: ModelManager, arguments: [String]
     ) async throws -> Int32 {
@@ -86,9 +87,10 @@ enum SpeechSmokeTest {
             return 5
         }
         let terms = arguments.indices.dropLast().compactMap { arguments[$0] == "--term" ? arguments[$0 + 1] : nil }
+        var boostingReady = true
         if !terms.isEmpty {
-            let ready = await models.prepareBoosting(for: terms)
-            print("[segmented] boosting \(terms.joined(separator: ", ")): \(ready ? "ready" : "NOT ready")")
+            boostingReady = await models.prepareBoosting(for: terms)
+            print("[segmented] boosting \(terms.joined(separator: ", ")): \(boostingReady ? "ready" : "NOT ready")")
         }
         let clock = ContinuousClock()
 
@@ -112,6 +114,9 @@ enum SpeechSmokeTest {
         for (index, part) in segmented.parts.enumerated() {
             print("[segmented] part \(index + 1): \(part)")
         }
+        // Whether a term came from boosting or the model heard it unaided.
+        print("[segmented] boosted whole:   \(Self.rewrites(whole.boosted))")
+        print("[segmented] boosted windows: \(Self.rewrites(segmented.transcript.boosted))")
 
         let (removed, added) = WordDiff.counts(original: whole.text, revised: segmented.transcript.text)
         let words = whole.text.split(whereSeparator: \.isWhitespace).count
@@ -144,12 +149,23 @@ enum SpeechSmokeTest {
         if arguments.contains("--expect-forced") {
             check("a cut without a pause", segmented.forcedCuts >= 1, "\(segmented.forcedCuts) forced")
         }
+        // Without the CTC model both passes run unboosted, and a term the model hears unaided
+        // would still pass the check below.
+        if !terms.isEmpty {
+            check("boosting ready", boostingReady, boostingReady ? "CTC model and terms loaded" : "not loaded")
+        }
         for term in terms {
             let inWhole = whole.text.localizedCaseInsensitiveContains(term)
             let inWindows = segmented.transcript.text.localizedCaseInsensitiveContains(term)
             check("\"\(term)\" in both", inWhole && inWindows, "whole \(inWhole), windows \(inWindows)")
         }
         return failed ? 5 : 0
+    }
+
+    /// `"Bird town" → "Birdtown" ×1, …`, or `none`.
+    private static func rewrites(_ corrections: [AppliedCorrection]) -> String {
+        guard !corrections.isEmpty else { return "none" }
+        return corrections.map { "\"\($0.from)\" → \"\($0.to)\" ×\($0.count)" }.joined(separator: ", ")
     }
 
     private static func seconds(_ duration: Duration) -> Double {
