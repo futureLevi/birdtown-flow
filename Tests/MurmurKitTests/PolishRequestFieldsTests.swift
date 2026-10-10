@@ -260,14 +260,73 @@ struct PolishRequestFieldsTests {
         #expect(PolishConfiguration.effort(.max, offeredBy: .anthropic) == .max)
         #expect(PolishConfiguration.effort(.max, offeredBy: .appleIntelligence) == .max)
 
-        let json = """
-            {"configurations":[{"id":"\(UUID().uuidString)","name":"Groq","provider":"openAICompatible",\
-            "model":"gpt-oss-20b","effort":"max","instructions":""}]}
-            """
+        let file = labFile(#"{"provider":"openAICompatible","model":"gpt-oss-20b","reasoningEffort":"max"}"#)
+        #expect(try decodeLab(file).first?.effort == PolishEffort.high)
+    }
+
+    @Test("A level never crosses to or from an OpenAI-compatible endpoint", arguments: [
+        (PolishProvider.claudeCode, PolishProvider.openAICompatible, PolishEffort.low, PolishEffort.standard),
+        (.anthropic, .openAICompatible, .max, .standard),
+        (.openAICompatible, .anthropic, .medium, .standard),
+        (.openAICompatible, .claudeCode, .high, .standard),
+        // By way of a provider that takes none: the level that was kept, hidden, stays behind.
+        (.appleIntelligence, .openAICompatible, .low, .standard),
+        (.openAICompatible, .appleIntelligence, .low, .standard),
+        // Claude to Claude, or to and from one that takes none, keeps it as it always did.
+        (.claudeCode, .anthropic, .max, .max),
+        (.anthropic, .claudeCode, .low, .low),
+        (.claudeCode, .appleIntelligence, .low, .low),
+        (.appleIntelligence, .anthropic, .high, .high),
+    ])
+    func labEffortOnSwitch(from old: PolishProvider, to new: PolishProvider, effort: PolishEffort, kept: PolishEffort) {
+        #expect(PolishConfiguration.effort(effort, switchingFrom: old, to: new) == kept)
+    }
+
+    @Test("An older Lab file's hidden Claude level isn't sent to an OpenAI-compatible endpoint")
+    func labLegacyOpenAIEffort() throws {
+        let configurations = try decodeLab(
+            labFile(#"{"provider":"openAICompatible","model":"gpt-4.1-mini","effort":"low"}"#),
+            labFile(#"{"provider":"anthropic","model":"claude-haiku-5-5","effort":"low"}"#),
+            labFile(#"{"provider":"appleIntelligence","effort":"high"}"#))
+        #expect(configurations.map(\.effort) == [PolishEffort.standard, .low, .high])
+    }
+
+    @Test("A picked reasoning effort survives a save, under a key older builds don't read")
+    func labEffortRoundTrip() throws {
+        // Whole seconds, which is all ISO 8601 keeps.
+        let starters = PolishConfiguration.starters(now: Date(timeIntervalSince1970: 1_800_000_000))
+        var openAI = starters[0]
+        openAI.provider = .openAICompatible
+        openAI.model = "gpt-oss-20b"
+        openAI.effort = .medium
+        let claude = starters[1]
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        let data = try encoder.encode(PolishLabState(configurations: [openAI, claude]))
+
+        let saved = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let rows = try #require(saved["configurations"] as? [[String: Any]])
+        #expect(rows[0]["reasoningEffort"] as? String == "medium")
+        #expect(rows[0]["effort"] == nil)
+        #expect(rows[1]["effort"] as? String == "low")
+        #expect(rows[1]["reasoningEffort"] == nil)
+
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
-        let state = try decoder.decode(PolishLabState.self, from: Data(json.utf8))
-        #expect(state.configurations.first?.effort == PolishEffort.high)
+        let loaded = try decoder.decode(PolishLabState.self, from: data)
+        #expect(loaded.configurations == [openAI, claude])
+    }
+
+    /// One configuration as lab.json keeps it: the fields of `object`, after an id and a name.
+    private func labFile(_ object: String) -> String {
+        #"{"id":"\#(UUID().uuidString)","name":"Saved","instructions":"",\#(object.dropFirst())"#
+    }
+
+    private func decodeLab(_ configurations: String...) throws -> [PolishConfiguration] {
+        let json = #"{"configurations":[\#(configurations.joined(separator: ","))]}"#
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        return try decoder.decode(PolishLabState.self, from: Data(json.utf8)).configurations
     }
 }
 
