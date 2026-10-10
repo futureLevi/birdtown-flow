@@ -15,6 +15,9 @@ final class LiveDictation {
     var onCommittedText: (@MainActor (String) -> Void)?
     /// The windowed transcription in progress. `nil` until the recording is long enough.
     private(set) var transcriber: SegmentedTranscriber?
+    /// Audio is on disk and its hidden row saved, and both are still this recording's to keep
+    /// or delete: `keepRecordedAudio` would keep them.
+    var hasSavedAudio: Bool { isSaved && !isCancelled && !isHandedOff }
 
     /// Samples captured before windows start being cut (20 s).
     static let armingSamples = 320_000

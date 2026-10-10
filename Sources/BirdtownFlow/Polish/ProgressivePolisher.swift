@@ -17,9 +17,9 @@ final class ProgressivePolisher {
     /// The part being polished now.
     private(set) var inFlight: (request: PolishRequest, task: Task<PolishService.Outcome, Never>)?
 
-    /// The provider the cached and in-flight results come from; `nil` until the first part
-    /// is sent. Key-up uses them only if it polishes with the same one.
-    var provider: PolishProvider? { polisher?.provider }
+    /// The provider, model and endpoint the cached and in-flight results come from; `nil`
+    /// until the first part is sent. Key-up uses them only if it polishes with the same ones.
+    private(set) var identity: PolishService.ClientIdentity?
 
     private let service: PolishService
     private let settings: Settings
@@ -111,6 +111,7 @@ final class ProgressivePolisher {
                     return
                 }
                 polisher = made
+                identity = service.clientIdentity(using: configuration)
             }
             guard let polisher else { return }
             start(request, number: index + 1, client: polisher.client, provider: polisher.provider)
@@ -125,14 +126,15 @@ final class ProgressivePolisher {
 
     /// Whether key-up would polish the way the parts here are polished: the app still has
     /// `template`'s style, the style the same Lab configuration (or none, and unchanged), and
-    /// that resolves to the provider the first part went to.
+    /// that resolves to the provider, model and endpoint the first part went to. The client
+    /// was made from them once; no part may go on to a model or endpoint Settings dropped.
     private func polishesSameWay(as template: PolishRequest) -> Bool {
         guard settings.style(for: template.category) == template.style,
               lab.configuration(for: template.style) == configuration
         else { return false }
-        let provider = configuration?.provider ?? settings.polishProvider
-        guard provider != .off else { return false }
-        if let polisher, polisher.provider != provider { return false }
+        let current = service.clientIdentity(using: configuration)
+        guard current.provider != .off else { return false }
+        if let identity, identity != current { return false }
         return true
     }
 

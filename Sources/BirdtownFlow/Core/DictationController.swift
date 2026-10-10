@@ -229,7 +229,16 @@ final class DictationController {
     func deactivate() {
         rearmTask?.cancel()
         rearmTask = nil
-        if session != nil { cancel() }
+        // Shortcuts pause while a new one is recorded, which ends a recording in progress.
+        // Nobody pressed Esc, so a long one keeps the audio it saved, with Retry (rule 2); a
+        // short one is cancelled.
+        if let current = session {
+            if current.live?.hasSavedAudio == true {
+                discardSession(reason: "Setting a shortcut stopped the recording")
+            } else {
+                cancel()
+            }
+        }
         hotkey.stop()
         isHotkeyActive = false
         pasteLastShortcut.unregister()
