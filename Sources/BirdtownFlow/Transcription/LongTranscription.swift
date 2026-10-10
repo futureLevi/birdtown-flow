@@ -20,10 +20,17 @@ struct TranscriptionReport: Sendable {
     }
 
     var path: Path = .whole
+    /// Windows of a `.segmentedLive` transcript decoded while recording. None when the key
+    /// came up before the first was cut, so key-up decoded every window.
+    var liveWindows = 0
     /// Why a segmented path fell back to `.whole`: a fixed token, e.g. "engineChanged".
     var fallbackReason: String?
     /// Sub-timings of the path taken.
     var line = TimingLine("transcribe")
+
+    /// Some of the transcript was decoded before key-up, so the time key-up waited for it
+    /// isn't the engine's time on the whole recording.
+    var decodedWhileRecording: Bool { path == .segmentedLive && liveWindows > 0 }
 }
 
 /// Transcribes a finished recording: segmented for long ones, whole-buffer otherwise.
@@ -54,6 +61,7 @@ enum LongTranscription {
                     do {
                         let outcome = try await live.finish(samples)
                         report.path = .segmentedLive
+                        report.liveWindows = outcome.liveWindows
                         report.line = outcome.line
                         return (outcome.transcript, report)
                     } catch let unavailable as SegmentedTranscriber.Unavailable {

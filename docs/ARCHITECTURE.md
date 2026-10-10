@@ -82,7 +82,8 @@ recording, every second, once 20 s of audio exist:
               1. the window's audio is appended to the record's WAV (IncrementalWAVWriter)
               2. first window only: a hidden placeholder History row is saved
               3. only then is the window decoded and boosted (SegmentedTranscriber)
-              committed text → ProgressivePolisher: finished parts polished and cached
+              committed text (boosted, the start of key-up's transcript) →
+                ProgressivePolisher: finished parts polished and cached
 key up   ─► LiveDictation.stop; the WAV is rewritten whole, atomically, at the same URL;
               the placeholder row is replaced (HistoryStore.update)
               LongTranscription: in-flight window, then only the tail (≤ 15 s), stitched
@@ -106,7 +107,10 @@ key up   ─► LiveDictation.stop; the WAV is rewritten whole, atomically, at t
   is rejected by `PolishGuard` keeps its dictated text; the note says how many parts did.
 - **Timing.** Every dictation and Retry logs one summary line to the `timing` category:
   `/usr/bin/log show --last 1h --predicate 'subsystem == "com.birdtownlabs.flow" AND category == "timing"'`.
-  Per-window and per-part lines are `.info` on `speech` and `polish`.
+  Per-window and per-part lines are `.info` on `speech` and `polish`. History's Timings
+  measure from key-up too, so a dictation transcribed while it was recorded
+  (`DictationTimings.transcribedWhileRecording`) shows no real-time factor: key-up only
+  waited for its last few seconds.
 
 ## Rules for anyone changing this code
 

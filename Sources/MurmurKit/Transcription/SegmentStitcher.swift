@@ -49,7 +49,7 @@ public enum SegmentStitcher {
         public var tokens: [TimedToken]
         /// Punctuation the window heard after a word the previous window kept (its "." when
         /// the previous window ended before hearing it). `join` attaches it only where the
-        /// previous text has no punctuation of its own.
+        /// previous text has no punctuation of its own, less any marks it already ends with.
         public var leadingPunctuation: String
         /// The last kept words, at most `seamRun`, for the next window's seam check. Empty
         /// when nothing was kept.
@@ -235,20 +235,33 @@ public enum SegmentStitcher {
     // MARK: - Joining
 
     /// The windows' texts as one transcript: single spaces between parts, a part's leading
-    /// punctuation attached only where the text before it has none. Capitalisation is
-    /// never changed.
+    /// punctuation attached only where the text before it has none, and never repeating a
+    /// mark it already ends with. Capitalisation is never changed.
     public static func join(_ parts: [Part]) -> String {
         var joined = ""
         for part in parts {
             let leading = part.leadingPunctuation.trimmingCharacters(in: .whitespaces)
             if !leading.isEmpty, let last = joined.last, !closingPunctuation.contains(last) {
-                joined += leading
+                joined += unwritten(leading, after: joined)
             }
             let text = part.text.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !text.isEmpty else { continue }
             joined += joined.isEmpty ? text : " " + text
         }
         return joined
+    }
+
+    /// `leading` without the marks `text` already ends with. When the windows line up, the
+    /// run after the previous window's last word is taken wherever this window heard it, so
+    /// a closing quote, bracket or apostrophe both heard is in both: `players'` then `'`
+    /// adds nothing, `said "yes"` then `".` adds only the ".".
+    private static func unwritten(_ leading: String, after text: String) -> String {
+        // Longest first. A prefix longer than `text` simply isn't its suffix, so the whole
+        // transcript so far is never counted.
+        let overlap = stride(from: leading.count, through: 1, by: -1).first {
+            text.hasSuffix(String(leading.prefix($0)))
+        } ?? 0
+        return String(leading.dropFirst(overlap))
     }
 
     /// Words written on both sides of a seam ("the the", or "and tell and tell", across two

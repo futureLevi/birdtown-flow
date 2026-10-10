@@ -198,6 +198,22 @@ private func tokens(_ pieces: [(String, Double)]) -> [SegmentStitcher.TimedToken
     pieces.enumerated().map { SegmentStitcher.TimedToken(text: $1.0, start: $1.1, index: $0) }
 }
 
+/// Two windows either side of a cut at `cut` seconds, kept and joined as
+/// `SegmentedTranscriber` does: what the second one keeps, and the joined text.
+private func stitchedAcrossCut(
+    _ before: [(String, Double)], _ after: [(String, Double)], cut: Double
+) -> (kept: SegmentStitcher.Kept, text: String) {
+    let first = SegmentStitcher.keep(tokens(before), in: 0..<cut, after: nil)
+    let second = SegmentStitcher.keep(
+        tokens(after), in: cut..<Double.infinity, after: first.lastWords, following: first.nextWord
+    )
+    let text = SegmentStitcher.join([
+        SegmentStitcher.Part(leadingPunctuation: first.leadingPunctuation, text: first.text),
+        SegmentStitcher.Part(leadingPunctuation: second.leadingPunctuation, text: second.text),
+    ])
+    return (second, text)
+}
+
 @Suite("SegmentStitcher")
 struct SegmentStitcherTests {
     @Test("Pieces group into words, with joiners and trailing punctuation")
@@ -310,6 +326,84 @@ struct SegmentStitcherTests {
         }
     }
 
+    @Test("A word cut through at the seam is joined without a stray mark")
+    func interiorMarksJoined() {
+        // "don't" across a cut at 24 s. The window before keeps it: its first piece starts
+        // before the cut.
+        let before: [(String, Double)] = [(" I", 23.7), (" don", 23.98), ("'", 24.06), ("t", 24.1), (" know", 24.32)]
+        // The next one times it just after the cut…
+        let deduplicated = stitchedAcrossCut(
+            before, [(" I", 23.72), (" don", 24.02), ("'", 24.08), ("t", 24.12), (" know", 24.32)], cut: 24
+        )
+        #expect(deduplicated.kept.text == "know")
+        #expect(deduplicated.text == "I don't know")
+        // …or just before it, with its apostrophe after the cut.
+        let straddling = stitchedAcrossCut(
+            before, [(" I", 23.71), (" don", 23.99), ("'", 24.05), ("t", 24.09), (" know", 24.31)], cut: 24
+        )
+        #expect(straddling.kept.text == "know")
+        #expect(straddling.text == "I don't know")
+
+        let hyphen = stitchedAcrossCut(
+            [(" a", 23.6), (" co", 23.97), ("-", 24.03), ("op", 24.07), (" meeting", 24.4)],
+            [(" a", 23.62), (" co", 23.99), ("-", 24.04), ("op", 24.08), (" meeting", 24.41)], cut: 24
+        )
+        #expect(hyphen.text == "a co-op meeting")
+        let decimal = stitchedAcrossCut(
+            [(" about", 23.5), (" 3", 23.96), (".", 24.02), ("5", 24.06), (" percent", 24.3)],
+            [(" about", 23.52), (" 3", 24.03), (".", 24.07), ("5", 24.11), (" percent", 24.33)], cut: 24
+        )
+        #expect(decimal.text == "about 3.5 percent")
+    }
+
+    @Test("A mark closing the word before the cut is carried, and written once")
+    func closingMarksJoined() {
+        // The window before the cut ended before hearing the comma, or the full stop.
+        let comma = stitchedAcrossCut(
+            [(" I", 23.7), (" don", 23.98), ("'", 24.06), ("t", 24.1), (" honestly", 24.4)],
+            [(" I", 23.72), (" don", 23.99), ("'", 24.05), ("t", 24.09), (",", 24.15), (" honestly", 24.42)], cut: 24
+        )
+        #expect(comma.kept.leadingPunctuation == ",")
+        #expect(comma.text == "I don't, honestly")
+        let stop = stitchedAcrossCut(
+            [(" on", 23.5), (" Friday", 23.97), (" see", 24.6)],
+            [(" on", 23.52), (" Friday", 24.03), (".", 24.3), (" See", 24.62)], cut: 24
+        )
+        #expect(stop.kept.leadingPunctuation == ".")
+        #expect(stop.text == "on Friday. See")
+
+        // A quote opened after the cut is inside the word. The closing one is carried, and
+        // added only where the window before didn't write it.
+        let quoted: [(String, Double)] = [(" said", 23.92), (" \"", 24.04), ("yes", 24.08), ("\"", 24.32), (" Then", 24.62)]
+        let heardBoth = stitchedAcrossCut(
+            [(" said", 23.9), (" \"", 24.02), ("yes", 24.06), ("\"", 24.3), (" Then", 24.6)], quoted, cut: 24
+        )
+        #expect(heardBoth.kept.leadingPunctuation == "\"")
+        #expect(heardBoth.text == "said \"yes\" Then")
+        let heardOpening = stitchedAcrossCut([(" said", 23.9), (" \"", 24.02), ("yes", 24.06)], quoted, cut: 24)
+        #expect(heardOpening.text == "said \"yes\" Then")
+        let fullStop = stitchedAcrossCut(
+            [(" said", 23.9), (" \"", 24.02), ("yes", 24.06), ("\"", 24.3)],
+            [(" said", 23.92), (" \"", 24.04), ("yes", 24.08), ("\"", 24.32), (".", 24.4), (" Then", 24.62)], cut: 24
+        )
+        #expect(fullStop.kept.leadingPunctuation == "\".")
+        #expect(fullStop.text == "said \"yes\". Then")
+
+        // Lined up on words both windows heard well before the cut, the mark after them is
+        // carried too, though the window before already wrote it.
+        let possessive = stitchedAcrossCut(
+            [(" the", 23.2), (" players", 23.5), ("'", 23.8), (" ball", 24.3)],
+            [(" the", 23.22), (" players", 23.52), ("'", 23.82), (" ball", 24.32)], cut: 24
+        )
+        #expect(possessive.kept.leadingPunctuation == "'")
+        #expect(possessive.text == "the players' ball")
+        let bracket = stitchedAcrossCut(
+            [(" see", 23.2), (" (", 23.4), ("above", 23.5), (")", 23.8), (" then", 24.3)],
+            [(" see", 23.25), (" (", 23.42), ("above", 23.55), (")", 23.83), (" then", 24.35)], cut: 24
+        )
+        #expect(bracket.text == "see (above) then")
+    }
+
     @Test("Punctuation heard after the previous window's last word is carried as leading punctuation")
     func leadingPunctuation() {
         let heard = tokens([(" on", 11.4), (" Friday", 11.7), (".", 12.02), (" See", 12.5), (" you", 12.7)])
@@ -361,6 +455,22 @@ struct SegmentStitcherTests {
     func joinKeepsCase() {
         let parts = ["and then", "  we left ", "", "Later, home."].map { SegmentStitcher.Part(text: $0) }
         #expect(SegmentStitcher.join(parts) == "and then we left Later, home.")
+    }
+
+    @Test("The windows joined so far are how the whole transcript begins")
+    func joinGrowsAtTheEnd() {
+        // What `ProgressivePolisher` splits while recording must be the start of what key-up
+        // splits, or no part polished early would match.
+        typealias Part = SegmentStitcher.Part
+        let parts = [
+            Part(text: "on Friday"), Part(leadingPunctuation: ".", text: "See you"), Part(text: ""),
+            Part(leadingPunctuation: ",", text: "said \"yes\""), Part(leadingPunctuation: "\".", text: "Then home."),
+        ]
+        let whole = SegmentStitcher.join(parts)
+        #expect(whole == "on Friday. See you, said \"yes\". Then home.")
+        for count in 1..<parts.count {
+            #expect(whole.hasPrefix(SegmentStitcher.join(Array(parts.prefix(count)))))
+        }
     }
 
     @Test("A word repeated across a seam is reported unless the whole transcript repeats it too")
