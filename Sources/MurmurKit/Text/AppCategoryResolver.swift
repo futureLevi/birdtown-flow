@@ -104,6 +104,18 @@ public enum AppCategoryResolver {
         browsers.contains(bundleID) || webAppPrefixes.contains { bundleID.hasPrefix($0) }
     }
 
+    /// Whether the front window's title can change `bundleID`'s category: a browser, or a web
+    /// app installed from one. Every other app is categorized by its bundle ID alone, so a
+    /// context read without the title (key-down does, to stay instant) already has the
+    /// category the dictation will use.
+    public static func categoryDependsOnTitle(bundleID: String?) -> Bool {
+        guard let bundleID, !bundleID.isEmpty else { return false }
+        if personalApps.contains(bundleID) || workApps.contains(bundleID) || emailApps.contains(bundleID) {
+            return false
+        }
+        return isBrowser(bundleID)
+    }
+
     /// Web apps name themselves in a title segment — usually the last ("Inbox (3) - me@x.com -
     /// Gmail"), sometimes the first ("Messenger | Facebook"). Segments are checked last, first,
     /// then the rest, so a Gmail subject line that mentions Slack still reads as email.
@@ -137,5 +149,18 @@ public enum AppCategoryResolver {
             let regex = try? NSRegularExpression(pattern: pattern, options: caseSensitive ? [] : [.caseInsensitive])
         else { return false }
         return regex.matches(text)
+    }
+}
+
+extension AppContext {
+    /// This context with the focused window's title, and the category the title implies (Gmail
+    /// in a browser is email, not "other"). A title that couldn't be read, or an empty one,
+    /// changes nothing.
+    public func withWindowTitle(_ title: String?) -> AppContext {
+        guard let title, !title.isEmpty else { return self }
+        var context = self
+        context.windowTitle = title
+        context.category = AppCategoryResolver.category(bundleID: bundleID, windowTitle: title)
+        return context
     }
 }
