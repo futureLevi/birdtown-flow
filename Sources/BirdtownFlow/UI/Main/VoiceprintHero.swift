@@ -1,23 +1,24 @@
 import SwiftUI
 
+/// How wide the hero's words may run before they reach the full-strength voice. Outside the
+/// generic hero, so its content closure's type can be inferred.
+struct VoiceprintHeroRoom {
+    var greeting: CGFloat
+    var hint: CGFloat
+}
+
 /// The navy band at the top of Home: the app icon's tile, stretched wide, with the Voiceprint
 /// on its right and the page's own words (the greeting and a hint) on its left.
 struct VoiceprintHero<Content: View>: View {
-    /// How wide the words may run before they reach the full-strength voice.
-    struct Room {
-        var greeting: CGFloat
-        var hint: CGFloat
-    }
-
     /// Seconds into a Shimmer sweep to draw instead of animating, for snapshots.
     var sweepPhase: Double?
-    let content: (Room) -> Content
+    let content: (VoiceprintHeroRoom) -> Content
 
     @Environment(\.colorScheme) private var colorScheme
     @State private var width = Layout.Hero.designWidth
     @State private var isOnScreen = true
 
-    init(sweepPhase: Double? = nil, @ViewBuilder content: @escaping (Room) -> Content) {
+    init(sweepPhase: Double? = nil, @ViewBuilder content: @escaping (VoiceprintHeroRoom) -> Content) {
         self.sweepPhase = sweepPhase
         self.content = content
     }
@@ -27,7 +28,7 @@ struct VoiceprintHero<Content: View>: View {
         let scale = min(1, width / Layout.Hero.designWidth)
         // Where the art's left edge lands: extra width is calm room for the words.
         let artLeft = width - Layout.Hero.designWidth * scale
-        let room = Room(
+        let room = VoiceprintHeroRoom(
             greeting: artLeft + Layout.Hero.greetingEndX * scale - Layout.Hero.textInset,
             hint: artLeft + Layout.Hero.hintEndX * scale - Layout.Hero.textInset
         )
