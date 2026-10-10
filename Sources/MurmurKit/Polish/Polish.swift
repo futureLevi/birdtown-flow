@@ -673,8 +673,8 @@ public struct AnthropicClient: PolishClient {
         urlRequest.setValue(key, forHTTPHeaderField: "x-api-key")
         urlRequest.setValue(Self.apiVersion, forHTTPHeaderField: "anthropic-version")
         urlRequest.setValue("application/json", forHTTPHeaderField: "content-type")
-        let modelID = model.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? Self.defaultModel : model
-        let effortLevel: String? = effort.map(\.value) ?? Self.effort(for: modelID)
+        let modelID = self.modelID
+        let effortLevel = sentEffort
         urlRequest.httpBody = try JSONEncoder().encode(
             Body(
                 model: modelID,
@@ -685,6 +685,17 @@ public struct AnthropicClient: PolishClient {
                 messages: [.init(role: "user", content: PolishPrompt.user(for: request))],
                 output_config: effortLevel.map { Body.OutputConfig(effort: $0) }))
         return urlRequest
+    }
+
+    /// The model a request goes to: `defaultModel` when none is set.
+    public var modelID: String {
+        model.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? Self.defaultModel : model
+    }
+
+    /// The effort level a request sends as `output_config.effort`, or `nil` when it sends none.
+    public var sentEffort: String? {
+        let picked: String?? = effort.map(\.value)
+        return picked ?? Self.effort(for: modelID)
     }
 
     /// Editing needs no deliberation, so a model that thinks before it answers is asked for
@@ -871,7 +882,7 @@ public struct OpenAICompatibleClient: PolishClient {
     }
 
     /// `reasoning_effort` for the picked effort; `nil` when none was.
-    var reasoningEffort: String? { effort.flatMap(Self.reasoningEffort(for:)) }
+    public var reasoningEffort: String? { effort.flatMap(Self.reasoningEffort(for:)) }
 
     /// Servers know low, medium and high, so Max asks for high.
     static func reasoningEffort(for effort: PolishEffort) -> String? {

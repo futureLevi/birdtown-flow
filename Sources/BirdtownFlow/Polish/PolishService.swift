@@ -123,11 +123,11 @@ final class PolishService {
                 model: named(claude.model, or: ClaudeCodePolisher.defaultModel), effort: claude.effort.value)
         }
         if let anthropic = client as? AnthropicClient {
-            return PolishDiagnostics(
-                model: named(anthropic.model, or: AnthropicClient.defaultModel), effort: anthropic.effort?.value)
+            return PolishDiagnostics(model: anthropic.modelID, effort: anthropic.sentEffort)
         }
         if let compatible = client as? OpenAICompatibleClient {
-            return PolishDiagnostics(model: named(compatible.model))
+            // What was asked for: a server that turns `reasoning_effort` down gets the request again without it.
+            return PolishDiagnostics(model: named(compatible.model), effort: compatible.reasoningEffort)
         }
         return PolishDiagnostics()
     }
