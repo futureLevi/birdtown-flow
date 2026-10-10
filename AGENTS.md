@@ -25,7 +25,8 @@ make snapshots      # every screen to ./snapshots, light and dark
 
 - **The HUD never takes focus.** It's a non-activating panel; if it became key, the user's
   text field would lose focus and there'd be nothing to type into.
-- **Audio is written and a History row exists before transcription starts.**
+- **Audio is written and a History row exists before transcription starts.** Live windows
+  decode during recording; the WAV append and placeholder row come first (see ARCHITECTURE).
 - **Polish can only make things better.** Time limit, `PolishGuard`, and any error all fall
   back to the deterministic text.
 - **The dictionary runs last**, after polish. `shared/dictionary-test-vectors.json` is the
@@ -67,6 +68,8 @@ make snapshots      # every screen to ./snapshots, light and dark
   allowed in an app others use: Anthropic's terms don't let third-party apps route
   requests through Free, Pro or Max credentials. Customers use the Anthropic option with
   their own API key.
+- **Decide the `polishWhileSpeaking` default for Anthropic/OpenAI-compatible:** text
+  reaches the provider before key-up and Esc can't recall it.
 - **Decide what the Lab is for customers.** It's an admin tool for tuning prompts. Either
   hide it behind an advanced setting or keep it to internal builds, and drop Claude Code
   from its provider list along with the provider itself.

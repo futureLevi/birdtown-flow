@@ -239,6 +239,65 @@ struct HistoryStoreTests {
         #expect(store.records.map(\.finalText) == ["tie", "newest", "middle", "oldest again"])
     }
 
+    @Test("A recording in progress is saved but hidden; after a crash its row is back as Interrupted")
+    func inProgressSurvivesCrash() throws {
+        let directory = temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = HistoryStore(directory: directory)
+        let earlier = HistoryRecord(createdAt: now.addingTimeInterval(-60), finalText: "Earlier", outcome: .failed)
+        store.add(earlier)
+
+        let id = UUID()
+        let audio = store.newRecordingURL(for: id)
+        try Data([1]).write(to: audio)
+        store.markInProgress(id)
+        store.add(HistoryRecord(id: id, createdAt: now, audioFileName: audio.lastPathComponent,
+                                outcome: .failed, errorMessage: "Interrupted"))
+        let deletion = HistoryDeletion(store: store)
+        #expect(deletion.isHidden(id))
+        #expect(!deletion.isPending(id))
+        #expect(deletion.hidden == [id])
+        #expect(deletion.visible(store.records).map(\.id) == [earlier.id])
+        #expect(store.failedCount == 1)
+        store.flush()
+
+        // The set isn't saved: the row a crash left behind shows, with its audio, for Retry.
+        let reloaded = HistoryStore(directory: directory)
+        #expect(reloaded.inProgress.isEmpty)
+        let row = try #require(reloaded.record(id: id))
+        #expect(row.errorMessage == "Interrupted")
+        #expect(reloaded.audioURL(for: row) != nil)
+        #expect(HistoryDeletion(store: reloaded).visible(reloaded.records).map(\.id) == [id, earlier.id])
+        #expect(reloaded.failedCount == 2)
+    }
+
+    @Test("Taking a row over shows it; deleting a hidden row forgets it; retention spares it")
+    func inProgressCleared() throws {
+        let directory = temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = HistoryStore(directory: directory)
+        let id = UUID()
+        store.markInProgress(id)
+        store.add(HistoryRecord(id: id, createdAt: now, outcome: .failed, errorMessage: "Interrupted"))
+        #expect(store.failedCount == 0)
+        store.clearInProgress(id)
+        #expect(store.inProgress.isEmpty)
+        #expect(store.failedCount == 1)
+
+        let other = UUID()
+        let audio = store.newRecordingURL(for: other)
+        try Data([1]).write(to: audio)
+        store.markInProgress(other)
+        store.add(HistoryRecord(id: other, createdAt: now.addingTimeInterval(-40 * 86_400),
+                                audioFileName: audio.lastPathComponent))
+        store.applyRetention(textDays: 30, audioDays: 0, now: now)
+        #expect(store.record(id: other)?.audioFileName == audio.lastPathComponent)
+        #expect(FileManager.default.fileExists(atPath: audio.path))
+        store.delete(ids: [other])
+        #expect(store.inProgress.isEmpty)
+        #expect(!FileManager.default.fileExists(atPath: audio.path))
+    }
+
     @Test("Cached stats and failed count follow every mutation and the day")
     func cachedDerivedValues() {
         let calendar: Calendar = {

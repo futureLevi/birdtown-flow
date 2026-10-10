@@ -28,7 +28,7 @@ Sources/MurmurKit          pure logic. Foundation only, builds and tests on Linu
   Models/                  shared value types (HistoryRecord, AppContext, Snippet, styles…)
   Text/                    TextPipeline, SnippetStore
   History/                 HistoryStore (JSON + recordings/)
-  Stats/                   DictationStats
+  Stats/                   DictationStats, TimingLine (the per-dictation timing summary)
   Polish/                  prompts, PolishGuard, Anthropic + OpenAI-compatible clients,
                            the Lab's configurations (PolishLabStore → lab.json) and WordDiff
 Sources/BirdtownFlow             the macOS app
@@ -68,12 +68,58 @@ key up   ─► AudioRecorder.stop → samples
               HistoryStore.update(final text, timings, outcome)
 ```
 
+## Long dictations
+
+Short recordings take the path above unchanged. A long one does most of its work before
+the key comes up, so key-up only waits for the last few seconds of speech and the last part
+of the text. Three settings switch each piece off (`liveTranscription`, `polishInParts`,
+`polishWhileSpeaking`); off, a dictation behaves as above.
+
+```
+key down ─► Session.id is the record id from now on; LiveDictation starts (Parakeet only)
+recording, every second, once 20 s of audio exist:
+              SegmentPlanner cuts at a pause: ≤ 12 s kept, + 2 s before and 0.96 s after
+              1. the window's audio is appended to the record's WAV (IncrementalWAVWriter)
+              2. first window only: a hidden placeholder History row is saved
+              3. only then is the window decoded and boosted (SegmentedTranscriber)
+              committed text (boosted, the start of key-up's transcript) →
+                ProgressivePolisher: finished parts polished and cached
+key up   ─► LiveDictation.stop; the WAV is rewritten whole, atomically, at the same URL;
+              the placeholder row is replaced (HistoryStore.update)
+              LongTranscription: in-flight window, then only the tail (≤ 15 s), stitched
+              TextPipeline.prepare
+              PolishService.polishLong: ≥ 250 words → sentence-safe parts of ~150 words,
+                cached ones reused, the rest in parallel under one deadline
+              TextPipeline.finalize, once, on the joined text (dictionary last)
+```
+
+- **Thresholds.** The segmented path is used only for recordings longer than 30 s at key-up;
+  live work starts at 20 s. Polish works in parts only from 250 prepared words.
+- **Same cuts on Retry.** Cuts are planned on WAV-round-tripped samples, so a Retry of the
+  saved WAV cuts the same windows and decodes the same input.
+- **The placeholder row** is hidden while recording (`HistoryStore.inProgress`) and deleted,
+  with its WAV, on Esc. After a crash it stays as an "Interrupted" row with a playable
+  partial WAV, and Retry works on it.
+- **Fallbacks.** Any doubt goes back to the whole-buffer path and logs
+  `live discarded: <reason>`: a short recording, the engine or dictionary changed while
+  recording, a backlog too large to catch up, a window that failed, live audio that doesn't
+  match the final buffer, a WAV append that failed. A polish part that times out, errors or
+  is rejected by `PolishGuard` keeps its dictated text; the note says how many parts did.
+- **Timing.** Every dictation and Retry logs one summary line to the `timing` category:
+  `/usr/bin/log show --last 1h --predicate 'subsystem == "com.birdtownlabs.flow" AND category == "timing"'`.
+  Per-window and per-part lines are `.info` on `speech` and `polish`. History's Timings
+  measure from key-up too, so a dictation transcribed while it was recorded
+  (`DictationTimings.transcribedWhileRecording`) shows no real-time factor: key-up only
+  waited for its last few seconds.
+
 ## Rules for anyone changing this code
 
 1. **The HUD never takes focus.** It is a non-activating `NSPanel`. If it became key, the
    user's text field would lose focus and there would be nothing to type into.
 2. **Audio is saved before transcription.** A crash or engine failure must never lose what
-   the user said. Failed records keep their audio and offer Retry.
+   the user said. Failed records keep their audio and offer Retry. Live windows of a long
+   recording obey it too: each window's audio is appended to the WAV and the placeholder
+   row exists before that window is decoded.
 3. **Polish can only make things better.** Hard timeout, `PolishGuard` rejection, and any
    error all fall back to the deterministic text, silently except for a note in History.
 4. **The dictionary runs last** (after polish), so its guarantees hold whatever a model wrote.

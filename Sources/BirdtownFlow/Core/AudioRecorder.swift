@@ -2,6 +2,7 @@ import AVFoundation
 import AudioToolbox
 import CoreAudio
 import Foundation
+import MurmurKit
 
 enum AudioRecorderError: LocalizedError, Sendable, Equatable {
     case noInputDevice
@@ -117,6 +118,22 @@ final class AudioRecorder: @unchecked Sendable {
     /// Closes the microphone and throws the audio away.
     func cancel() {
         queue.async { _ = self.finishCapture() }
+    }
+
+    /// A copy of what recording `generation` has captured so far, from sample `offset` on,
+    /// and the total captured. An offset at or past the end copies nothing and still reports
+    /// the total. `nil` once that recording has stopped, or when another one is running.
+    /// For a long recording's live windows (`LiveDictation`); capture carries on meanwhile.
+    func capturedAudio(from offset: Int, generation: Int) async -> (samples: [Float], end: Int)? {
+        await withCheckedContinuation { continuation in
+            queue.async {
+                guard let sink = self.sink, sink.generation == generation else {
+                    continuation.resume(returning: nil)
+                    return
+                }
+                continuation.resume(returning: sink.copy(from: offset))
+            }
+        }
     }
 
     // MARK: - Queue
@@ -264,15 +281,29 @@ final class AudioRecorder: @unchecked Sendable {
 
     /// Writes 16-bit PCM, 16 kHz, mono. Atomic: a crash mid-write never leaves a torn file.
     static func writeWAV(_ samples: [Float], to url: URL) throws {
-        let rate = UInt32(sampleRate)
-        var pcm = [Int16](repeating: 0, count: samples.count)
-        for index in samples.indices {
-            let clamped = max(-1, min(1, samples[index]))
-            pcm[index] = Int16((clamped * Float(Int16.max)).rounded())
-        }
+        let pcm = samples.map(WAVQuantization.pcm16)
         let dataBytes = UInt32(pcm.count * MemoryLayout<Int16>.size)
 
-        var data = Data(capacity: 44 + Int(dataBytes))
+        var data = wavHeader(dataBytes: dataBytes)
+        data.reserveCapacity(wavHeaderSize + Int(dataBytes))
+        // Apple hardware is little-endian, which is what WAV wants.
+        pcm.withUnsafeBufferPointer { data.append($0) }
+
+        try FileManager.default.createDirectory(
+            at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try data.write(to: url, options: .atomic)
+    }
+
+    /// Bytes before the samples in the files `writeWAV` and `IncrementalWAVWriter` write.
+    static let wavHeaderSize = 44
+    /// Where the header holds the RIFF chunk's size (36 + data bytes) and the data's size.
+    static let wavRIFFSizeOffset: UInt64 = 4
+    static let wavDataSizeOffset: UInt64 = 40
+
+    /// The 44-byte header of a 16-bit, 16 kHz, mono WAV with `dataBytes` of samples.
+    static func wavHeader(dataBytes: UInt32) -> Data {
+        let rate = UInt32(sampleRate)
+        var data = Data(capacity: wavHeaderSize)
         data.append(contentsOf: Array("RIFF".utf8))
         appendLE(36 + dataBytes, to: &data)
         data.append(contentsOf: Array("WAVE".utf8))
@@ -286,12 +317,7 @@ final class AudioRecorder: @unchecked Sendable {
         appendLE(UInt16(16), to: &data)         // bits per sample
         data.append(contentsOf: Array("data".utf8))
         appendLE(dataBytes, to: &data)
-        // Apple hardware is little-endian, which is what WAV wants.
-        pcm.withUnsafeBufferPointer { data.append($0) }
-
-        try FileManager.default.createDirectory(
-            at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
-        try data.write(to: url, options: .atomic)
+        return data
     }
 
     /// Reads a WAV back as 16 kHz mono Float32, for Retry. Accepts 16-bit PCM and 32-bit
@@ -353,7 +379,7 @@ final class AudioRecorder: @unchecked Sendable {
         }
     }
 
-    private static func appendLE<T: FixedWidthInteger>(_ value: T, to data: inout Data) {
+    static func appendLE<T: FixedWidthInteger>(_ value: T, to data: inout Data) {
         withUnsafeBytes(of: value.littleEndian) { data.append(contentsOf: $0) }
     }
 
@@ -421,6 +447,14 @@ private final class CaptureSink: @unchecked Sendable {
     /// Stops accepting audio (device change) without discarding what's been captured.
     func seal() {
         lock.withLock { isOpen = false }
+    }
+
+    /// The samples from `offset` on, and how many there are in all, without disturbing capture.
+    func copy(from offset: Int) -> (samples: [Float], end: Int) {
+        lock.withLock {
+            let start = min(max(0, offset), samples.count)
+            return (Array(samples[start...]), samples.count)
+        }
     }
 
     func close() -> CapturedAudio {

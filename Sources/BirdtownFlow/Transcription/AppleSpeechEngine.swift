@@ -1,5 +1,6 @@
 import AVFoundation
 import Foundation
+import MurmurKit
 import os
 import Speech
 
@@ -19,9 +20,6 @@ actor AppleSpeechEngine: TranscriptionEngine {
     /// a dictation arriving during `prepare()` would start a second asset installation.
     private var resolving: Task<Locale, Error>?
 
-    /// Speech has a natural ceiling of roughly realtime on the slowest Macs; anything well past
-    /// that is a stuck analyzer, and the recording is kept for Retry either way.
-    private static let baseTimeLimit: Double = 15
     private static let sampleRate: Double = 16_000
 
     init(locale: Locale = .current) {
@@ -37,7 +35,9 @@ actor AppleSpeechEngine: TranscriptionEngine {
         guard !samples.isEmpty else { return "" }
         let locale = try await resolve()
         let seconds = Double(samples.count) / Self.sampleRate
-        let limit = Duration.seconds(Self.baseTimeLimit + seconds * 2)
+        // Roughly real time on the slowest Macs, twice over; the dictation's watchdog waits
+        // longer than this, so a stuck analyzer is reported as one.
+        let limit = Duration.seconds(TranscriptionTimeLimit.appleSpeech(audioSeconds: seconds))
         do {
             return try await HardDeadline.run(within: limit) {
                 try await Self.analyze(samples, locale: locale, vocabulary: vocabulary)

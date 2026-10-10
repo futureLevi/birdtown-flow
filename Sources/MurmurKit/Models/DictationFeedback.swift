@@ -65,13 +65,28 @@ public enum DictationFeedback {
     ///
     /// `nil` when there's nothing to say: no note (polished, or polish is off), or the guard
     /// rejected a rewrite that changed what was said. That's polish doing its job, not a
-    /// fault, and it would otherwise nag on every borderline sentence.
+    /// fault, and it would otherwise nag on every borderline sentence. A long dictation that
+    /// was polished in parts, most of them successfully, says so in History only: the text
+    /// did go in polished.
     public static func polishNotice(for note: String?) -> String? {
         guard var note = note?.trimmingCharacters(in: .whitespacesAndNewlines), !note.isEmpty else { return nil }
-        if note.lowercased().hasPrefix(guardRejectionPrefix) { return nil }
+        let lowercased = note.lowercased()
+        if lowercased.hasPrefix(guardRejectionPrefix) || lowercased.hasPrefix(partialPolishPrefix) { return nil }
         while note.hasSuffix(".") { note.removeLast() }
         guard !note.isEmpty else { return nil }
         return "Inserted without polish · " + clauseCase(note)
+    }
+
+    /// The History note for a long dictation polished in parts (`PolishChunker`) where some
+    /// parts kept their dictated text: "Partly polished · 1 of 4 parts kept as dictated
+    /// (timed out after 4 s)". `reason` is the first such part's note, shortened to its
+    /// opening clause.
+    public static func partialPolishNote(keptAsDictated kept: Int, of total: Int, reason: String) -> String {
+        var clause = (reason.split(separator: ":", maxSplits: 1).first.map(String.init) ?? reason)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        while clause.hasSuffix(".") { clause.removeLast() }
+        let because = clause.isEmpty ? "" : " (\(clauseCase(clause)))"
+        return "Partly polished · \(kept) of \(total) parts kept as dictated" + because
     }
 
     /// Text after a "·" reads as a continuation, so it starts lowercase ("timed out",
@@ -92,4 +107,7 @@ public enum DictationFeedback {
 
     /// How `PolishService` begins the note for a rewrite `PolishGuard` turned down.
     static let guardRejectionPrefix = "rewrite rejected"
+
+    /// How `partialPolishNote` begins, lowercased.
+    static let partialPolishPrefix = "partly polished"
 }

@@ -19,6 +19,11 @@ public enum PolishError: LocalizedError, Sendable {
     case http(status: Int, message: String)
     case emptyResponse
     case timedOut
+    /// The reply stopped before the end: the model ran out of output tokens or context.
+    /// What came back is only the start of the text, so it isn't used.
+    case truncated
+    /// The model declined the request, or the provider withheld its reply.
+    case refused
 
     public var errorDescription: String? {
         switch self {
@@ -32,6 +37,8 @@ public enum PolishError: LocalizedError, Sendable {
             }
         case .emptyResponse: "The model returned nothing."
         case .timedOut: "Polish took too long, so the unpolished text was used."
+        case .truncated: "The model's reply was cut off before the end, so the unpolished text was used."
+        case .refused: "The model declined to edit this text, so the unpolished text was used."
         }
     }
 }
@@ -133,13 +140,45 @@ public enum PolishPrompt {
         """
 
     /// The transcript, fenced so the model can tell the text to edit from its instructions.
+    ///
+    /// One part of a long dictation (`PolishChunker`) also says so, and carries the end of
+    /// the part before it in a `<context>` fence of its own. The system prompt stays the
+    /// same, so a Claude Code session started ahead of time still matches.
     public static func user(for request: PolishRequest) -> String {
         // A transcript can't legitimately contain our fence; neutralise one so it can't close early.
         let text = request.text
             .replacingOccurrences(of: "</transcript>", with: "</ transcript>", options: .caseInsensitive)
             .replacingOccurrences(of: "<transcript>", with: "< transcript>", options: .caseInsensitive)
-        return "<transcript>\n\(text)\n</transcript>"
+        let transcript = "<transcript>\n\(text)\n</transcript>"
+        guard request.context != nil || request.continues else { return transcript }
+
+        var preamble = "This is one part of a longer dictation."
+        var sections: [String] = []
+        if let context = request.context {
+            preamble += " " + contextLine
+            let fenced = context
+                .replacingOccurrences(of: "</context>", with: "</ context>", options: .caseInsensitive)
+                .replacingOccurrences(of: "<context>", with: "< context>", options: .caseInsensitive)
+                .replacingOccurrences(of: "</transcript>", with: "</ transcript>", options: .caseInsensitive)
+                .replacingOccurrences(of: "<transcript>", with: "< transcript>", options: .caseInsensitive)
+            sections.append("<context>\n\(fenced)\n</context>")
+        }
+        if request.continues { preamble += " " + continuesLine }
+        preamble += " " + partReplyLine
+        return ([preamble] + sections + [transcript]).joined(separator: "\n\n")
     }
+
+    private static let contextLine = """
+        The text between <context> and </context> came just before it, as dictated. Read it only \
+        to follow the sense: don't edit it or repeat it.
+        """
+
+    private static let continuesLine = """
+        The dictation goes on after this part, so end it the way the speaker did, not as if it \
+        were the end of the message.
+        """
+
+    private static let partReplyLine = "Reply with the edited text of this part only."
 
     /// One line on what each style means, for the model.
     public static func styleLine(_ style: WritingStyle) -> String {
@@ -255,11 +294,18 @@ public enum PolishPrompt {
         3. Snacks
         """
 
-    /// Output budget: dictation rarely grows under editing, so a multiple of the input with
-    /// headroom, capped so a runaway reply can't run up a bill.
+    /// Output budget: dictation rarely grows under editing, so three tokens a word (a word is
+    /// about 1.3; a character of Chinese or Japanese, which counts as a word here
+    /// (`PolishTimeLimit.words(in:)`), one to three), plus room for the brief reasoning a
+    /// model with adaptive thinking may do first, which counts against it too.
+    ///
+    /// Capped so a runaway reply can't run up a bill, but only at about what the fastest
+    /// models write in the longest polish may take (`PolishTimeLimit.maximum`): the cap
+    /// stops a runaway, never a long dictation polished whole (`polishInParts` off) or a
+    /// long part. A reply that hits it anyway is cut off, and `parseResponse` turns it down.
     public static func maxTokens(for text: String) -> Int {
-        let words = text.split { $0.isWhitespace }.count
-        return min(2048, max(256, words * 3 + 64))
+        let words = PolishTimeLimit.words(in: text)
+        return min(8_192, max(512, words * 3 + 256))
     }
 }
 
@@ -295,8 +341,15 @@ public enum PolishGuard {
 
     /// Returns the cleaned output, or `nil` if it looks like the model answered, refused,
     /// added commentary or invented content instead of editing.
-    public static func accept(_ output: String, original: String, vocabulary: [String] = []) -> String? {
-        if case .accepted(let text) = review(output, original: original, vocabulary: vocabulary) { return text }
+    ///
+    /// - Parameter context: for one part of a long dictation, the context its request carried
+    ///   (`PolishRequest.context`), which the output must not repeat.
+    public static func accept(
+        _ output: String, original: String, vocabulary: [String] = [], context: String? = nil
+    ) -> String? {
+        if case .accepted(let text) = review(output, original: original, vocabulary: vocabulary, context: context) {
+            return text
+        }
         return nil
     }
 
@@ -304,14 +357,27 @@ public enum PolishGuard {
     public static let minimumLengthRatio = 0.4
     public static let maximumLengthRatio = 1.6
 
-    public static func review(_ output: String, original: String, vocabulary: [String] = []) -> Verdict {
+    /// This many words in a row from a part's context, in its rewrite and not in the part,
+    /// mean the model repeated the context.
+    public static let echoRunLength = 5
+
+    public static func review(
+        _ output: String, original: String, vocabulary: [String] = [], context: String? = nil
+    ) -> Verdict {
         let text = unwrap(output, original: original)
         guard text.contains(where: { $0.isLetter || $0.isNumber }) else { return .rejected(.empty) }
+        let outputWords = words(text)
+        let originalWords = words(original)
+
+        // 0. One part of a long dictation: its context is there to be read. A run of the
+        //    context's words that the part itself doesn't have means the model edited the
+        //    context too, and joining the parts would say it twice.
+        if let context, let echoed = echoedContext(context, in: outputWords, original: originalWords) {
+            return .rejected(.inventedWords(echoed))
+        }
 
         // 1. A model that talks to the user has stopped being an editor.
         // Compared as word sequences, so "sure I can" → "Sure, I can" is the speaker's own "sure".
-        let outputWords = words(text)
-        let originalWords = words(original)
         let opensWithCommentary = commentaryOpeners.contains { opener in
             let phrase = words(opener)
             return outputWords.starts(with: phrase) && !originalWords.containsSequence(phrase)
@@ -373,6 +439,8 @@ public enum PolishGuard {
         "^<(transcript|text|output|edited|edited_text|cleaned|result|answer)>\\s*([\\s\\S]*?)\\s*</\\1>$",
         caseInsensitive: true)
     private static let strayTag = makeRegex("</?\\s*transcript\\s*>", caseInsensitive: true)
+    /// The context of one part of a long dictation, sent back ahead of the edit.
+    private static let leadingContext = makeRegex("^<context>[\\s\\S]*?</context>\\s*", caseInsensitive: true)
     private static let thinking = makeRegex("<think>[\\s\\S]*?</think>", caseInsensitive: true)
     /// "Here's the cleaned-up text:", "Sure! Here is your edited transcript:", "Edited text:".
     private static let preamble = makeRegex(
@@ -384,11 +452,13 @@ public enum PolishGuard {
     private static let pairs: [(Character, Character)] = [("\"", "\""), ("“", "”"), ("'", "'"), ("‘", "’"), ("«", "»"), ("`", "`")]
 
     /// Peels off what models wrap edited text in — reasoning blocks, code fences, our own tags,
-    /// "Here's the edited text:" and quotation marks — unless the speaker's text had them too.
+    /// a part's context echoed ahead of it, "Here's the edited text:" and quotation marks —
+    /// unless the speaker's text had them too.
     static func unwrap(_ output: String, original: String) -> String {
         var text = thinking.replacingMatches(in: output, template: "").trimmingCharacters(in: .whitespacesAndNewlines)
         for _ in 0..<3 {
             let before = text
+            text = leadingContext.replacingMatches(in: text, template: "")
             let ns = NSString(string: text)
             let all = NSRange(location: 0, length: ns.length)
             if let match = fence.firstMatch(in: text, range: all), let inner = match.group(1, in: ns) {
@@ -429,6 +499,30 @@ public enum PolishGuard {
         "what", "who", "whom", "whose", "where", "when", "why", "how", "which", "is", "are", "was", "were",
         "do", "does", "did", "can", "could", "would", "should", "will", "shall", "may", "might", "have", "has",
     ]
+
+    /// The context's words that the output repeats `echoRunLength` or more in a row where the
+    /// original doesn't have that run, in the context's order; `nil` when there are none.
+    static func echoedContext(_ context: String, in output: [String], original: [String]) -> [String]? {
+        let contextWords = words(context)
+        let length = echoRunLength
+        guard contextWords.count >= length, output.count >= length else { return nil }
+        let outputRuns = runs(of: output, length: length)
+        let originalRuns = runs(of: original, length: length)
+        var echoed: [String] = []
+        for start in 0...(contextWords.count - length) {
+            let run = contextWords[start..<(start + length)]
+            let key = run.joined(separator: " ")
+            guard outputRuns.contains(key), !originalRuns.contains(key) else { continue }
+            for word in run where !echoed.contains(word) { echoed.append(word) }
+        }
+        return echoed.isEmpty ? nil : echoed
+    }
+
+    /// Every run of `length` consecutive words, space-joined.
+    private static func runs(of words: [String], length: Int) -> Set<String> {
+        guard words.count >= length else { return [] }
+        return Set((0...(words.count - length)).map { words[$0..<($0 + length)].joined(separator: " ") })
+    }
 
     static func looksLikeQuestion(_ text: String) -> Bool {
         if text.contains("?") { return true }
@@ -548,8 +642,10 @@ public struct AnthropicClient: PolishClient {
     public var model: String
     /// `nil` picks automatically (low on models that take it); otherwise exactly this.
     public var effort: PolishEffort?
-    /// Per-request network timeout. PolishService enforces its own, shorter, overall deadline.
-    public var timeout: TimeInterval = 20
+    /// Per-request network timeout, a backstop. PolishService enforces its own, shorter
+    /// deadline: at most `PolishTimeLimit.maximum` for a dictation, a minute in the Lab. The
+    /// reply arrives in one piece, so this must last as long as the longest of those.
+    public var timeout: TimeInterval = 60
 
     public init(apiKey: String, model: String = AnthropicClient.defaultModel, effort: PolishEffort? = nil) {
         self.apiKey = apiKey
@@ -599,6 +695,13 @@ public struct AnthropicClient: PolishClient {
             throw PolishError.http(status: status, message: HTTP.errorMessage(from: data, status: status))
         }
         let response = try JSONDecoder().decode(Response.self, from: data)
+        // A reply cut off at `max_tokens` can still read like a finished edit and pass
+        // `PolishGuard`, silently dropping the end of the dictation.
+        switch response.stop_reason ?? "" {
+        case "max_tokens", "model_context_window_exceeded": throw PolishError.truncated
+        case "refusal": throw PolishError.refused
+        default: break
+        }
         guard let text = response.content.first(where: { $0.type == "text" })?.text,
             !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         else { throw PolishError.emptyResponse }
@@ -625,13 +728,17 @@ public struct AnthropicClient: PolishClient {
     }
     // swiftlint:enable identifier_name
 
+    // swiftlint:disable identifier_name
     struct Response: Decodable {
         struct Block: Decodable {
             var type: String
             var text: String?
         }
         var content: [Block]
+        /// "end_turn" for a finished reply. Optional so a proxy that leaves it out still works.
+        var stop_reason: String?
     }
+    // swiftlint:enable identifier_name
 }
 
 /// Any OpenAI-compatible `/chat/completions` endpoint.
@@ -639,7 +746,8 @@ public struct OpenAICompatibleClient: PolishClient {
     public var baseURL: URL
     public var apiKey: String
     public var model: String
-    public var timeout: TimeInterval = 20
+    /// A backstop, like `AnthropicClient.timeout`.
+    public var timeout: TimeInterval = 60
 
     public init(baseURL: URL, apiKey: String, model: String) {
         self.baseURL = baseURL
@@ -711,7 +819,15 @@ public struct OpenAICompatibleClient: PolishClient {
             throw PolishError.http(status: status, message: HTTP.errorMessage(from: data, status: status))
         }
         let response = try JSONDecoder().decode(Response.self, from: data)
-        guard let content = response.choices.first?.message.content,
+        let choice = response.choices.first
+        // No `max_tokens` is sent here, but servers have their own (Ollama's `num_predict`), and
+        // a reply cut off at it can pass `PolishGuard`. "max_tokens" is how some proxies say it.
+        switch choice?.finish_reason ?? "" {
+        case "length", "max_tokens": throw PolishError.truncated
+        case "content_filter": throw PolishError.refused
+        default: break
+        }
+        guard let content = choice?.message.content,
             !content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         else { throw PolishError.emptyResponse }
         return content
@@ -728,13 +844,17 @@ public struct OpenAICompatibleClient: PolishClient {
         var messages: [Message]
     }
 
+    // swiftlint:disable identifier_name
     struct Response: Decodable {
         struct Choice: Decodable {
             struct Message: Decodable { var content: String? }
             var message: Message
+            /// "stop" for a finished reply. Not every server sends it.
+            var finish_reason: String?
         }
         var choices: [Choice]
     }
+    // swiftlint:enable identifier_name
 }
 
 // MARK: - HTTP

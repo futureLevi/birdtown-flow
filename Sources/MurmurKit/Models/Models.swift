@@ -202,10 +202,15 @@ public struct PolishRequest: Sendable, Hashable {
     public var level: PolishLevel
     /// A system prompt to use instead of the built-in one: a Lab configuration's.
     public var instructions: String?
+    /// One part of a long dictation (`PolishChunker`): the end of the part before it, as
+    /// dictated. The model reads it for sense and leaves it out of its reply.
+    public var context: String?
+    /// One part of a long dictation, and not the last: the text goes on after it.
+    public var continues: Bool
 
     public init(
         text: String, style: WritingStyle, category: AppCategory, appName: String?, vocabulary: [String],
-        level: PolishLevel = .full, instructions: String? = nil
+        level: PolishLevel = .full, instructions: String? = nil, context: String? = nil, continues: Bool = false
     ) {
         self.text = text
         self.style = style
@@ -214,6 +219,8 @@ public struct PolishRequest: Sendable, Hashable {
         self.vocabulary = vocabulary
         self.level = level
         self.instructions = instructions
+        self.context = context
+        self.continues = continues
     }
 }
 
@@ -238,11 +245,18 @@ public struct DictationTimings: Codable, Hashable, Sendable {
     public var transcribeMs: Int
     public var polishMs: Int
     public var totalMs: Int
+    /// `true` when windows of a long dictation were decoded while it was recorded:
+    /// `transcribeMs` is then only what was left at key-up (the window being decoded and the
+    /// last few seconds), not the engine's time on the whole recording. `nil` otherwise (a
+    /// key that came up before the first window was cut left key-up all of it), and in
+    /// records saved before it existed, so their JSON reads as it always did.
+    public var transcribedWhileRecording: Bool?
 
-    public init(transcribeMs: Int = 0, polishMs: Int = 0, totalMs: Int = 0) {
+    public init(transcribeMs: Int = 0, polishMs: Int = 0, totalMs: Int = 0, transcribedWhileRecording: Bool? = nil) {
         self.transcribeMs = transcribeMs
         self.polishMs = polishMs
         self.totalMs = totalMs
+        self.transcribedWhileRecording = transcribedWhileRecording
     }
 
     /// Whether anything was measured. Failed and cancelled dictations can have no timings.
@@ -254,8 +268,10 @@ public struct DictationTimings: Codable, Hashable, Sendable {
 
     /// How many times faster than real time the engine transcribed `audioSeconds` of speech
     /// (40 means a minute of audio took 1.5 s), or `nil` when either side wasn't measured.
+    /// Also `nil` when it was `transcribedWhileRecording`: `transcribeMs` covers only the
+    /// last few seconds, so six minutes over 600 ms would claim 600× for a 40× engine.
     public func realtimeFactor(audioSeconds: Double) -> Double? {
-        guard audioSeconds > 0, transcribeMs > 0 else { return nil }
+        guard audioSeconds > 0, transcribeMs > 0, transcribedWhileRecording != true else { return nil }
         return audioSeconds * 1000 / Double(transcribeMs)
     }
 }

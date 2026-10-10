@@ -114,9 +114,10 @@ struct HistoryView: View {
     var body: some View {
         // Selecting, highlighting and playing re-run body too; only a new search, filter or
         // history change redoes the search and the grouping. Deletes still inside their undo
-        // window are hidden (see `AppModel.historyDeletion`), and a new or undone delete
-        // changes the key, so the memo never serves a list with them in it or missing.
-        let searchKey = SearchKey(records: model.history.records, query: appliedQuery, hidden: model.historyDeletion.pending)
+        // window are hidden (see `AppModel.historyDeletion`), as are the rows of recordings
+        // still in progress, and a new or undone delete or a row handed over changes the key,
+        // so the memo never serves a list with them in it or missing.
+        let searchKey = SearchKey(records: model.history.records, query: appliedQuery, hidden: model.historyDeletion.hidden)
         let result = searchMemo.value(for: searchKey) { key in
             Self.runSearch(key, in: model.history)
         }
@@ -309,7 +310,7 @@ struct HistoryView: View {
     private func emptyState(searchMatches: Int) -> some View {
         // What the list searched for, which can trail the field by a keystroke while typing.
         let trimmed = appliedQuery.trimmingCharacters(in: .whitespacesAndNewlines)
-        // Records waiting out the undo window are hidden but still in the store.
+        // Records waiting out the undo window, or still being recorded, are hidden but in the store.
         if model.history.records.isEmpty || (trimmed.isEmpty && searchMatches == 0) {
             EmptyState(
                 symbol: "waveform",
@@ -477,7 +478,7 @@ struct HistoryView: View {
     private func reveal(_ id: UUID?) {
         guard let id else { return }
         model.focusedRecordID = nil
-        guard model.history.record(id: id) != nil, !model.historyDeletion.isPending(id) else { return }
+        guard model.history.record(id: id) != nil, !model.historyDeletion.isHidden(id) else { return }
         if !visibleIDs.contains(id) {
             clearQuery()
             filter = .all
@@ -516,7 +517,7 @@ struct HistoryView: View {
     }
 
     private struct SearchResult {
-        /// Matches for the search, minus records waiting out the undo window.
+        /// Matches for the search, minus hidden records (`HistoryDeletion.hidden`).
         let searched: [HistoryRecord]
         /// How many of `searched` each chip would show.
         let counts: [HistoryFilter: Int]

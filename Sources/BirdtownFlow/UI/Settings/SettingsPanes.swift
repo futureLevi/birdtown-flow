@@ -616,6 +616,8 @@ struct TextSettingsPane: View {
             }
 
             labGroup
+
+            advancedGroup(settings)
         }
     }
 
@@ -642,6 +644,32 @@ struct TextSettingsPane: View {
                     model.show(.lab)
                 }
                 .buttonStyle(SetupKit.SecondaryButtonStyle())
+            }
+        }
+    }
+
+    /// Kill switches for the long-dictation speedups. On by default; off gives the plain path.
+    private func advancedGroup(_ source: Settings) -> some View {
+        @Bindable var settings = source
+        return SettingsGroup(
+            title: "Advanced",
+            footnote: "Long dictations are polished while you're still talking, so pressing Esc can't recall text already sent to the polish provider."
+        ) {
+            SettingsRow(
+                title: "Transcribe while you talk",
+                detail: "Long dictations are transcribed in parts as you speak, so the text is ready sooner."
+            ) {
+                SettingsSwitch(label: "Transcribe while you talk", isOn: $settings.liveTranscription)
+            }
+            SettingsDivider()
+            SettingsRow(title: "Polish in parts", detail: "Long dictations are split into parts that are polished at the same time.") {
+                SettingsSwitch(label: "Polish in parts", isOn: $settings.polishInParts)
+            }
+            SettingsDivider()
+            SettingsRow(title: "Polish while you talk", detail: "Starts polishing a long dictation before you finish.") {
+                SettingsSwitch(label: "Polish while you talk", isOn: $settings.polishWhileSpeaking)
+                    // It polishes parts, so it needs them.
+                    .disabled(!settings.polishInParts)
             }
         }
     }
@@ -710,7 +738,7 @@ struct TextSettingsPane: View {
                     }
                     SettingsDivider()
                 }
-                SettingsRow(title: "Time limit", detail: "If polish takes longer, Birdtown Flow types the plain transcript.") {
+                SettingsRow(title: "Time limit", detail: "For a normal dictation; long ones get more. If polish takes longer, Birdtown Flow types the plain transcript.") {
                     Stepper(value: $settings.polishTimeout, in: 1...15, step: 1) {
                         Text("\(Int(settings.polishTimeout)) s")
                             .font(Typography.body)
