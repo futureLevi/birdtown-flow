@@ -27,11 +27,8 @@ enum FrontmostContext {
     /// `base` with the focused window's title and the category it implies (Gmail in a browser
     /// is email, not "other"). Best-effort: returns `base` if the title can't be read.
     nonisolated static func refined(_ base: AppContext, pid: pid_t?) -> AppContext {
-        guard let pid, let title = focusedWindowTitle(pid: pid), !title.isEmpty else { return base }
-        var context = base
-        context.windowTitle = title
-        context.category = AppCategoryResolver.category(bundleID: base.bundleID, windowTitle: title)
-        return context
+        guard let pid else { return base }
+        return base.withWindowTitle(focusedWindowTitle(pid: pid))
     }
 
     nonisolated private static func focusedWindowTitle(pid: pid_t) -> String? {

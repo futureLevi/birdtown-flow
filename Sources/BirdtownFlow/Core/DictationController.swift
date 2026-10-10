@@ -438,10 +438,17 @@ final class DictationController {
 
         let (quick, pid) = FrontmostContext.quick()
         context = quick
-        // Claude Code takes a second or two to start; do it while the person is talking.
-        prewarmPolish(for: quick)
-        // The other providers warm up too: Apple's model loads, a cloud connection opens.
-        if blocked == nil { warmUpPolish(for: quick) }
+        // Polish gets ready for the category the dictation will use: the waiting Claude Code
+        // and Apple Intelligence sessions only serve the instructions they started with. A
+        // browser's category comes from its window title, not read yet, so its polish waits
+        // for that (`preparePolishOnceTitleIsRead`).
+        let titleDecidesCategory = AppCategoryResolver.categoryDependsOnTitle(bundleID: quick.bundleID)
+        if !titleDecidesCategory {
+            // Claude Code takes a second or two to start; do it while the person is talking.
+            prewarmPolish(for: quick)
+            // The other providers warm up too: Apple's model loads, a cloud connection opens.
+            if blocked == nil { warmUpPolish(for: quick) }
+        }
         let contextTask = Task.detached(priority: .userInitiated) {
             FrontmostContext.refined(quick, pid: pid)
         }
@@ -455,6 +462,9 @@ final class DictationController {
         session = Session(
             generation: generation, id: id, startedAt: startedAt, blocked: blocked, contextTask: contextTask
         )
+        if titleDecidesCategory {
+            preparePolishOnceTitleIsRead(contextTask, id: id)
+        }
         if blocked == nil, settings.liveTranscription {
             startLive(generation: generation, id: id, contextTask: contextTask, startedAt: startedAt)
         }
@@ -1206,6 +1216,7 @@ final class DictationController {
     /// Starts or stops the waiting Claude Code session after the polish settings, or the Lab's
     /// configurations or their styles, change.
     func polishSettingsChanged() {
+        // The dictation in progress (with its window title, once that's read), else "other".
         let context = self.context ?? AppContext(bundleID: nil, appName: nil, category: .other)
         if !prewarmPolish(for: context), !usesClaudeCode {
             ClaudeCodePolisher.shutDown()
@@ -1234,8 +1245,33 @@ final class DictationController {
         return true
     }
 
+    /// Polish for a dictation into a browser or web app, made ready once its window title is
+    /// read: the title decides the category (Gmail is email), and a session started for
+    /// key-down's "other" would be thrown away at key-up, where the right one would start cold.
+    /// Fire-and-forget, so recording and key-up never wait for it. It does nothing for a
+    /// dictation that was cancelled, dropped or blocked meanwhile, and keeps going for one
+    /// whose key came up first, since its polish hasn't necessarily started yet.
+    private func preparePolishOnceTitleIsRead(_ contextTask: Task<AppContext, Never>, id: UUID) {
+        Task { [weak self] in
+            let context = await contextTask.value
+            guard let self else { return }
+            if let current = self.session, current.id == id {
+                // The microphone can't record: it's about to say so, and nothing is polished.
+                guard current.blocked == nil else { return }
+                // So a polish settings change while recording gets this context ready too.
+                self.context = context
+            } else if !self.isCurrent(id) {
+                // Esc, a dropped recording, or a newer dictation.
+                return
+            }
+            self.prewarmPolish(for: context)
+            self.warmUpPolish(for: context)
+        }
+    }
+
     /// Gets the polish provider for a dictation into `context` ready, unless it's Claude Code,
-    /// which `prewarmPolish` starts. Only at key-down: a settings change doesn't warm anything.
+    /// which `prewarmPolish` starts. Only as a dictation starts (at key-down, or once its window
+    /// title is read): a settings change doesn't warm anything.
     private func warmUpPolish(for context: AppContext) {
         guard settings.polishProvider != .off else { return }
         let style = settings.style(for: context.category)
