@@ -1006,9 +1006,10 @@ final class DictationController {
             record.polishConfiguration = polishConfiguration
             record.timings.transcribeMs = transcribeMs
             // Windows decoded while recording leave key-up only the last few seconds, so
-            // `transcribeMs` says nothing about the engine's speed. A Retry decodes it all
-            // again and clears this.
-            record.timings.transcribedWhileRecording = transcriptionReport.path == .segmentedLive ? true : nil
+            // `transcribeMs` says nothing about the engine's speed. Not when the key came up
+            // before the first window was cut: key-up decoded them all. A Retry decodes it
+            // all again and clears this.
+            record.timings.transcribedWhileRecording = transcriptionReport.decodedWhileRecording ? true : nil
             record.timings.polishMs = polishMs
         }
     }

@@ -245,10 +245,11 @@ public struct DictationTimings: Codable, Hashable, Sendable {
     public var transcribeMs: Int
     public var polishMs: Int
     public var totalMs: Int
-    /// `true` when a long dictation was transcribed window by window while it was recorded:
+    /// `true` when windows of a long dictation were decoded while it was recorded:
     /// `transcribeMs` is then only what was left at key-up (the window being decoded and the
-    /// last few seconds), not the engine's time on the whole recording. `nil` otherwise, and
-    /// in records saved before it existed, so their JSON reads as it always did.
+    /// last few seconds), not the engine's time on the whole recording. `nil` otherwise (a
+    /// key that came up before the first window was cut left key-up all of it), and in
+    /// records saved before it existed, so their JSON reads as it always did.
     public var transcribedWhileRecording: Bool?
 
     public init(transcribeMs: Int = 0, polishMs: Int = 0, totalMs: Int = 0, transcribedWhileRecording: Bool? = nil) {

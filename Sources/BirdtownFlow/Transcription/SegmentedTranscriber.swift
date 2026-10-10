@@ -37,6 +37,10 @@ actor SegmentedTranscriber {
         /// Each window's text, in order.
         var parts: [String]
         var windows: Int
+        /// Of `windows`, those decoded while recording (the one in flight at key-up included).
+        /// None for a Retry, or when the key came up before the first window was cut: key-up
+        /// then decoded them all.
+        var liveWindows: Int
         var forcedCuts: Int
         /// The longest one window took, decode and boost.
         var slowestWindowMs: Int
@@ -181,7 +185,7 @@ actor SegmentedTranscriber {
         line.ms("catchup", catchUpMs)
         line.ms("tail", tail.ms)
         line.ms("tailBoost", tail.boostMs)
-        return outcome(line)
+        return outcome(line, liveWindows: liveWindows)
     }
 
     /// A Retry: the saved WAV, cut and decoded window by window as it was while recording.
@@ -202,7 +206,7 @@ actor SegmentedTranscriber {
         line.ms("cut", cutMs)
         line.ms("tail", tail.ms)
         line.ms("tailBoost", tail.boostMs)
-        return outcome(line)
+        return outcome(line, liveWindows: 0)
     }
 
     // MARK: - Decoding
@@ -295,7 +299,7 @@ actor SegmentedTranscriber {
         if failure == nil { failure = reason }
     }
 
-    private func outcome(_ line: TimingLine) -> Outcome {
+    private func outcome(_ line: TimingLine, liveWindows: Int) -> Outcome {
         let text = SegmentStitcher.join(parts.map {
             SegmentStitcher.Part(leadingPunctuation: $0.kept.leadingPunctuation, text: $0.text)
         })
@@ -304,6 +308,7 @@ actor SegmentedTranscriber {
             line: line,
             parts: parts.map(\.text),
             windows: parts.count,
+            liveWindows: liveWindows,
             forcedCuts: forcedCuts,
             slowestWindowMs: slowestWindowMs
         )
