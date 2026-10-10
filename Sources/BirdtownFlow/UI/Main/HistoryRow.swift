@@ -711,18 +711,41 @@ struct OriginalPanel: View {
 struct TimingsLine: View {
     let record: HistoryRecord
 
+    /// How much the numbers line says beyond the numbers. A narrow window steps down a level
+    /// before anything is clipped.
+    private enum Detail {
+        /// The speed and the polisher's name.
+        case brief
+        case numbersOnly
+    }
+
     var body: some View {
-        // A narrow window drops the speed and the polisher's name before anything is clipped.
-        ViewThatFits(in: .horizontal) {
-            line(showsDetail: true)
-            line(showsDetail: false)
+        VStack(alignment: .leading, spacing: Spacing.xs) {
+            ViewThatFits(in: .horizontal) {
+                line(.brief)
+                line(.numbersOnly)
+            }
+            if let details {
+                HStack(spacing: Spacing.l) {
+                    // Lines the details up under the numbers.
+                    Image(systemName: "stopwatch")
+                        .hidden()
+                        .accessibilityHidden(true)
+                    Text(details)
+                        .foregroundStyle(Palette.inkTertiary)
+                        .monospacedDigit()
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                }
+            }
         }
         .font(Typography.caption)
-        .help("Measured from when you let go of the key. Other is cleanup, the dictionary and typing the text.")
+        .help("Measured from when you let go of the key. Other is cleanup, the dictionary and typing the text. "
+            + "Mic is how long the microphone took to start once you pressed the key.")
         .accessibilityElement(children: .combine)
     }
 
-    private func line(showsDetail: Bool) -> some View {
+    private func line(_ detail: Detail) -> some View {
         let timings = record.timings
         return HStack(spacing: Spacing.l) {
             Image(systemName: "stopwatch")
@@ -733,12 +756,12 @@ struct TimingsLine: View {
                     .foregroundStyle(Palette.inkTertiary)
             } else {
                 if timings.transcribeMs > 0 {
-                    item("Transcribe", timings.transcribeMs, detail: showsDetail ? transcribeDetail : nil)
+                    item("Transcribe", timings.transcribeMs, detail: detail == .numbersOnly ? nil : transcribeDetail)
                 }
                 if timings.polishMs > 0 {
                     // Timed out or rejected: the time was still spent waiting for it.
                     item(polisher == nil ? "Polish (not used)" : "Polish", timings.polishMs,
-                         detail: showsDetail ? polisher.map { "(\($0))" } : nil)
+                         detail: polishDetail(detail))
                 }
                 if timings.otherMs > 0 {
                     item("Other", timings.otherMs)
@@ -747,6 +770,28 @@ struct TimingsLine: View {
             }
         }
         .fixedSize()
+    }
+
+    /// "(Claude Code)": the polisher's name, while the line has room for it.
+    private func polishDetail(_ detail: Detail) -> String? {
+        detail == .brief ? polisher.map { "(\($0))" } : nil
+    }
+
+    /// "Polish: cold start, model 1,180 ms, <model> low · Mic 45 ms", under the numbers: how
+    /// polish went, and how long the microphone took to start (before key-up, so not part of
+    /// the total). `nil` when neither was recorded.
+    private var details: String? {
+        let timings = record.timings
+        guard !timings.isEmpty else { return nil }
+        var parts: [String] = []
+        let polish = timings.polishDetails(format: Self.format)
+        if timings.polishMs > 0, !polish.isEmpty {
+            parts.append("Polish: " + polish.joined(separator: ", "))
+        }
+        if let micLiveMs = timings.micLiveMs {
+            parts.append("Mic \(Self.format(micLiveMs))")
+        }
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
     }
 
     private func item(_ label: String, _ milliseconds: Int, detail: String? = nil, emphasized: Bool = false) -> some View {

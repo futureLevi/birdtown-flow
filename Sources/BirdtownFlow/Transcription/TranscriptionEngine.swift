@@ -37,6 +37,10 @@ struct Transcript: Sendable {
     var text: String
     /// Words the engine first wrote, rewritten to dictionary terms by vocabulary boosting.
     var boosted: [AppliedCorrection] = []
+    /// Parakeet only, for the timing summary: the recognition pass (TDT), and the vocabulary
+    /// boost (CTC) after it when one ran. `nil` from engines that don't split their time.
+    var recognitionMs: Int? = nil
+    var boostMs: Int? = nil
 }
 
 /// An engine that can transcribe a long recording one window at a time

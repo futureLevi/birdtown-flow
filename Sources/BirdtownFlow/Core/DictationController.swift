@@ -438,10 +438,17 @@ final class DictationController {
 
         let (quick, pid) = FrontmostContext.quick()
         context = quick
-        // Claude Code takes a second or two to start; do it while the person is talking.
-        prewarmPolish(for: quick)
-        // The other providers warm up too: Apple's model loads, a cloud connection opens.
-        if blocked == nil { warmUpPolish(for: quick) }
+        // Polish gets ready for the category the dictation will use: the waiting Claude Code
+        // and Apple Intelligence sessions only serve the instructions they started with. A
+        // browser's category comes from its window title, not read yet, so its polish waits
+        // for that (`preparePolishOnceTitleIsRead`).
+        let titleDecidesCategory = AppCategoryResolver.categoryDependsOnTitle(bundleID: quick.bundleID)
+        if !titleDecidesCategory {
+            // Claude Code takes a second or two to start; do it while the person is talking.
+            prewarmPolish(for: quick)
+            // The other providers warm up too: Apple's model loads, a cloud connection opens.
+            if blocked == nil { warmUpPolish(for: quick) }
+        }
         let contextTask = Task.detached(priority: .userInitiated) {
             FrontmostContext.refined(quick, pid: pid)
         }
@@ -455,6 +462,9 @@ final class DictationController {
         session = Session(
             generation: generation, id: id, startedAt: startedAt, blocked: blocked, contextTask: contextTask
         )
+        if titleDecidesCategory {
+            preparePolishOnceTitleIsRead(contextTask, id: id)
+        }
         if blocked == nil, settings.liveTranscription {
             startLive(generation: generation, id: id, contextTask: contextTask, startedAt: startedAt)
         }
@@ -854,11 +864,26 @@ final class DictationController {
     ) async {
         let style = settings.style(for: context.category)
         var record = makeRecord(id: id, startedAt: startedAt, context: context, audioDuration: audio.duration)
+        record.timings.micLiveMs = audio.micLiveMs
         let clock = ContinuousClock()
         var timing = initialTiming
+        // What the pipeline and the insert measured. They join the summary only once processing
+        // is over, so building it never holds up the text.
+        var stages: PipelineOutput?
+        var insertMs: Int?
+        var insertSplit = TextInjector.Timings()
         defer {
             // Nothing polishes this dictation's parts any more.
             progressive?.cancel()
+            timing.ms("micLive", audio.micLiveMs)
+            stages?.addStages(to: &timing)
+            if let insertMs {
+                timing.ms("insert", insertMs)
+                var split = TimingLine("insert")
+                split.ms("ax", insertSplit.accessibilityMs)
+                split.ms("paste", insertSplit.pasteMs)
+                timing.group("insert", split)
+            }
             timing.ms("total", Self.milliseconds(since: releasedAt))
             timing.tag("outcome", record.outcome.rawValue)
             Log.timing.notice("\(timing.text, privacy: .public)")
@@ -894,7 +919,7 @@ final class DictationController {
             ) { [weak self] in
                 if self?.isCurrent(id) == true { self?.phase = .polishing }
             }
-            output.addStages(to: &timing)
+            stages = output
             guard isCurrent(id) else { throw CancellationError() }
             output.apply(to: &record)
 
@@ -915,8 +940,9 @@ final class DictationController {
             }
 
             let insertStart = clock.now
-            let outcome = await TextInjector.insert(text, restoreClipboard: settings.restoreClipboard)
-            timing.ms("insert", Self.milliseconds(insertStart.duration(to: clock.now)))
+            let (outcome, split) = await TextInjector.insertMeasured(text, restoreClipboard: settings.restoreClipboard)
+            insertMs = Self.milliseconds(insertStart.duration(to: clock.now))
+            insertSplit = split
             var copiedNotice: String?
             var copiedFollowUp: FollowUp?
             switch outcome {
@@ -1003,6 +1029,9 @@ final class DictationController {
         var polishNote: String?
         /// The Lab configuration this style used, by name.
         var polishConfiguration: String?
+        /// What polish was sent to and, for Claude Code, where its time went. `nil` when
+        /// polish didn't run.
+        var polishDiagnostics: PolishDiagnostics?
         /// From key-up's point of view: engine wait included, as History has always shown it.
         var transcribeMs: Int
         var polishMs: Int
@@ -1014,7 +1043,8 @@ final class DictationController {
         var prepareMs: Int
         var finalizeMs: Int
 
-        /// Appends engine wait, transcription, prepare, polish and finalize to the summary.
+        /// Appends engine wait, transcription, prepare, polish (with what it was sent to and,
+        /// for Claude Code, a cold start and the model's time) and finalize to the summary.
         func addStages(to line: inout TimingLine) {
             line.ms("engineWait", engineWaitMs)
             line.ms("transcribe", transcribeMs - engineWaitMs)
@@ -1024,6 +1054,7 @@ final class DictationController {
             line.ms("prepare", prepareMs)
             if let polishReport {
                 line.ms("polish", polishMs)
+                polishDiagnostics?.addFields(to: &line)
                 line.group("polish", polishReport.line)
             }
             line.ms("finalize", finalizeMs)
@@ -1056,6 +1087,8 @@ final class DictationController {
             // all again and clears this.
             record.timings.transcribedWhileRecording = transcriptionReport.decodedWhileRecording ? true : nil
             record.timings.polishMs = polishMs
+            // A Retry that doesn't polish clears what the dictation's polish recorded.
+            record.timings.setPolish(polishDiagnostics)
         }
     }
 
@@ -1095,6 +1128,7 @@ final class DictationController {
         var polishedBy: PolishProvider?
         var polishNote: String?
         var polishConfiguration: String?
+        var polishDiagnostics: PolishDiagnostics?
         var polishReport: PolishReport?
         var polishMs = 0
 
@@ -1108,6 +1142,7 @@ final class DictationController {
             polishedBy = outcome.provider
             polishNote = outcome.note
             polishConfiguration = configurationName
+            polishDiagnostics = outcome.diagnostics
             polishReport = report
             polishMs = Self.milliseconds(polishStart.duration(to: clock.now))
             try Task.checkCancellation()
@@ -1133,6 +1168,7 @@ final class DictationController {
             polishedBy: polishedBy,
             polishNote: polishNote,
             polishConfiguration: polishConfiguration,
+            polishDiagnostics: polishDiagnostics,
             transcribeMs: transcribeMs,
             polishMs: polishMs,
             engineWaitMs: engineWaitMs,
@@ -1206,6 +1242,7 @@ final class DictationController {
     /// Starts or stops the waiting Claude Code session after the polish settings, or the Lab's
     /// configurations or their styles, change.
     func polishSettingsChanged() {
+        // The dictation in progress (with its window title, once that's read), else "other".
         let context = self.context ?? AppContext(bundleID: nil, appName: nil, category: .other)
         if !prewarmPolish(for: context), !usesClaudeCode {
             ClaudeCodePolisher.shutDown()
@@ -1234,8 +1271,33 @@ final class DictationController {
         return true
     }
 
+    /// Polish for a dictation into a browser or web app, made ready once its window title is
+    /// read: the title decides the category (Gmail is email), and a session started for
+    /// key-down's "other" would be thrown away at key-up, where the right one would start cold.
+    /// Fire-and-forget, so recording and key-up never wait for it. It does nothing for a
+    /// dictation that was cancelled, dropped or blocked meanwhile, and keeps going for one
+    /// whose key came up first, since its polish hasn't necessarily started yet.
+    private func preparePolishOnceTitleIsRead(_ contextTask: Task<AppContext, Never>, id: UUID) {
+        Task { [weak self] in
+            let context = await contextTask.value
+            guard let self else { return }
+            if let current = self.session, current.id == id {
+                // The microphone can't record: it's about to say so, and nothing is polished.
+                guard current.blocked == nil else { return }
+                // So a polish settings change while recording gets this context ready too.
+                self.context = context
+            } else if !self.isCurrent(id) {
+                // Esc, a dropped recording, or a newer dictation.
+                return
+            }
+            self.prewarmPolish(for: context)
+            self.warmUpPolish(for: context)
+        }
+    }
+
     /// Gets the polish provider for a dictation into `context` ready, unless it's Claude Code,
-    /// which `prewarmPolish` starts. Only at key-down: a settings change doesn't warm anything.
+    /// which `prewarmPolish` starts. Only as a dictation starts (at key-down, or once its window
+    /// title is read): a settings change doesn't warm anything.
     private func warmUpPolish(for context: AppContext) {
         guard settings.polishProvider != .off else { return }
         let style = settings.style(for: context.category)

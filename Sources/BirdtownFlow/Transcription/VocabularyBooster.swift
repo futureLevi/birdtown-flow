@@ -129,8 +129,9 @@ actor VocabularyBooster {
     ) async -> Rescored? {
         let evidence: VocabularyRescorer.CandidateEvidenceOutput
         do {
+            // No terms: the log-probs don't depend on them, and the per-term search goes unused.
             let spotted = try await session.spotter.spotKeywordsWithLogProbs(
-                audioSamples: samples, customVocabulary: session.vocabulary, minScore: nil)
+                audioSamples: samples, customVocabulary: CustomVocabularyContext(terms: []))
             guard !spotted.logProbs.isEmpty else { return nil }
             // The same call `VocabularyBoostingSession.rescore` makes, minus applying the result.
             evidence = session.rescorer.ctcTokenEvaluateCandidates(
@@ -147,7 +148,7 @@ actor VocabularyBooster {
             return nil
         }
 
-        var accepted: [VocabularyRescorer.CandidateEvidence] = []
+        var accepted: [Rewrite] = []
         var vetoed = 0
         for candidate in evidence.candidates where candidate.legacyOutcome == .applied {
             guard candidate.wordRange.lowerBound >= 0,
@@ -155,11 +156,21 @@ actor VocabularyBooster {
                   !candidate.wordRange.isEmpty
             else { continue }
             let heard = Array(evidence.baseWords[candidate.wordRange])
-            if BoostGuard.accepts(heard: heard, term: candidate.canonicalTerm) {
-                accepted.append(candidate)
-            } else {
+            guard let kept = BoostGuard.span(heard: heard, term: candidate.canonicalTerm) else {
                 vetoed += 1
+                continue
             }
+            let start = candidate.wordRange.lowerBound
+            let replaced = (start + kept.lowerBound)..<(start + kept.upperBound)
+            // FluidAudio may have compared exactly the narrowed words with this term already,
+            // and found the audio favours them as heard ("cloud code" inside "cloud code. It").
+            if replaced != candidate.wordRange, evidence.candidates.contains(where: {
+                $0.wordRange == replaced && $0.canonicalTerm == candidate.canonicalTerm && !$0.comparisonPassed
+            }) {
+                vetoed += 1
+                continue
+            }
+            accepted.append(Rewrite(candidate: candidate, replaced: replaced))
         }
         if vetoed > 0 {
             Log.speech.info("vocabulary boosting: \(vetoed, privacy: .public) rewrite(s) vetoed by BoostGuard")
@@ -170,7 +181,7 @@ actor VocabularyBooster {
               !rescored.isEmpty, rescored != text
         else { return nil }
 
-        let replacements = applied(accepted)
+        let replacements = applied(accepted, in: evidence)
         let rewritten = replacements.reduce(0) { $0 + $1.count }
         Log.speech.info("vocabulary boosting rewrote \(rewritten, privacy: .public) word(s)")
         return Rescored(text: rescored, replacements: replacements)
@@ -225,71 +236,106 @@ actor VocabularyBooster {
         }
     }
 
-    /// `evidence.baseText` with each accepted candidate's words replaced by its term.
+    /// A candidate `BoostGuard` let stand, and which of its words the term replaces: all of
+    /// them, or fewer when its span took in a neighbouring word ("BirdTown Flow will").
+    private struct Rewrite {
+        let candidate: VocabularyRescorer.CandidateEvidence
+        let replaced: Range<Int>
+
+        var span: Range<Int> { candidate.wordRange }
+        var isNarrowed: Bool { replaced != span }
+    }
+
+    /// `evidence.baseText` with each accepted rewrite's words replaced by its term.
     ///
     /// Spliced into the original text where FluidAudio aligned every candidate to it, which
     /// keeps the transcript's own punctuation and spacing; otherwise rebuilt from the word
     /// list with single spaces, which is what FluidAudio's own rewrite does.
     private static func rewrite(
         _ evidence: VocabularyRescorer.CandidateEvidenceOutput,
-        applying accepted: [VocabularyRescorer.CandidateEvidence]
+        applying accepted: [Rewrite]
     ) -> String? {
         // Earliest first; overlaps shouldn't survive FluidAudio's arbitration, but never splice two.
-        var chosen: [VocabularyRescorer.CandidateEvidence] = []
-        for candidate in accepted.sorted(by: { $0.wordRange.lowerBound < $1.wordRange.lowerBound }) {
-            if let last = chosen.last, last.wordRange.overlaps(candidate.wordRange) { continue }
-            chosen.append(candidate)
+        var chosen: [Rewrite] = []
+        for rewrite in accepted.sorted(by: { $0.span.lowerBound < $1.span.lowerBound }) {
+            if let last = chosen.last, last.span.overlaps(rewrite.span) { continue }
+            chosen.append(rewrite)
         }
 
         let bytes = Array(evidence.baseText.utf8)
-        let ranges = chosen.compactMap(\.baseTextUTF8Range)
-        if ranges.count == chosen.count,
-           ranges.allSatisfy({ $0.lowerBound >= 0 && $0.upperBound <= bytes.count }) {
+        let spliced: [(range: Range<Int>, text: String)] = chosen.compactMap { rewrite in
+            guard let range = rewrite.candidate.baseTextUTF8Range,
+                  range.lowerBound >= 0, range.upperBound <= bytes.count
+            else { return nil }
+            guard rewrite.isNarrowed else { return (range: range, text: written(rewrite, in: evidence)) }
+            // The span's text, word by word, so the words kept either side go back as written.
+            let heard = String(decoding: bytes[range], as: UTF8.self).split(separator: " ").map(String.init)
+            guard heard.count == rewrite.span.count else { return nil }
+            return (range: range, text: replacement(rewrite, heard: heard, in: evidence))
+        }
+        if spliced.count == chosen.count {
             var output = bytes
-            for (candidate, range) in zip(chosen, ranges).reversed() {
-                output.replaceSubrange(range, with: Array(written(candidate, in: evidence).utf8))
+            for splice in spliced.reversed() {
+                output.replaceSubrange(splice.range, with: Array(splice.text.utf8))
             }
             return String(decoding: output, as: UTF8.self)
         }
 
         var words: [String] = []
         var index = 0
-        for candidate in chosen {
-            words += evidence.baseWords[index..<candidate.wordRange.lowerBound]
-            // Keep the sentence punctuation the replaced words ended on.
-            let ending = String(evidence.baseWords[candidate.wordRange.upperBound - 1]
-                .reversed().prefix(while: { ".,;:!?…".contains($0) }).reversed())
-            words.append(written(candidate, in: evidence) + ending)
-            index = candidate.wordRange.upperBound
+        for rewrite in chosen {
+            words += evidence.baseWords[index..<rewrite.span.lowerBound]
+            words.append(replacement(rewrite, heard: Array(evidence.baseWords[rewrite.span]), in: evidence))
+            index = rewrite.span.upperBound
         }
         words += evidence.baseWords[index...]
+        return words.joined(separator: " ")
+    }
+
+    /// What goes in place of a rewrite's `heard` words (its whole span): the term, keeping the
+    /// sentence punctuation the replaced words ended on, between any words kept either side.
+    private static func replacement(
+        _ rewrite: Rewrite, heard: [String], in evidence: VocabularyRescorer.CandidateEvidenceOutput
+    ) -> String {
+        let start = rewrite.span.lowerBound
+        let replaced = (rewrite.replaced.lowerBound - start)..<(rewrite.replaced.upperBound - start)
+        let ending = String(heard[replaced.upperBound - 1].reversed().prefix(while: { ".,;:!?…".contains($0) }).reversed())
+        var words = Array(heard[..<replaced.lowerBound])
+        words.append(written(rewrite, in: evidence) + ending)
+        words += heard[replaced.upperBound...]
         return words.joined(separator: " ")
     }
 
     /// The term as it goes into the text: capitalized where the heard words started a sentence
     /// ("kubectl" for "Cube control" at the start), otherwise exactly as the dictionary spells it.
     /// FluidAudio's own rewrite does the same.
-    private static func written(
-        _ candidate: VocabularyRescorer.CandidateEvidence,
-        in evidence: VocabularyRescorer.CandidateEvidenceOutput
-    ) -> String {
-        let term = candidate.canonicalTerm
+    private static func written(_ rewrite: Rewrite, in evidence: VocabularyRescorer.CandidateEvidenceOutput) -> String {
+        let term = rewrite.candidate.canonicalTerm
         guard let first = term.first, first.isLowercase,
-              evidence.baseWords[candidate.wordRange.lowerBound].first?.isUppercase == true
+              evidence.baseWords[rewrite.replaced.lowerBound].first?.isUppercase == true
         else { return term }
         return first.uppercased() + term.dropFirst()
     }
 
     /// The rewrites that were applied, one entry per distinct rewrite, in the order first seen.
-    private static func applied(_ candidates: [VocabularyRescorer.CandidateEvidence]) -> [AppliedCorrection] {
+    private static func applied(
+        _ rewrites: [Rewrite], in evidence: VocabularyRescorer.CandidateEvidenceOutput
+    ) -> [AppliedCorrection] {
         var order: [String] = []
         var found: [String: (from: String, to: String, count: Int)] = [:]
-        for candidate in candidates where candidate.basePhrase != candidate.canonicalTerm {
-            let key = candidate.basePhrase.lowercased() + "\u{1F}" + candidate.canonicalTerm
+        for rewrite in rewrites {
+            let term = rewrite.candidate.canonicalTerm
+            // A narrowed rewrite only changed some of the words FluidAudio matched.
+            let heard = rewrite.isNarrowed
+                ? evidence.baseWords[rewrite.replaced].joined(separator: " ")
+                    .trimmingCharacters(in: CharacterSet(charactersIn: ".,;:!?…"))
+                : rewrite.candidate.basePhrase
+            guard heard != term else { continue }
+            let key = heard.lowercased() + "\u{1F}" + term
             if let seen = found[key] {
                 found[key] = (seen.from, seen.to, seen.count + 1)
             } else {
-                found[key] = (candidate.basePhrase, candidate.canonicalTerm, 1)
+                found[key] = (heard, term, 1)
                 order.append(key)
             }
         }

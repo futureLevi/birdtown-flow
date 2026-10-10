@@ -640,7 +640,8 @@ public struct AnthropicClient: PolishClient {
 
     public var apiKey: String
     public var model: String
-    /// `nil` picks automatically (low on models that take it); otherwise exactly this.
+    /// `nil` picks automatically (low on models that think before they answer); otherwise
+    /// exactly this.
     public var effort: PolishEffort?
     /// Per-request network timeout, a backstop. PolishService enforces its own, shorter
     /// deadline: at most `PolishTimeLimit.maximum` for a dictation, a minute in the Lab. The
@@ -672,23 +673,56 @@ public struct AnthropicClient: PolishClient {
         urlRequest.setValue(key, forHTTPHeaderField: "x-api-key")
         urlRequest.setValue(Self.apiVersion, forHTTPHeaderField: "anthropic-version")
         urlRequest.setValue("application/json", forHTTPHeaderField: "content-type")
-        let modelID = model.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? Self.defaultModel : model
+        let modelID = self.modelID
+        let effortLevel = sentEffort
         urlRequest.httpBody = try JSONEncoder().encode(
             Body(
                 model: modelID,
-                max_tokens: PolishPrompt.maxTokens(for: request.text),
-                temperature: 0,
+                max_tokens: Self.maxTokens(for: request.text, model: modelID, effort: effortLevel),
+                // 0 keeps the edit literal, on the models that still take it (`ClaudeModel`).
+                temperature: ClaudeModel.acceptsTemperature(modelID) ? 0 : nil,
                 system: PolishPrompt.system(for: request),
                 messages: [.init(role: "user", content: PolishPrompt.user(for: request))],
-                output_config: (effort.map(\.value) ?? Self.effort(for: modelID)).map { Body.OutputConfig(effort: $0) }))
+                output_config: effortLevel.map { Body.OutputConfig(effort: $0) }))
         return urlRequest
     }
 
-    /// Editing needs no deliberation, so ask for the least on models that take an effort
-    /// level. Others reject the field, so it's only sent where it's known to work.
-    static func effort(for model: String) -> String? {
-        model.lowercased().hasPrefix("claude-haiku-5") ? "low" : nil
+    /// The model a request goes to: `defaultModel` when none is set.
+    public var modelID: String {
+        model.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? Self.defaultModel : model
     }
+
+    /// The effort level a request sends as `output_config.effort`, or `nil` when it sends none.
+    public var sentEffort: String? {
+        let picked: String?? = effort.map(\.value)
+        return picked ?? Self.effort(for: modelID)
+    }
+
+    /// Editing needs no deliberation, so a model that thinks before it answers is asked for
+    /// the least. Effort is how to get less thinking on those ("To get less thinking, lower
+    /// the effort level", Anthropic's effort docs on Haiku 5.5), and left out it means
+    /// medium or high. `thinking: disabled` is no substitute: Opus 5.5 and Sonnet 5.5 reject
+    /// it, and Haiku 5.5 takes it only at high effort or below. Models that answer straight
+    /// away are left at their default, and older ones reject the field.
+    static func effort(for model: String) -> String? {
+        ClaudeModel.thinksByDefault(model) ? "low" : nil
+    }
+
+    /// The reply's budget (`PolishPrompt.maxTokens`), plus room to think on a model that
+    /// thinks before it answers, at any effort above low. Thinking counts toward
+    /// `max_tokens`, so a small one can stop after the thinking and before any text
+    /// (Anthropic's Haiku 5.5 migration guide: "raise it to leave room for thinking, or
+    /// choose a lower effort level"). At low, the level sent unless the Lab picks another,
+    /// thinking is brief and the reply's budget already allows for it.
+    static func maxTokens(for text: String, model: String, effort: String?) -> Int {
+        let reply = PolishPrompt.maxTokens(for: text)
+        guard ClaudeModel.thinksByDefault(model), effort != "low" else { return reply }
+        return reply + thinkingAllowance
+    }
+
+    /// The same as the reply's cap in `PolishPrompt.maxTokens`: about what the fastest models
+    /// write in the longest polish may take, so thinking longer could never finish in time.
+    static let thinkingAllowance = 8_192
 
     public static func parseResponse(data: Data, status: Int) throws -> String {
         guard (200..<300).contains(status) else {
@@ -720,7 +754,8 @@ public struct AnthropicClient: PolishClient {
         }
         var model: String
         var max_tokens: Int
-        var temperature: Double
+        /// Left out of the JSON when nil.
+        var temperature: Double?
         var system: String
         var messages: [Message]
         /// Left out of the JSON when nil.
@@ -746,40 +781,90 @@ public struct OpenAICompatibleClient: PolishClient {
     public var baseURL: URL
     public var apiKey: String
     public var model: String
+    /// From a Lab configuration, sent as `reasoning_effort`, which servers running reasoning
+    /// models take (OpenAI's own; Groq and Cerebras for gpt-oss). `nil` or `.standard` leaves
+    /// it out.
+    public var effort: PolishEffort?
     /// A backstop, like `AnthropicClient.timeout`.
     public var timeout: TimeInterval = 60
 
-    public init(baseURL: URL, apiKey: String, model: String) {
+    public init(baseURL: URL, apiKey: String, model: String, effort: PolishEffort? = nil) {
         self.baseURL = baseURL
         self.apiKey = apiKey
         self.model = model
+        self.effort = effort
+    }
+
+    /// Request fields some servers turn down with a 400: a temperature other than the
+    /// default (OpenAI's reasoning models), and `reasoning_effort` (servers that don't know
+    /// it, and models that don't reason).
+    public enum OptionalField: String, CaseIterable, Sendable {
+        case temperature
+        case reasoningEffort = "reasoning_effort"
+
+        /// Whether a server's error message names it.
+        func isNamed(in message: String) -> Bool {
+            let text = message.lowercased()
+            switch self {
+            case .temperature: return text.contains("temperature")
+            case .reasoningEffort: return text.contains("reasoning_effort") || text.contains("reasoning effort")
+            }
+        }
     }
 
     public func polish(_ request: PolishRequest) async throws -> String {
-        // Once an endpoint has rejected a temperature, later dictations skip straight to the
-        // request it accepts instead of paying for the rejection every time.
-        let memoKey = Self.temperatureMemoKey(baseURL: baseURL, model: model)
-        if Self.rejectsTemperature.contains(memoKey) {
-            let (data, status) = try await HTTP.send(try makeRequest(for: request, temperature: nil))
-            return try Self.parseResponse(data: data, status: status)
-        }
-        let (data, status) = try await HTTP.send(try makeRequest(for: request))
-        // Some models (OpenAI's reasoning family) only accept the default temperature; asking
-        // again without it beats failing every dictation for those users.
-        if status == 400, HTTP.errorMessage(from: data, status: status).lowercased().contains("temperature") {
-            Self.rejectsTemperature.insert(memoKey)
-            let (retryData, retryStatus) = try await HTTP.send(try makeRequest(for: request, temperature: nil))
-            return try Self.parseResponse(data: retryData, status: retryStatus)
-        }
-        return try Self.parseResponse(data: data, status: status)
+        try await polish(request, send: HTTP.send)
     }
 
-    /// Endpoint and model pairs that rejected a temperature, for as long as the app runs.
-    static let rejectsTemperature = LockedSet()
+    /// `polish`, with the network passed in so tests can play the server.
+    ///
+    /// A server that turns down an optional field is asked again without it, which beats
+    /// failing every dictation for those users. Once a request without it has been answered,
+    /// later dictations to the same endpoint and model leave it out from the start instead
+    /// of paying for the rejection every time.
+    func polish(
+        _ request: PolishRequest, send: (URLRequest) async throws -> (Data, Int)
+    ) async throws -> String {
+        let memoKey = Self.memoKey(baseURL: baseURL, model: model)
+        var omitted = Set(OptionalField.allCases.filter { Self.rejectedFields.contains(Self.memoEntry(memoKey, $0)) })
+        while true {
+            let (data, status) = try await send(try makeRequest(for: request, leavingOut: omitted))
+            if status == 400 {
+                let rejected = Self.fieldsToDrop(
+                    afterRejection: HTTP.errorMessage(from: data, status: status),
+                    sent: optionalFields(leavingOut: omitted))
+                // Each round leaves out at least one more field, so this asks at most twice more.
+                if !rejected.isEmpty {
+                    omitted.formUnion(rejected)
+                    continue
+                }
+            } else if (200..<300).contains(status) {
+                for field in omitted { Self.rejectedFields.insert(Self.memoEntry(memoKey, field)) }
+            }
+            return try Self.parseResponse(data: data, status: status)
+        }
+    }
+
+    /// The fields to leave out when asking again after a 400 that said `message`: the ones
+    /// it names or, when it names none, `reasoning_effort`, the one a server is least likely
+    /// to know. Empty when leaving fields out wouldn't help, so the error stands.
+    static func fieldsToDrop(afterRejection message: String, sent: Set<OptionalField>) -> Set<OptionalField> {
+        let named = sent.filter { $0.isNamed(in: message) }
+        return named.isEmpty ? sent.intersection([.reasoningEffort]) : named
+    }
+
+    /// Fields turned down by an endpoint and model, and answered without, for as long as the
+    /// app runs (`memoEntry`).
+    static let rejectedFields = LockedSet()
 
     /// The completions URL and the model as it's sent, so stray whitespace doesn't split entries.
-    static func temperatureMemoKey(baseURL: URL, model: String) -> String {
+    static func memoKey(baseURL: URL, model: String) -> String {
         completionsURL(for: baseURL).absoluteString + "\n" + model.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    /// One field turned down for the endpoint and model in `key`.
+    static func memoEntry(_ key: String, _ field: OptionalField) -> String {
+        key + "\n" + field.rawValue
     }
 
     /// Opens a connection to the endpoint's server while the person is still talking, so the
@@ -796,21 +881,53 @@ public struct OpenAICompatibleClient: PolishClient {
         return URL(string: trimmed + "/chat/completions") ?? baseURL.appendingPathComponent("chat/completions")
     }
 
-    public func makeRequest(for request: PolishRequest, temperature: Double? = 0) throws -> URLRequest {
+    /// `reasoning_effort` for the picked effort; `nil` when none was.
+    public var reasoningEffort: String? { effort.flatMap(Self.reasoningEffort(for:)) }
+
+    /// The `reasoning_effort` a request to this endpoint and model goes out with now: `nil`
+    /// once the server has turned it down and answered without it (`rejectedFields`).
+    public var sentReasoningEffort: String? {
+        let entry = Self.memoEntry(Self.memoKey(baseURL: baseURL, model: model), .reasoningEffort)
+        guard let reasoningEffort, !Self.rejectedFields.contains(entry) else { return nil }
+        return reasoningEffort
+    }
+
+    /// Servers know low, medium and high, so Max asks for high.
+    static func reasoningEffort(for effort: PolishEffort) -> String? {
+        switch effort {
+        case .standard: nil
+        case .low: "low"
+        case .medium: "medium"
+        case .high, .max: "high"
+        }
+    }
+
+    /// The optional fields a request that leaves out `omitted` carries.
+    func optionalFields(leavingOut omitted: Set<OptionalField>) -> Set<OptionalField> {
+        var fields: Set<OptionalField> = [.temperature]
+        if reasoningEffort != nil { fields.insert(.reasoningEffort) }
+        return fields.subtracting(omitted)
+    }
+
+    /// The request with `temperature: 0` and, when an effort was picked, `reasoning_effort`,
+    /// apart from any fields in `omitted`.
+    public func makeRequest(for request: PolishRequest, leavingOut omitted: Set<OptionalField> = []) throws -> URLRequest {
         var urlRequest = URLRequest(url: Self.completionsURL(for: baseURL), timeoutInterval: timeout)
         urlRequest.httpMethod = "POST"
         urlRequest.setValue("application/json", forHTTPHeaderField: "content-type")
         // Local servers (Ollama, LM Studio) need no key, so an empty one simply isn't sent.
         let key = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
         if !key.isEmpty { urlRequest.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization") }
+        let fields = optionalFields(leavingOut: omitted)
         urlRequest.httpBody = try JSONEncoder().encode(
             Body(
                 model: model.trimmingCharacters(in: .whitespacesAndNewlines),
-                temperature: temperature,
+                temperature: fields.contains(.temperature) ? 0 : nil,
                 messages: [
                     .init(role: "system", content: PolishPrompt.system(for: request)),
                     .init(role: "user", content: PolishPrompt.user(for: request)),
-                ]))
+                ],
+                reasoning_effort: fields.contains(.reasoningEffort) ? reasoningEffort : nil))
         return urlRequest
     }
 
@@ -833,6 +950,8 @@ public struct OpenAICompatibleClient: PolishClient {
         return content
     }
 
+    // Field names are the API's.
+    // swiftlint:disable identifier_name
     struct Body: Encodable {
         struct Message: Encodable {
             var role: String
@@ -842,7 +961,10 @@ public struct OpenAICompatibleClient: PolishClient {
         /// Omitted from the JSON when `nil` (synthesised `Encodable` uses `encodeIfPresent`).
         var temperature: Double?
         var messages: [Message]
+        /// "low", "medium" or "high"; omitted when `nil`, like `temperature`.
+        var reasoning_effort: String?
     }
+    // swiftlint:enable identifier_name
 
     // swiftlint:disable identifier_name
     struct Response: Decodable {

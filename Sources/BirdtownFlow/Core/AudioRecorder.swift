@@ -21,6 +21,9 @@ struct CapturedAudio: Sendable {
     var samples: [Float]
     /// Loudest ~33 ms window, on the meter's 0…1 scale. Used to drop silent recordings.
     var peakLevel: Float
+    /// From `AudioRecorder.start` (the key going down) to the microphone's first buffer.
+    /// `nil` when no buffer ever came.
+    var micLiveMs: Int? = nil
 
     var duration: Double { Double(samples.count) / AudioRecorder.sampleRate }
 }
@@ -89,7 +92,9 @@ final class AudioRecorder: @unchecked Sendable {
 
     /// Opens the microphone and starts accumulating. Failures arrive as `.failed`.
     func start(deviceUID: String?, generation: Int) {
-        queue.async { self.startOnQueue(deviceUID: deviceUID, generation: generation) }
+        // Taken here, on the caller's key-down, so `CapturedAudio.micLiveMs` includes the queue.
+        let requestedAt = ContinuousClock.now
+        queue.async { self.startOnQueue(deviceUID: deviceUID, generation: generation, requestedAt: requestedAt) }
     }
 
     /// Closes the microphone and returns everything captured since `start`.
@@ -138,7 +143,7 @@ final class AudioRecorder: @unchecked Sendable {
 
     // MARK: - Queue
 
-    private func startOnQueue(deviceUID: String?, generation: Int) {
+    private func startOnQueue(deviceUID: String?, generation: Int, requestedAt: ContinuousClock.Instant) {
         _ = finishCapture()
         lastDeviceUID = deviceUID
 
@@ -158,6 +163,7 @@ final class AudioRecorder: @unchecked Sendable {
         let sink = CaptureSink(
             generation: generation,
             maxSamples: Int(Self.sampleRate * Self.maxDuration),
+            requestedAt: requestedAt,
             emit: { [weak self] event in self?.emit(event) }
         )
 
@@ -412,6 +418,9 @@ private final class CaptureSink: @unchecked Sendable {
 
     private let lock = NSLock()
     private let maxSamples: Int
+    /// When the recording was asked for, and when its first buffer arrived (`micLiveMs`).
+    private let requestedAt: ContinuousClock.Instant
+    private var firstBufferAt: ContinuousClock.Instant?
     private let emit: @Sendable (AudioRecorder.Event) -> Void
     private let outputFormat: AVAudioFormat?
 
@@ -425,9 +434,13 @@ private final class CaptureSink: @unchecked Sendable {
     /// 1/30 s at 16 kHz: one meter reading per window, however the hardware sizes its buffers.
     private static let meterWindow = Int(AudioRecorder.sampleRate / 30)
 
-    init(generation: Int, maxSamples: Int, emit: @escaping @Sendable (AudioRecorder.Event) -> Void) {
+    init(
+        generation: Int, maxSamples: Int, requestedAt: ContinuousClock.Instant,
+        emit: @escaping @Sendable (AudioRecorder.Event) -> Void
+    ) {
         self.generation = generation
         self.maxSamples = maxSamples
+        self.requestedAt = requestedAt
         self.emit = emit
         outputFormat = AVAudioFormat(
             commonFormat: .pcmFormatFloat32,
@@ -465,7 +478,8 @@ private final class CaptureSink: @unchecked Sendable {
                 windowSum = 0
                 windowCount = 0
             }
-            let audio = CapturedAudio(samples: samples, peakLevel: peak)
+            let micLiveMs = firstBufferAt.map { Int((($0 - requestedAt) / Duration.milliseconds(1)).rounded()) }
+            let audio = CapturedAudio(samples: samples, peakLevel: peak, micLiveMs: micLiveMs)
             samples = []
             return audio
         }
@@ -473,6 +487,7 @@ private final class CaptureSink: @unchecked Sendable {
 
     private func ingest(_ buffer: AVAudioPCMBuffer) {
         lock.withLock {
+            if firstBufferAt == nil { firstBufferAt = ContinuousClock.now }
             guard isOpen, let chunk = convert(buffer), !chunk.isEmpty else { return }
 
             let room = maxSamples - samples.count

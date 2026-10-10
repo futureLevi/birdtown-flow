@@ -47,19 +47,33 @@ enum TextInjector {
         }
     }
 
+    /// Where `insertMeasured` spent its time, for the timing summary: the Accessibility pass
+    /// (finding the field, the spacing probe and any AX write) and the paste, its short wait
+    /// for the target app included. `nil` for a step that didn't run.
+    struct Timings: Sendable, Equatable {
+        var accessibilityMs: Int?
+        var pasteMs: Int?
+    }
+
     /// Inserts `text` at the caret, or leaves it on the clipboard when there's nowhere to type.
     static func insert(_ text: String, restoreClipboard: Bool) async -> Outcome {
-        guard !text.isEmpty else { return .inserted }
+        await insertMeasured(text, restoreClipboard: restoreClipboard).outcome
+    }
+
+    /// `insert`, and how long its steps took.
+    static func insertMeasured(_ text: String, restoreClipboard: Bool) async -> (outcome: Outcome, timings: Timings) {
+        var timings = Timings()
+        guard !text.isEmpty else { return (outcome: .inserted, timings: timings) }
         configureMessagingTimeout()
 
         // Typing into a password prompt is never right, even if it would work.
         if IsSecureEventInputEnabled() {
             copy(text)
-            return .copied(.secureInput)
+            return (outcome: .copied(.secureInput), timings: timings)
         }
         guard AXIsProcessTrusted() else {
             copy(text)
-            return .copied(.noAccessibility)
+            return (outcome: .copied(.noAccessibility), timings: timings)
         }
 
         let pasteFirst = prefersPasteboard(NSWorkspace.shared.frontmostApplication)
@@ -67,22 +81,31 @@ enum TextInjector {
         // Every AX call blocks until the target app answers, and the hotkey's event tap lives
         // on the main run loop, so the probe and write run on their own queue: a slow app
         // stalls this dictation, not the keyboard. The decisions are the same as on main.
+        let clock = ContinuousClock()
+        let accessibilityStart = clock.now
         let attempt = await withCheckedContinuation { (continuation: CheckedContinuation<AXAttempt, Never>) in
             axQueue.async {
                 continuation.resume(returning: attemptViaAccessibility(text, pasteFirst: pasteFirst))
             }
         }
+        timings.accessibilityMs = milliseconds(accessibilityStart.duration(to: clock.now))
 
         switch attempt {
         case .noTextField:
             copy(text)
-            return .copied(.noTextField)
+            return (outcome: .copied(.noTextField), timings: timings)
         case .inserted:
-            return .inserted
+            return (outcome: .inserted, timings: timings)
         case .needsPaste(let spacedText):
+            let pasteStart = clock.now
             await paste(spacedText, restoreClipboard: restoreClipboard)
-            return .inserted
+            timings.pasteMs = milliseconds(pasteStart.duration(to: clock.now))
+            return (outcome: .inserted, timings: timings)
         }
+    }
+
+    private static func milliseconds(_ duration: Duration) -> Int {
+        Int((duration / Duration.milliseconds(1)).rounded())
     }
 
     /// Puts `text` on the clipboard as an ordinary copy (clipboard managers keep it).
