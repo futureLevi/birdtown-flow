@@ -854,11 +854,26 @@ final class DictationController {
     ) async {
         let style = settings.style(for: context.category)
         var record = makeRecord(id: id, startedAt: startedAt, context: context, audioDuration: audio.duration)
+        record.timings.micLiveMs = audio.micLiveMs
         let clock = ContinuousClock()
         var timing = initialTiming
+        // What the pipeline and the insert measured. They join the summary only once processing
+        // is over, so building it never holds up the text.
+        var stages: PipelineOutput?
+        var insertMs: Int?
+        var insertSplit = TextInjector.Timings()
         defer {
             // Nothing polishes this dictation's parts any more.
             progressive?.cancel()
+            timing.ms("micLive", audio.micLiveMs)
+            stages?.addStages(to: &timing)
+            if let insertMs {
+                timing.ms("insert", insertMs)
+                var split = TimingLine("insert")
+                split.ms("ax", insertSplit.accessibilityMs)
+                split.ms("paste", insertSplit.pasteMs)
+                timing.group("insert", split)
+            }
             timing.ms("total", Self.milliseconds(since: releasedAt))
             timing.tag("outcome", record.outcome.rawValue)
             Log.timing.notice("\(timing.text, privacy: .public)")
@@ -894,7 +909,7 @@ final class DictationController {
             ) { [weak self] in
                 if self?.isCurrent(id) == true { self?.phase = .polishing }
             }
-            output.addStages(to: &timing)
+            stages = output
             guard isCurrent(id) else { throw CancellationError() }
             output.apply(to: &record)
 
@@ -915,8 +930,9 @@ final class DictationController {
             }
 
             let insertStart = clock.now
-            let outcome = await TextInjector.insert(text, restoreClipboard: settings.restoreClipboard)
-            timing.ms("insert", Self.milliseconds(insertStart.duration(to: clock.now)))
+            let (outcome, split) = await TextInjector.insertMeasured(text, restoreClipboard: settings.restoreClipboard)
+            insertMs = Self.milliseconds(insertStart.duration(to: clock.now))
+            insertSplit = split
             var copiedNotice: String?
             var copiedFollowUp: FollowUp?
             switch outcome {
@@ -1003,6 +1019,9 @@ final class DictationController {
         var polishNote: String?
         /// The Lab configuration this style used, by name.
         var polishConfiguration: String?
+        /// What polish was sent to and, for Claude Code, where its time went. `nil` when
+        /// polish didn't run.
+        var polishDiagnostics: PolishDiagnostics?
         /// From key-up's point of view: engine wait included, as History has always shown it.
         var transcribeMs: Int
         var polishMs: Int
@@ -1014,7 +1033,8 @@ final class DictationController {
         var prepareMs: Int
         var finalizeMs: Int
 
-        /// Appends engine wait, transcription, prepare, polish and finalize to the summary.
+        /// Appends engine wait, transcription, prepare, polish (with what it was sent to and,
+        /// for Claude Code, a cold start and the model's time) and finalize to the summary.
         func addStages(to line: inout TimingLine) {
             line.ms("engineWait", engineWaitMs)
             line.ms("transcribe", transcribeMs - engineWaitMs)
@@ -1024,6 +1044,7 @@ final class DictationController {
             line.ms("prepare", prepareMs)
             if let polishReport {
                 line.ms("polish", polishMs)
+                polishDiagnostics?.addFields(to: &line)
                 line.group("polish", polishReport.line)
             }
             line.ms("finalize", finalizeMs)
@@ -1056,6 +1077,8 @@ final class DictationController {
             // all again and clears this.
             record.timings.transcribedWhileRecording = transcriptionReport.decodedWhileRecording ? true : nil
             record.timings.polishMs = polishMs
+            // A Retry that doesn't polish clears what the dictation's polish recorded.
+            record.timings.setPolish(polishDiagnostics)
         }
     }
 
@@ -1095,6 +1118,7 @@ final class DictationController {
         var polishedBy: PolishProvider?
         var polishNote: String?
         var polishConfiguration: String?
+        var polishDiagnostics: PolishDiagnostics?
         var polishReport: PolishReport?
         var polishMs = 0
 
@@ -1108,6 +1132,7 @@ final class DictationController {
             polishedBy = outcome.provider
             polishNote = outcome.note
             polishConfiguration = configurationName
+            polishDiagnostics = outcome.diagnostics
             polishReport = report
             polishMs = Self.milliseconds(polishStart.duration(to: clock.now))
             try Task.checkCancellation()
@@ -1133,6 +1158,7 @@ final class DictationController {
             polishedBy: polishedBy,
             polishNote: polishNote,
             polishConfiguration: polishConfiguration,
+            polishDiagnostics: polishDiagnostics,
             transcribeMs: transcribeMs,
             polishMs: polishMs,
             engineWaitMs: engineWaitMs,

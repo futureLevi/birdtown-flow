@@ -108,12 +108,17 @@ actor ParakeetEngine: TranscriptionEngine {
         let terms = Self.boostTerms(from: vocabulary)
         var boosted: [AppliedCorrection] = []
         var rescoredText = false
+        var boostMs: Int?
         if !text.isEmpty, !terms.isEmpty, let timings = result.tokenTimings, !timings.isEmpty,
-           await boostingEnabled(),
-           let rescored = await boost(text: text, timings: timings, audio: audio, terms: terms) {
-            text = rescored.text
-            boosted = rescored.replacements
-            rescoredText = true
+           await boostingEnabled() {
+            let boostStarted = clock.now
+            let rescored = await boost(text: text, timings: timings, audio: audio, terms: terms)
+            boostMs = Self.milliseconds(clock.now - boostStarted)
+            if let rescored {
+                text = rescored.text
+                boosted = rescored.replacements
+                rescoredText = true
+            }
         }
 
         let engineName = name
@@ -126,7 +131,8 @@ actor ParakeetEngine: TranscriptionEngine {
             \(totalSeconds, format: .fixed(precision: 2))s (recognition \(recognitionSeconds, format: .fixed(precision: 2))s\
             \(boostNote, privacy: .public))
             """)
-        return Transcript(text: text, boosted: boosted)
+        return Transcript(
+            text: text, boosted: boosted, recognitionMs: Self.milliseconds(recognized - started), boostMs: boostMs)
     }
 
     // MARK: - Boosting

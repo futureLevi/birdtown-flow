@@ -28,7 +28,8 @@ Sources/MurmurKit          pure logic. Foundation only, builds and tests on Linu
   Models/                  shared value types (HistoryRecord, AppContext, Snippet, styles…)
   Text/                    TextPipeline, SnippetStore
   History/                 HistoryStore (JSON + recordings/)
-  Stats/                   DictationStats, TimingLine (the per-dictation timing summary)
+  Stats/                   DictationStats, TimingLine (the per-dictation timing summary),
+                           TimingRollup (the p50/p90 line atop History's Timings view)
   Polish/                  prompts, PolishGuard, Anthropic + OpenAI-compatible clients,
                            the Lab's configurations (PolishLabStore → lab.json) and WordDiff
 Sources/BirdtownFlow             the macOS app

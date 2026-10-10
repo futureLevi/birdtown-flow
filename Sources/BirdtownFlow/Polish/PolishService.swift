@@ -1,5 +1,6 @@
 import Foundation
 import MurmurKit
+import os
 
 /// Routes a transcript to the configured AI polisher, with a hard timeout and `PolishGuard`.
 /// Never throws: any failure returns the input unchanged with a note for History.
@@ -14,6 +15,10 @@ final class PolishService {
         /// The model answered, but its reply can't be used: `PolishGuard` turned it down, or it
         /// was cut off or declined. Asking again with the same request won't help.
         var rejected = false
+        /// The model and effort it was sent with and, for Claude Code, a cold start and the
+        /// model's own time. A cold start is kept when the request ran out of time; the model's
+        /// time only comes with an answer. Empty when no request was sent (polish off, no key).
+        var diagnostics = PolishDiagnostics()
     }
 
     private let settings: Settings
@@ -65,13 +70,23 @@ final class PolishService {
     ) async -> Outcome {
         let clock = ContinuousClock()
         let started = clock.now
+        var diagnostics = Self.diagnostics(sentWith: client)
+        // How Claude Code's session started, heard before the answer: when the deadline wins,
+        // `HardDeadline` drops the reply, and a cold start is the likeliest reason it did.
+        let claudeStart = OSAllocatedUnfairLock<ClaudeCodeStart?>(initialState: nil)
         do {
             // A part still queued when time is up isn't sent at all.
             let remaining = deadline - started
             guard remaining > .zero else { throw HardDeadline.Exceeded() }
-            let output = try await HardDeadline.run(within: max(remaining, .milliseconds(1))) {
-                try await client.polish(request)
+            // Claude Code's answer carries its own timings, as in `labRun`; the others' is only text.
+            let reply: ClaudeCodeReply = try await HardDeadline.run(within: max(remaining, .milliseconds(1))) {
+                if let claude = client as? ClaudeCodePolisher {
+                    return try await claude.reply(to: request) { start in claudeStart.withLock { $0 = start } }
+                }
+                return ClaudeCodeReply(text: try await client.polish(request))
             }
+            if client is ClaudeCodePolisher { diagnostics.record(reply) }
+            let output = reply.text
             let elapsed = Self.seconds(clock.now - started)
             guard let accepted = PolishGuard.accept(
                 output, original: request.text, vocabulary: request.vocabulary, context: request.context
@@ -79,15 +94,42 @@ final class PolishService {
                 Log.polish.info("\(provider.rawValue, privacy: .public) rewrite rejected by the guard")
                 return Outcome(
                     text: request.text, provider: nil, note: "Rewrite rejected: it changed what was said",
-                    rejected: true)
+                    rejected: true, diagnostics: diagnostics)
             }
             Log.polish.info("\(provider.rawValue, privacy: .public) polished in \(elapsed, format: .fixed(precision: 2))s")
-            return Outcome(text: accepted, provider: provider, note: nil)
+            return Outcome(text: accepted, provider: provider, note: nil, diagnostics: diagnostics)
         } catch {
             let note = Self.note(for: error, limit: limit ?? timeLimit)
             Log.polish.info("polish fell back (\(provider.rawValue, privacy: .public)): \(note, privacy: .public)")
-            return Outcome(text: request.text, provider: nil, note: note, rejected: Self.isUnusableReply(error))
+            // No model or session time without an answer, but how the session started is known.
+            let start = claudeStart.withLock { $0 }
+            if let start { diagnostics.record(start) }
+            return Outcome(
+                text: request.text, provider: nil, note: note, rejected: Self.isUnusableReply(error),
+                diagnostics: diagnostics)
         }
+    }
+
+    /// The model and effort `client` sends with, as far as it says: Claude Code and the
+    /// Anthropic API fall back to their default model, and the API picks its own effort
+    /// when none is set. Apple Intelligence names neither.
+    private static func diagnostics(sentWith client: any PolishClient) -> PolishDiagnostics {
+        func named(_ model: String, or fallback: String? = nil) -> String? {
+            let trimmed = model.trimmingCharacters(in: .whitespacesAndNewlines)
+            return trimmed.isEmpty ? fallback : trimmed
+        }
+        if let claude = client as? ClaudeCodePolisher {
+            return PolishDiagnostics(
+                model: named(claude.model, or: ClaudeCodePolisher.defaultModel), effort: claude.effort.value)
+        }
+        if let anthropic = client as? AnthropicClient {
+            return PolishDiagnostics(
+                model: named(anthropic.model, or: AnthropicClient.defaultModel), effort: anthropic.effort?.value)
+        }
+        if let compatible = client as? OpenAICompatibleClient {
+            return PolishDiagnostics(model: named(compatible.model))
+        }
+        return PolishDiagnostics()
     }
 
     /// `polish`, for a dictation of any length.
@@ -199,7 +241,7 @@ final class PolishService {
         }
         let keptAsDictated = parts.count { $0.provider == nil }
         let firstNote = parts.lazy.compactMap(\.note).first
-        let outcome: Outcome
+        var outcome: Outcome
         if keptAsDictated == parts.count {
             outcome = Outcome(text: request.text, provider: nil, note: firstNote)
         } else {
@@ -209,6 +251,10 @@ final class PolishService {
                 note: keptAsDictated == 0 ? nil : DictationFeedback.partialPolishNote(
                     keptAsDictated: keptAsDictated, of: parts.count, reason: firstNote ?? ""))
         }
+        // What key-up waited for: the parts awaited or sent now, not the cached ones.
+        let sentWith = Self.diagnostics(sentWith: client)
+        outcome.diagnostics = PolishDiagnostics.parts(
+            results.map(\.outcome.diagnostics), model: sentWith.model, effort: sentWith.effort)
 
         report.line.count("chunks", parts.count)
         report.line.count("cached", parts.count - awaited.count - fresh.count)
@@ -430,7 +476,7 @@ final class PolishService {
                 }
             return LabResult(
                 verdict: verdict, totalMilliseconds: total, modelMilliseconds: reply.modelMilliseconds,
-                sessionMilliseconds: reply.sessionMilliseconds, startedCold: reply.startedCold)
+                sessionMilliseconds: reply.sessionMilliseconds, startedCold: reply.start.startedCold)
         } catch {
             let message = error is CancellationError ? "Stopped before it finished." : Self.explanation(for: error, limit: limit)
             return LabResult(verdict: .failed(message), totalMilliseconds: Self.milliseconds(clock.now - started))
@@ -622,5 +668,23 @@ final class PolishService {
 
     private static func milliseconds(_ duration: Duration) -> Int {
         Int((seconds(duration) * 1000).rounded())
+    }
+}
+
+private extension PolishDiagnostics {
+    /// How Claude Code's session started: cold or not and why, and how long the session it
+    /// used had been waiting.
+    mutating func record(_ start: ClaudeCodeStart) {
+        startedCold = start.startedCold
+        coldReason = start.coldReason
+        spareAgeMs = start.spareAgeMilliseconds
+    }
+
+    /// Claude Code's own account of one answered request: how its session started, and the
+    /// model's and the session's time.
+    mutating func record(_ reply: ClaudeCodeReply) {
+        record(reply.start)
+        modelMs = reply.modelMilliseconds
+        sessionMs = reply.sessionMilliseconds
     }
 }
