@@ -11,11 +11,16 @@ struct VoiceprintHero<Content: View>: View {
 
     /// Seconds into a Shimmer sweep to draw instead of animating, for snapshots.
     var sweepPhase: Double?
-    @ViewBuilder var content: (Room) -> Content
+    let content: (Room) -> Content
 
     @Environment(\.colorScheme) private var colorScheme
     @State private var width = Layout.Hero.designWidth
     @State private var isOnScreen = true
+
+    init(sweepPhase: Double? = nil, @ViewBuilder content: @escaping (Room) -> Content) {
+        self.sweepPhase = sweepPhase
+        self.content = content
+    }
 
     var body: some View {
         let shape = RoundedRectangle(cornerRadius: Layout.Hero.cornerRadius, style: .continuous)
