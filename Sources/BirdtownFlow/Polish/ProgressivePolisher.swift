@@ -142,9 +142,13 @@ final class ProgressivePolisher {
     private func start(_ request: PolishRequest, number: Int, client: any PolishClient, provider: PolishProvider) {
         let service = self.service
         let started = ContinuousClock.now
-        let deadline = started + .seconds(service.timeLimit)
+        // The limit key-up would give one request this long, so a long part isn't cut short
+        // while recording and then sent again at key-up with less time left.
+        let limit = service.oneRequestLimit(for: request.text)
+        let deadline = started + .seconds(limit)
         let task = Task { [weak self] in
-            let outcome = await service.polishOne(request, client: client, provider: provider, deadline: deadline)
+            let outcome = await service.polishOne(
+                request, client: client, provider: provider, deadline: deadline, limit: limit)
             self?.finished(request, outcome: outcome, number: number, elapsed: ContinuousClock.now - started)
             return outcome
         }

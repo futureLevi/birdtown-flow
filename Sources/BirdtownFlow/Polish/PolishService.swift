@@ -160,8 +160,9 @@ final class PolishService {
                     } onCancel: {
                         task.cancel()
                     }
-                    // It timed out or failed against its own, earlier deadline: like a part
-                    // that failed while the person talked, it gets what's left of this one.
+                    // It timed out or failed against its own deadline (one request's limit,
+                    // set when it was sent): like a part that failed while the person talked,
+                    // it gets what's left of this one.
                     if outcome.provider == nil, !outcome.rejected, !Task.isCancelled {
                         outcome = await polishPart(index)
                     }
@@ -234,8 +235,9 @@ final class PolishService {
             concurrency: concurrency(for: provider))
     }
 
-    /// One request for `text`: `timeLimit`, or more for a long text.
-    private func oneRequestLimit(for text: String) -> Double {
+    /// One request for `text`: `timeLimit`, or more for a long text. A part polished while
+    /// the person talks gets the same (`ProgressivePolisher`).
+    func oneRequestLimit(for text: String) -> Double {
         PolishTimeLimit.seconds(base: timeLimit, words: PolishTimeLimit.words(in: text))
     }
 
