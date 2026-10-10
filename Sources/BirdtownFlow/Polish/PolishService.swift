@@ -111,9 +111,10 @@ final class PolishService {
             part.continues = chunk.continues
             return part
         }
-        // What was polished while the person talked counts only if it came from this provider
-        // (Settings can change during a recording).
-        let earlier = progressive.flatMap { $0.provider == polisher.provider ? $0 : nil }
+        // What was polished while the person talked counts only if it came from this provider,
+        // model and endpoint (Settings can change during a recording).
+        let identity = clientIdentity(using: configuration)
+        let earlier = progressive.flatMap { $0.identity == identity ? $0 : nil }
         progressive?.stop(keeping: earlier == nil ? [] : requests)
 
         var outcomes = [Outcome?](repeating: nil, count: requests.count)
@@ -223,6 +224,40 @@ final class PolishService {
                   for: provider, model: configuration?.model, effort: configuration?.effort)
         else { return nil }
         return (client, provider)
+    }
+
+    /// What a client is made from, keys aside: equal identities send text to the same place
+    /// and have it polished by the same model the same way.
+    struct ClientIdentity: Equatable, Sendable {
+        var provider: PolishProvider
+        var model: String?
+        var effort: PolishEffort?
+        /// The OpenAI-compatible base URL; `nil` for the other providers.
+        var endpoint: URL?
+    }
+
+    /// What a client made now for `configuration` (or Settings) would be made from, as
+    /// `makeClient` reads it, without reading a key or making one. A long dictation's parts
+    /// polished while the person talks go on, and count at key-up, only while it stays the
+    /// same, so a model or endpoint changed in Settings mid-recording gets no more text.
+    func clientIdentity(using configuration: PolishConfiguration?) -> ClientIdentity {
+        let provider = configuration?.provider ?? settings.polishProvider
+        let configured: String? = configuration?.model
+        let chosenModel = configured.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.flatMap { $0.isEmpty ? nil : $0 }
+        let model: String?
+        var endpoint: URL?
+        switch provider {
+        case .anthropic:
+            model = chosenModel ?? settings.anthropicModel.trimmingCharacters(in: .whitespacesAndNewlines)
+        case .openAICompatible:
+            model = chosenModel ?? settings.openAIModel.trimmingCharacters(in: .whitespacesAndNewlines)
+            endpoint = endpointURL
+        case .claudeCode:
+            model = chosenModel
+        case .off, .appleIntelligence:
+            model = nil
+        }
+        return ClientIdentity(provider: provider, model: model, effort: configuration?.effort, endpoint: endpoint)
     }
 
     /// Gets the provider ready for a dictation that's starting, while the person talks: loads

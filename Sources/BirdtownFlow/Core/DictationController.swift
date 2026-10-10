@@ -192,7 +192,9 @@ final class DictationController {
         hotkey.onTapLost = { [weak self] in
             guard let self else { return }
             // A hold in progress will never see its release now.
-            if self.session != nil, !self.isHandsFree { self.discardSession() }
+            if self.session != nil, !self.isHandsFree {
+                self.discardSession(reason: "The push-to-talk key stopped working")
+            }
             self.isHotkeyActive = false
             self.scheduleRearm()
         }
@@ -227,7 +229,16 @@ final class DictationController {
     func deactivate() {
         rearmTask?.cancel()
         rearmTask = nil
-        if session != nil { cancel() }
+        // Shortcuts pause while a new one is recorded, which ends a recording in progress.
+        // Nobody pressed Esc, so a long one keeps the audio it saved, with Retry (rule 2); a
+        // short one is cancelled.
+        if let current = session {
+            if current.live?.hasSavedAudio == true {
+                discardSession(reason: "Setting a shortcut stopped the recording")
+            } else {
+                cancel()
+            }
+        }
         hotkey.stop()
         isHotkeyActive = false
         pasteLastShortcut.unregister()
@@ -251,7 +262,7 @@ final class DictationController {
     private func restartHotkey() {
         // Restarting the tap forgets a held key, so its release would never arrive and a
         // hold-to-talk recording would be orphaned. Drop it (hands-free ones need no key).
-        if session != nil, !isHandsFree { discardSession() }
+        if session != nil, !isHandsFree { discardSession(reason: "The push-to-talk key was reset") }
         pressRole = .ignored
         hotkey.key = settings.pushToTalkKey
         hotkey.start()
@@ -477,16 +488,24 @@ final class DictationController {
 
     /// Drops the recording without a sound or a History row (shortcut chords, slips, a
     /// double-tap that never came).
-    private func discardSession() {
+    ///
+    /// A long recording that has saved audio already isn't dropped: what's on disk stays as a
+    /// failed row with Retry (rule 2), and the HUD says `reason` and links to it.
+    private func discardSession(reason: String = "The recording stopped early") {
         guard let current = session else { return }
         session = nil
+        let kept = current.live?.keepRecordedAudio(message: reason) ?? false
         endLive(current)
         armTask?.cancel()
         armTask = nil
         doubleTapTask?.cancel()
         doubleTapTask = nil
         recorder.cancel()
-        resetToIdle()
+        if kept {
+            fail(Self.keptMessage(reason), followUp: .record(current.id))
+        } else {
+            resetToIdle()
+        }
     }
 
     // MARK: - Long recordings
@@ -519,7 +538,7 @@ final class DictationController {
     /// known; a style whose configuration turns polish off leaves it idle.
     private func makeProgressivePolisher(contextTask: Task<AppContext, Never>) -> ProgressivePolisher? {
         guard settings.polishWhileSpeaking, settings.polishInParts, settings.polishProvider != .off else { return nil }
-        let progressive = ProgressivePolisher(service: PolishService(settings: settings), settings: settings)
+        let progressive = ProgressivePolisher(service: PolishService(settings: settings), settings: settings, lab: lab)
         Task { [weak self, weak progressive] in
             let context = await contextTask.value
             guard let self, let progressive else { return }
@@ -536,10 +555,17 @@ final class DictationController {
         return progressive
     }
 
-    /// The recording is gone (Esc, discarded, dropped, failed): stop its work and leave no trace.
+    /// The recording is gone (Esc, discarded, dropped, failed): stop its work and leave no
+    /// trace, unless `LiveDictation.keepRecordedAudio` kept its audio first.
     private func endLive(_ session: Session) {
         session.live?.cancel()
         session.progressive?.cancel()
+    }
+
+    /// The HUD's words for a recording that ended early but kept its audio in History
+    /// (`LiveDictation.keepRecordedAudio`). `reason` is what its row says.
+    private static func keptMessage(_ reason: String) -> String {
+        "\(reason) · the audio is saved in History"
     }
 
     private func lockHandsFree() {
@@ -730,12 +756,23 @@ final class DictationController {
         do {
             audio = try await Watchdog.run(within: Timing.recorderStop) { await recorder.stop() }
         } catch {
-            endLive(session)
-            guard isCurrent(id) else { return }
+            // Esc meanwhile: the recording goes, saved audio and all.
+            guard isCurrent(id) else {
+                endLive(session)
+                return
+            }
             Log.audio.error("the recorder didn't hand over its audio in time")
+            // A long recording's audio so far is on disk: it stays, with Retry (rule 2).
+            let reason = "The microphone stopped responding"
+            let kept = session.live?.keepRecordedAudio(message: reason) ?? false
+            endLive(session)
             isStopping = false
             processing = nil
-            fail("The microphone stopped responding", followUp: .inputDevice)
+            if kept {
+                fail(Self.keptMessage(reason), followUp: .record(id))
+            } else {
+                fail(reason, followUp: .inputDevice)
+            }
             return
         }
         guard isCurrent(id) else {
@@ -1066,6 +1103,9 @@ final class DictationController {
             polishReport = report
             polishMs = Self.milliseconds(polishStart.duration(to: clock.now))
             try Task.checkCancellation()
+        } else {
+            // Nothing will use the parts polished while the person talked: send no more.
+            progressive?.cancel()
         }
 
         let finalizeStart = clock.now
@@ -1398,6 +1438,10 @@ final class DictationController {
 
             updated = history.record(id: record.id) ?? updated
             output.apply(to: &updated)
+            // A row saved before key-up (a crash, a quit) never learned its length.
+            if updated.audioDuration == 0 {
+                updated.audioDuration = Double(samples.count) / AudioRecorder.sampleRate
+            }
             updated.style = style
             updated.errorMessage = output.polishNote
             updated.timings.totalMs = Self.milliseconds(since: started)

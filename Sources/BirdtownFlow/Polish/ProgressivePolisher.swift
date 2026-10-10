@@ -17,12 +17,13 @@ final class ProgressivePolisher {
     /// The part being polished now.
     private(set) var inFlight: (request: PolishRequest, task: Task<PolishService.Outcome, Never>)?
 
-    /// The provider the cached and in-flight results come from; `nil` until the first part
-    /// is sent. Key-up uses them only if it polishes with the same one.
-    var provider: PolishProvider? { polisher?.provider }
+    /// The provider, model and endpoint the cached and in-flight results come from; `nil`
+    /// until the first part is sent. Key-up uses them only if it polishes with the same ones.
+    private(set) var identity: PolishService.ClientIdentity?
 
     private let service: PolishService
     private let settings: Settings
+    private let lab: PolishLabStore
     private var template: PolishRequest?
     private var configuration: PolishConfiguration?
     private var options = PipelineOptions()
@@ -34,15 +35,17 @@ final class ProgressivePolisher {
     /// Parts that timed out or failed while recording; key-up sends them again.
     private var failed: Set<PolishRequest> = []
     private var failuresInARow = 0
-    /// Key-up took over, the recording is gone, or the provider keeps failing.
+    /// Key-up took over, the recording is gone, the provider keeps failing, or the polish
+    /// settings changed while recording.
     private var isStopped = false
 
     /// A provider that fails this many parts in a row is left alone until key-up.
     private static let failureLimit = 2
 
-    init(service: PolishService, settings: Settings) {
+    init(service: PolishService, settings: Settings, lab: PolishLabStore) {
         self.service = service
         self.settings = settings
+        self.lab = lab
     }
 
     /// Called once the frontmost context is known; `template.text` is "".
@@ -82,9 +85,18 @@ final class ProgressivePolisher {
 
     /// Sends the first finished part that hasn't been polished, unless one is in flight.
     private func startNextPart() {
-        guard !isStopped, inFlight == nil, settings.polishWhileSpeaking, settings.polishInParts,
-              let template, let raw = latest
-        else { return }
+        guard !isStopped, let template else { return }
+        // Settings and the Lab can change while the person talks. Text goes out before key-up
+        // only while that's still wanted, and only for parts key-up would use.
+        let sameWay = polishesSameWay(as: template)
+        guard mayPolishWhileSpeaking, sameWay else {
+            Log.polish.info("progressive polish stopped: the polish settings changed while recording")
+            // Parts polished some other way mustn't stand in for this way at key-up.
+            if !sameWay { cache = [:] }
+            stop(keeping: [])
+            return
+        }
+        guard inFlight == nil, let raw = latest else { return }
         let prepared = TextPipeline.prepare(raw, options: options)
         for (index, chunk) in PolishChunker.chunks(prepared, closedOnly: true).enumerated() {
             var request = template
@@ -99,11 +111,31 @@ final class ProgressivePolisher {
                     return
                 }
                 polisher = made
+                identity = service.clientIdentity(using: configuration)
             }
             guard let polisher else { return }
             start(request, number: index + 1, client: polisher.client, provider: polisher.provider)
             return
         }
+    }
+
+    /// Polish is on, in parts, and allowed to send text before key-up.
+    private var mayPolishWhileSpeaking: Bool {
+        settings.polishProvider != .off && settings.polishInParts && settings.polishWhileSpeaking
+    }
+
+    /// Whether key-up would polish the way the parts here are polished: the app still has
+    /// `template`'s style, the style the same Lab configuration (or none, and unchanged), and
+    /// that resolves to the provider, model and endpoint the first part went to. The client
+    /// was made from them once; no part may go on to a model or endpoint Settings dropped.
+    private func polishesSameWay(as template: PolishRequest) -> Bool {
+        guard settings.style(for: template.category) == template.style,
+              lab.configuration(for: template.style) == configuration
+        else { return false }
+        let current = service.clientIdentity(using: configuration)
+        guard current.provider != .off else { return false }
+        if let identity, identity != current { return false }
+        return true
     }
 
     private func start(_ request: PolishRequest, number: Int, client: any PolishClient, provider: PolishProvider) {

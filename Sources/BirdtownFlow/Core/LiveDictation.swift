@@ -16,6 +16,9 @@ final class LiveDictation {
     var onCommittedText: (@MainActor (String) -> Void)?
     /// The windowed transcription in progress. `nil` until the recording is long enough.
     private(set) var transcriber: SegmentedTranscriber?
+    /// Audio is on disk and its hidden row saved, and both are still this recording's to keep
+    /// or delete: `keepRecordedAudio` would keep them.
+    var hasSavedAudio: Bool { isSaved && !isCancelled && !isHandedOff }
 
     /// Samples captured before windows start being cut (20 s).
     static let armingSamples = 320_000
@@ -91,8 +94,8 @@ final class LiveDictation {
         await writer?.close()
     }
 
-    /// Esc, a discarded or dropped recording: cancels the work and deletes the placeholder row
-    /// and its WAV, so nothing is left behind.
+    /// Esc, a dropped recording, or one that heard nothing: cancels the work and deletes the
+    /// placeholder row and its WAV, so nothing is left behind.
     func cancel() {
         guard !isCancelled else { return }
         isCancelled = true
@@ -110,6 +113,44 @@ final class LiveDictation {
         }
         // Also removes the WAV and the in-progress mark.
         if isSaved { history.delete(ids: [id]) }
+    }
+
+    /// The recording ended before the dictation could take it over (the microphone stopped
+    /// responding, the push-to-talk key was lost). Like `cancel`, except that audio already on
+    /// disk stays: the hidden row becomes a failed one saying `message`, pointing at the
+    /// partial WAV, so what was said survives and Retry works (rule 2).
+    ///
+    /// Returns whether there's a row to point the user at. Without one (no window was saved
+    /// yet), nothing is left behind, as with `cancel`.
+    @discardableResult
+    func keepRecordedAudio(message: String) -> Bool {
+        guard !isCancelled, !isHandedOff else { return false }
+        guard isSaved, let writer, var record = history.record(id: id) else {
+            cancel()
+            return false
+        }
+        // The row and the WAV are no longer this recording's to delete, so `cancel` only
+        // stops the work.
+        isHandedOff = true
+        cancel()
+        record.outcome = .failed
+        record.errorMessage = message
+        history.update(record)
+        history.clearInProgress(id)
+        Log.audio.notice("kept the audio of a recording that ended early")
+
+        // The header is patched after every append, so the file already plays. Closing waits
+        // for an append still running, and then the row learns how much audio it has.
+        let store = history
+        let recordID = id
+        Task {
+            await writer.close()
+            let written = await writer.written
+            guard var row = store.record(id: recordID), row.audioDuration == 0 else { return }
+            row.audioDuration = Double(written) / Self.sampleRate
+            store.update(row)
+        }
+        return true
     }
 
     /// `DictationController.process` took over the row: it's no longer hidden.
