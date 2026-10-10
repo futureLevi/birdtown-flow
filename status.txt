@@ -1,0 +1,9 @@
+sha=3d4ded17aadbce37f905e4cefe5c82f94cfdd50d
+branch=perf/latency-batch
+build=success
+test=success
+snapshots=success
+synth=success
+speech=success
+segmented=success
+release=skipped
