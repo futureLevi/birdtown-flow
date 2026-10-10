@@ -1,5 +1,6 @@
 import Foundation
 import MurmurKit
+import os
 
 /// Routes a transcript to the configured AI polisher, with a hard timeout and `PolishGuard`.
 /// Never throws: any failure returns the input unchanged with a note for History.
@@ -15,7 +16,8 @@ final class PolishService {
         /// was cut off or declined. Asking again with the same request won't help.
         var rejected = false
         /// The model and effort it was sent with and, for Claude Code, a cold start and the
-        /// model's own time. Empty when no request was sent (polish off, no key).
+        /// model's own time. A cold start is kept when the request ran out of time; the model's
+        /// time only comes with an answer. Empty when no request was sent (polish off, no key).
         var diagnostics = PolishDiagnostics()
     }
 
@@ -69,6 +71,9 @@ final class PolishService {
         let clock = ContinuousClock()
         let started = clock.now
         var diagnostics = Self.diagnostics(sentWith: client)
+        // How Claude Code's session started, heard before the answer: when the deadline wins,
+        // `HardDeadline` drops the reply, and a cold start is the likeliest reason it did.
+        let claudeStart = OSAllocatedUnfairLock<ClaudeCodeStart?>(initialState: nil)
         do {
             // A part still queued when time is up isn't sent at all.
             let remaining = deadline - started
@@ -76,7 +81,7 @@ final class PolishService {
             // Claude Code's answer carries its own timings, as in `labRun`; the others' is only text.
             let reply: ClaudeCodeReply = try await HardDeadline.run(within: max(remaining, .milliseconds(1))) {
                 if let claude = client as? ClaudeCodePolisher {
-                    return try await claude.reply(to: request)
+                    return try await claude.reply(to: request) { start in claudeStart.withLock { $0 = start } }
                 }
                 return ClaudeCodeReply(text: try await client.polish(request))
             }
@@ -96,6 +101,9 @@ final class PolishService {
         } catch {
             let note = Self.note(for: error, limit: limit ?? timeLimit)
             Log.polish.info("polish fell back (\(provider.rawValue, privacy: .public)): \(note, privacy: .public)")
+            // No model or session time without an answer, but how the session started is known.
+            let start = claudeStart.withLock { $0 }
+            if let start { diagnostics.record(start) }
             return Outcome(
                 text: request.text, provider: nil, note: note, rejected: Self.isUnusableReply(error),
                 diagnostics: diagnostics)
@@ -468,7 +476,7 @@ final class PolishService {
                 }
             return LabResult(
                 verdict: verdict, totalMilliseconds: total, modelMilliseconds: reply.modelMilliseconds,
-                sessionMilliseconds: reply.sessionMilliseconds, startedCold: reply.startedCold)
+                sessionMilliseconds: reply.sessionMilliseconds, startedCold: reply.start.startedCold)
         } catch {
             let message = error is CancellationError ? "Stopped before it finished." : Self.explanation(for: error, limit: limit)
             return LabResult(verdict: .failed(message), totalMilliseconds: Self.milliseconds(clock.now - started))
@@ -664,13 +672,19 @@ final class PolishService {
 }
 
 private extension PolishDiagnostics {
-    /// Claude Code's own account of one request: a cold start and why, the model's and the
-    /// session's time, and how long the session it used had been waiting.
+    /// How Claude Code's session started: cold or not and why, and how long the session it
+    /// used had been waiting.
+    mutating func record(_ start: ClaudeCodeStart) {
+        startedCold = start.startedCold
+        coldReason = start.coldReason
+        spareAgeMs = start.spareAgeMilliseconds
+    }
+
+    /// Claude Code's own account of one answered request: how its session started, and the
+    /// model's and the session's time.
     mutating func record(_ reply: ClaudeCodeReply) {
-        startedCold = reply.startedCold
-        coldReason = reply.coldReason
+        record(reply.start)
         modelMs = reply.modelMilliseconds
         sessionMs = reply.sessionMilliseconds
-        spareAgeMs = reply.spareAgeMilliseconds
     }
 }

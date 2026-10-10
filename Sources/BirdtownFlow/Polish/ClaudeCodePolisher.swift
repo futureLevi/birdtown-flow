@@ -41,11 +41,17 @@ struct ClaudeCodePolisher: PolishClient {
         try await reply(to: request).text
     }
 
-    /// The answer with Claude Code's own timings, for the Lab.
-    func reply(to request: PolishRequest) async throws -> ClaudeCodeReply {
+    /// The answer with Claude Code's own timings, for the Lab and the dictation's diagnostics.
+    ///
+    /// `started` hears how the session started as soon as one is chosen, before the answer
+    /// comes, so a request that runs out of time can still say whether it started cold.
+    func reply(
+        to request: PolishRequest, started: @Sendable (ClaudeCodeStart) -> Void = { _ in }
+    ) async throws -> ClaudeCodeReply {
         try await ClaudeCodeSessions.shared.run(
             ClaudeCodeSessionKey(systemPrompt: PolishPrompt.system(for: request), model: model, effort: effort),
-            message: PolishPrompt.user(for: request)
+            message: PolishPrompt.user(for: request),
+            started: started
         )
     }
 
@@ -76,7 +82,14 @@ struct ClaudeCodeReply: Sendable {
     var modelMilliseconds: Int?
     /// Time from the message arriving to the answer, inside Claude Code.
     var sessionMilliseconds: Int?
-    /// No session was waiting with this setup, so this answer also waited for Claude Code to start.
+    /// How the session that answered started. `ClaudeCodeSessions.run` fills it in.
+    var start = ClaudeCodeStart()
+}
+
+/// How the session that took a message started: waiting ahead of time, or started for it.
+/// Known before the answer, so it survives a request that runs out of time.
+struct ClaudeCodeStart: Sendable {
+    /// No session was waiting with this setup, so the message also waited for Claude Code to start.
     var startedCold = false
     /// Why it started cold: "noSpare", "differentSetup" or "spareExited". `nil` when warm.
     var coldReason: String?
@@ -111,30 +124,34 @@ actor ClaudeCodeSessions {
         spare = try? ClaudeCodeProcess.start(installation: installation, key: key)
     }
 
-    func run(_ key: ClaudeCodeSessionKey, message: String) async throws -> ClaudeCodeReply {
+    /// Sends `message` to a session started with `key` and waits for the answer. `started`
+    /// hears how that session started once it's chosen, before the wait.
+    func run(
+        _ key: ClaudeCodeSessionKey, message: String, started: @Sendable (ClaudeCodeStart) -> Void = { _ in }
+    ) async throws -> ClaudeCodeReply {
         guard let installation = await locate() else { throw ClaudeCodePolisher.Failure.notInstalled }
         let session: ClaudeCodeProcess
-        var cold = false
-        var coldReason: String?
-        var spareAge: Duration?
+        var start = ClaudeCodeStart()
         if let spare, spare.key == key, spare.isRunning {
             session = spare
-            spareAge = spare.age
+            start.spareAgeMilliseconds = Int((spare.age / Duration.milliseconds(1)).rounded())
         } else {
             // The setup changed (another style's configuration, a Lab test) or nothing was
             // waiting: this one pays the startup.
             if let spare {
-                coldReason = spare.key != key ? "differentSetup" : "spareExited"
+                start.coldReason = spare.key != key ? "differentSetup" : "spareExited"
             } else {
-                coldReason = "noSpare"
+                start.coldReason = "noSpare"
             }
             spare?.terminate()
             session = try ClaudeCodeProcess.start(installation: installation, key: key)
-            cold = true
+            start.startedCold = true
         }
         spare = nil
         // The dictation goes in first, so starting the next session doesn't hold it up.
         let written = Result { try session.write(message) }
+        // Before the wait: a request that runs out of time still says whether it started cold.
+        started(start)
         // The next dictation's session starts now, while this one is answering. Nothing has
         // awaited since `spare` was cleared, so this can't replace one started meanwhile.
         if spare == nil {
@@ -144,9 +161,7 @@ actor ClaudeCodeSessions {
         do {
             try written.get()
             var reply = try await session.awaitReply()
-            reply.startedCold = cold
-            reply.coldReason = coldReason
-            reply.spareAgeMilliseconds = spareAge.map { Int(($0 / Duration.milliseconds(1)).rounded()) }
+            reply.start = start
             return reply
         } catch {
             session.terminate()
