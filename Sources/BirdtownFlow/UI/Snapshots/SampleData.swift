@@ -70,14 +70,21 @@ enum SampleData {
         var error: String?
         /// A polish fallback note on a dictation that still went through.
         var note: String?
+        /// What polish was sent to, for the Timings view, and its time when not the usual.
+        var polishDetail: PolishDiagnostics?
+        var polishMs: Int?
     }
 
     private static let specs: [Spec] = [
         // Today
+        // Claude Code had no session waiting: the Timings view says so.
         Spec(day: 0, at: 0.97, app: App.slack, style: .casual,
              raw: "pushed the fix for the onboarding crash can someone on the ios side sanity check it before we cut the build",
              text: "Pushed the fix for the onboarding crash. Can someone on the iOS side sanity-check it before we cut the build?",
-             polish: .anthropic, wpm: 162),
+             polish: .claudeCode, wpm: 162,
+             polishDetail: PolishDiagnostics(
+                 model: ClaudeCodePolisher.defaultModel, effort: "low", startedCold: true, modelMs: 1_180),
+             polishMs: 3_612),
         Spec(day: 0, at: 0.92, app: App.cursor, style: .formal,
              raw: "refactor this to use a sink let so both requests run in parallel and add a five second timeout",
              text: "Refactor this to use async let so both requests run in parallel, and add a five-second timeout.",
@@ -89,7 +96,7 @@ enum SampleData {
         Spec(day: 0, at: 0.78, app: App.gmail, style: .formal,
              raw: "hi priya thanks for the intro to the team at northwind i'd love to find thirty minutes next week to walk through how we label manipulation data does tuesday or wednesday afternoon work",
              text: "Hi Priya,\n\nThanks for the intro to the team at Northwind. I'd love to find thirty minutes next week to walk through how we label manipulation data. Does Tuesday or Wednesday afternoon work?",
-             polish: .anthropic, wpm: 156),
+             polish: .anthropic, wpm: 156, polishDetail: PolishDiagnostics(model: AnthropicClient.defaultModel)),
         Spec(day: 0, at: 0.64, app: App.notes, style: .formal, raw: "", text: "", wpm: 140,
              error: "The speech model wasn't ready yet, so this one wasn't transcribed."),
         Spec(day: 0, at: 0.52, app: App.terminal, style: .formal,
@@ -183,7 +190,11 @@ enum SampleData {
             let words = Double(max(spec.text.split { $0.isWhitespace }.count, 1))
             let duration = (words / spec.wpm * 60 * 10).rounded() / 10
             let transcribe = 120 + Int(words * 3)
-            let polish = spec.polish == nil ? 0 : 420 + Int(words * 9)
+            let polish = spec.polish == nil ? 0 : (spec.polishMs ?? 420 + Int(words * 9))
+            var timings = DictationTimings(
+                transcribeMs: transcribe, polishMs: polish, totalMs: transcribe + polish + 40,
+                micLiveMs: 28 + Int(words) % 23)
+            timings.setPolish(spec.polishDetail)
             return HistoryRecord(
                 id: id,
                 createdAt: createdAt,
@@ -197,11 +208,7 @@ enum SampleData {
                 snippets: spec.snippets,
                 audioFileName: "\(id.uuidString).wav",
                 audioDuration: duration,
-                timings: failed ? DictationTimings() : DictationTimings(
-                    transcribeMs: transcribe,
-                    polishMs: polish,
-                    totalMs: transcribe + polish + 40
-                ),
+                timings: failed ? DictationTimings() : timings,
                 outcome: failed ? .failed : .inserted,
                 errorMessage: spec.error ?? spec.note
             )

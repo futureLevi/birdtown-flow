@@ -251,12 +251,33 @@ public struct DictationTimings: Codable, Hashable, Sendable {
     /// key that came up before the first window was cut left key-up all of it), and in
     /// records saved before it existed, so their JSON reads as it always did.
     public var transcribedWhileRecording: Bool?
+    /// Claude Code: the model's own share of `polishMs` (`PolishDiagnostics.modelMs`).
+    public var polishModelMs: Int?
+    /// Claude Code: no session was waiting, so polish also waited for Claude Code to start.
+    public var polishStartedCold: Bool?
+    /// The model and effort polish went out with, e.g. `AnthropicClient.defaultModel` and "low".
+    public var polishModel: String?
+    public var polishEffort: String?
+    /// From the key going down to the microphone's first audio. Not part of `totalMs`, which
+    /// starts at key-up.
+    public var micLiveMs: Int?
 
-    public init(transcribeMs: Int = 0, polishMs: Int = 0, totalMs: Int = 0, transcribedWhileRecording: Bool? = nil) {
+    // Every field after `totalMs` is optional and left out of the JSON when `nil`, so records
+    // saved before it existed read as they always did.
+    public init(
+        transcribeMs: Int = 0, polishMs: Int = 0, totalMs: Int = 0, transcribedWhileRecording: Bool? = nil,
+        polishModelMs: Int? = nil, polishStartedCold: Bool? = nil, polishModel: String? = nil,
+        polishEffort: String? = nil, micLiveMs: Int? = nil
+    ) {
         self.transcribeMs = transcribeMs
         self.polishMs = polishMs
         self.totalMs = totalMs
         self.transcribedWhileRecording = transcribedWhileRecording
+        self.polishModelMs = polishModelMs
+        self.polishStartedCold = polishStartedCold
+        self.polishModel = polishModel
+        self.polishEffort = polishEffort
+        self.micLiveMs = micLiveMs
     }
 
     /// Whether anything was measured. Failed and cancelled dictations can have no timings.

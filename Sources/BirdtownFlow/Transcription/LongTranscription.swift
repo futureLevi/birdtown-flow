@@ -92,6 +92,9 @@ enum LongTranscription {
         }
 
         let transcript = try await engine.transcript(samples, vocabulary: vocabulary)
+        // Parakeet's recognition pass and the vocabulary boost after it; other engines say nothing.
+        report.line.ms("recognize", transcript.recognitionMs)
+        report.line.ms("boost", transcript.boostMs)
         return (transcript, report)
     }
 

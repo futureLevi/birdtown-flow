@@ -130,7 +130,7 @@ struct HistoryView: View {
         ScrollViewReader { proxy in
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: Spacing.l, pinnedViews: [.sectionHeaders]) {
-                    header(counts: result.counts)
+                    header(counts: result.counts, rollup: result.rollup)
                         .padding(.bottom, Spacing.xs)
                     if visible.isEmpty {
                         emptyState(searchMatches: result.searched.count)
@@ -224,7 +224,7 @@ struct HistoryView: View {
         }
     }
 
-    private func header(counts: [HistoryFilter: Int]) -> some View {
+    private func header(counts: [HistoryFilter: Int], rollup: TimingRollup?) -> some View {
         VStack(alignment: .leading, spacing: Spacing.l) {
             PageHeader(
                 title: "History",
@@ -257,6 +257,15 @@ struct HistoryView: View {
                       ? "Hide how long each dictation took"
                       : "Show how long transcription, polish and the rest took, in milliseconds")
                 .accessibilityLabel("Show timings")
+            }
+            if showsTimings, let rollup {
+                // p50 is a typical dictation, p90 a slow one.
+                Text(rollup.summary(format: OriginalPanel.format))
+                    .font(Typography.caption)
+                    .foregroundStyle(Palette.inkTertiary)
+                    .monospacedDigit()
+                    .help("Typical (p50) and slow (p90) times over your most recent dictations that were "
+                        + "typed or copied, measured from when you let go of the key")
             }
         }
     }
@@ -521,6 +530,9 @@ struct HistoryView: View {
         let searched: [HistoryRecord]
         /// How many of `searched` each chip would show.
         let counts: [HistoryFilter: Int]
+        /// The Timings view's line about recent dictations, over every record but hidden
+        /// ones, whatever the search.
+        let rollup: TimingRollup?
     }
 
     private struct ListKey: Equatable {
@@ -544,6 +556,7 @@ struct HistoryView: View {
                 counts[option, default: 0] += 1
             }
         }
-        return SearchResult(searched: searched, counts: counts)
+        let rollup = TimingRollup.recent(key.records.lazy.filter { !key.hidden.contains($0.id) })
+        return SearchResult(searched: searched, counts: counts, rollup: rollup)
     }
 }

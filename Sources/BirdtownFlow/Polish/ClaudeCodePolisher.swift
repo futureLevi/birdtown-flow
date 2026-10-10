@@ -78,6 +78,10 @@ struct ClaudeCodeReply: Sendable {
     var sessionMilliseconds: Int?
     /// No session was waiting with this setup, so this answer also waited for Claude Code to start.
     var startedCold = false
+    /// Why it started cold: "noSpare", "differentSetup" or "spareExited". `nil` when warm.
+    var coldReason: String?
+    /// How long the waiting session had been running when it took the message. `nil` when cold.
+    var spareAgeMilliseconds: Int?
 }
 
 // MARK: - Sessions
@@ -111,11 +115,19 @@ actor ClaudeCodeSessions {
         guard let installation = await locate() else { throw ClaudeCodePolisher.Failure.notInstalled }
         let session: ClaudeCodeProcess
         var cold = false
+        var coldReason: String?
+        var spareAge: Duration?
         if let spare, spare.key == key, spare.isRunning {
             session = spare
+            spareAge = spare.age
         } else {
             // The setup changed (another style's configuration, a Lab test) or nothing was
             // waiting: this one pays the startup.
+            if let spare {
+                coldReason = spare.key != key ? "differentSetup" : "spareExited"
+            } else {
+                coldReason = "noSpare"
+            }
             spare?.terminate()
             session = try ClaudeCodeProcess.start(installation: installation, key: key)
             cold = true
@@ -133,6 +145,8 @@ actor ClaudeCodeSessions {
             try written.get()
             var reply = try await session.awaitReply()
             reply.startedCold = cold
+            reply.coldReason = coldReason
+            reply.spareAgeMilliseconds = spareAge.map { Int(($0 / Duration.milliseconds(1)).rounded()) }
             return reply
         } catch {
             session.terminate()
@@ -278,12 +292,14 @@ final class ClaudeCodeProcess: @unchecked Sendable {
         return data
     }
 
-    /// The `result` event, if this line is one.
-    static func resultEvent(in line: Data) -> ResultEvent? {
-        guard
-            let object = try? JSONSerialization.jsonObject(with: line) as? [String: Any],
-            object["type"] as? String == "result"
-        else { return nil }
+    /// One line of Claude Code's output as a JSON object, or `nil` when it isn't one.
+    static func event(in line: Data) -> [String: Any]? {
+        try? JSONSerialization.jsonObject(with: line) as? [String: Any]
+    }
+
+    /// The `result` event, if `object` is one.
+    static func resultEvent(from object: [String: Any]) -> ResultEvent? {
+        guard object["type"] as? String == "result" else { return nil }
         let isError = (object["is_error"] as? Bool ?? false) || (object["subtype"] as? String ?? "success") != "success"
         let text = object["result"] as? String ?? (object["subtype"] as? String ?? "")
         return ResultEvent(
@@ -298,6 +314,12 @@ final class ClaudeCodeProcess: @unchecked Sendable {
             // process exits and the pipe closes.
             let thread = Thread { [self] in
                 var buffer = Data()
+                // When the assistant's message lines arrived, to see how long the `result`
+                // event that ends the reply trails the answer itself. Measurement only.
+                let clock = ContinuousClock()
+                let waiting = clock.now
+                var firstAnswer: ContinuousClock.Instant?
+                var lastAnswer: ContinuousClock.Instant?
                 while true {
                     let chunk = output.availableData
                     if chunk.isEmpty {
@@ -308,8 +330,16 @@ final class ClaudeCodeProcess: @unchecked Sendable {
                     while let newline = buffer.firstIndex(of: 0x0A) {
                         let line = buffer[buffer.startIndex..<newline]
                         buffer.removeSubrange(buffer.startIndex...newline)
-                        if let event = Self.resultEvent(in: Data(line)) {
+                        guard let object = Self.event(in: Data(line)) else { continue }
+                        if object["type"] as? String == "assistant" {
+                            lastAnswer = clock.now
+                            if firstAnswer == nil { firstAnswer = lastAnswer }
+                        } else if let event = Self.resultEvent(from: object) {
+                            let arrived = clock.now
                             continuation.resume(returning: event)
+                            // After the reply is on its way, so logging never delays it.
+                            Self.logResultGap(
+                                waiting: waiting, firstAnswer: firstAnswer, lastAnswer: lastAnswer, result: arrived)
                             return
                         }
                     }
@@ -318,6 +348,30 @@ final class ClaudeCodeProcess: @unchecked Sendable {
             thread.name = "Claude Code output"
             thread.start()
         }
+    }
+
+    /// How long after waiting began the answer's first line came, and how far the `result`
+    /// event trailed its last line: time the reply spends waiting for Claude Code to wrap
+    /// up rather than on the model.
+    private static func logResultGap(
+        waiting: ContinuousClock.Instant, firstAnswer: ContinuousClock.Instant?,
+        lastAnswer: ContinuousClock.Instant?, result: ContinuousClock.Instant
+    ) {
+        // Computed up front: os.Logger wants plain values in its interpolations.
+        guard let firstAnswer, let lastAnswer else {
+            let resultMs = milliseconds(result - waiting)
+            Log.polish.info("Claude Code result after \(resultMs) ms, with no assistant line")
+            return
+        }
+        let answerMs = milliseconds(firstAnswer - waiting)
+        let gapMs = milliseconds(result - lastAnswer)
+        Log.polish.info("""
+            Claude Code answered after \(answerMs) ms; result event \(gapMs) ms after the last assistant line
+            """)
+    }
+
+    private static func milliseconds(_ duration: Duration) -> Int {
+        Int((duration / Duration.milliseconds(1)).rounded())
     }
 
     private func appendError(_ data: Data) {

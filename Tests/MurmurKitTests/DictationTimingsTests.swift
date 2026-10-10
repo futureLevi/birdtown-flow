@@ -70,4 +70,30 @@ struct DictationTimingsTests {
         let unset = try JSONEncoder().encode(DictationTimings(transcribeMs: 600, polishMs: 200, totalMs: 900))
         #expect(!String(decoding: unset, as: UTF8.self).contains("transcribedWhileRecording"))
     }
+
+    @Test func polishAndMicrophoneFieldsRoundTrip() throws {
+        let timings = DictationTimings(
+            transcribeMs: 310, polishMs: 3_612, totalMs: 4_020, polishModelMs: 1_180, polishStartedCold: true,
+            polishModel: "fast-model-1", polishEffort: "low", micLiveMs: 42)
+        #expect(try JSONDecoder().decode(DictationTimings.self, from: JSONEncoder().encode(timings)) == timings)
+    }
+
+    @Test func polishAndMicrophoneFieldsAreSavedOnlyWhenSet() throws {
+        let json = String(decoding: try JSONEncoder().encode(DictationTimings(transcribeMs: 310, totalMs: 400)), as: UTF8.self)
+        for key in ["polishModelMs", "polishStartedCold", "polishModel", "polishEffort", "micLiveMs"] {
+            #expect(!json.contains(key))
+        }
+    }
+
+    @Test func timingsSavedBeforePolishDiagnosticsStillDecode() throws {
+        // As saved by the release before: the flag, and nothing about the model or the mic.
+        let json = #"{"transcribeMs":600,"polishMs":200,"totalMs":900,"transcribedWhileRecording":true}"#
+        let timings = try JSONDecoder().decode(DictationTimings.self, from: Data(json.utf8))
+        #expect(timings == DictationTimings(transcribeMs: 600, polishMs: 200, totalMs: 900, transcribedWhileRecording: true))
+        #expect(timings.polishModelMs == nil)
+        #expect(timings.polishStartedCold == nil)
+        #expect(timings.polishModel == nil)
+        #expect(timings.polishEffort == nil)
+        #expect(timings.micLiveMs == nil)
+    }
 }
