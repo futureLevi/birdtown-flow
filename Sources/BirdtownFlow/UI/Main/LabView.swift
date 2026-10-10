@@ -308,7 +308,7 @@ private struct LabEditor: View {
                 if configuration.usesEffort {
                     LabField(label: "Effort") {
                         Picker("Effort", selection: binding(\.effort)) {
-                            ForEach(PolishEffort.allCases) { effort in
+                            ForEach(configuration.effortOptions) { effort in
                                 Text(effort.shortTitle).tag(effort)
                             }
                         }
@@ -355,6 +355,7 @@ private struct LabEditor: View {
         let claude: Set<PolishProvider> = [.claudeCode, .anthropic]
         let keepsModel = claude.contains(edited.provider) && claude.contains(provider) && !edited.model.isEmpty
         edited.provider = provider
+        edited.effort = PolishConfiguration.effort(edited.effort, offeredBy: provider)
         if !keepsModel {
             let fromSettings = model.settings.openAIModel.trimmingCharacters(in: .whitespacesAndNewlines)
             edited.model = provider == .openAICompatible && !fromSettings.isEmpty

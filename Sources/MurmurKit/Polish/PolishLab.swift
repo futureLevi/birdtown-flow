@@ -69,7 +69,10 @@ public struct PolishConfiguration: Codable, Identifiable, Hashable, Sendable {
         notes = try container.decodeIfPresent(String.self, forKey: .notes) ?? ""
         provider = (try? container.decodeIfPresent(PolishProvider.self, forKey: .provider)) ?? .claudeCode
         model = try container.decodeIfPresent(String.self, forKey: .model) ?? Self.defaultModel(for: provider)
-        effort = (try? container.decodeIfPresent(PolishEffort.self, forKey: .effort)) ?? .standard
+        // Saved before OpenAI-compatible endpoints took an effort, when the Lab kept a Claude
+        // level, hidden, on a switch to them.
+        effort = Self.effort(
+            (try? container.decodeIfPresent(PolishEffort.self, forKey: .effort)) ?? .standard, offeredBy: provider)
         instructions = try container.decodeIfPresent(String.self, forKey: .instructions) ?? ""
         updatedAt = try container.decodeIfPresent(Date.self, forKey: .updatedAt) ?? Date(timeIntervalSince1970: 0)
     }
@@ -101,7 +104,31 @@ public struct PolishConfiguration: Codable, Identifiable, Hashable, Sendable {
 
     /// Whether the provider takes a model name and an effort level.
     public var usesModel: Bool { provider != .appleIntelligence && provider != .off }
-    public var usesEffort: Bool { provider == .claudeCode || provider == .anthropic }
+    public var usesEffort: Bool { !effortOptions.isEmpty }
+
+    /// The effort levels the Lab offers for this configuration's provider.
+    public var effortOptions: [PolishEffort] { Self.effortOptions(for: provider) }
+
+    /// Claude takes every level. OpenAI-compatible servers take low, medium and high, as
+    /// `reasoning_effort`, and only for reasoning models; others are asked again without it.
+    public static func effortOptions(for provider: PolishProvider) -> [PolishEffort] {
+        switch provider {
+        case .claudeCode, .anthropic: PolishEffort.allCases
+        case .openAICompatible: [.standard, .low, .medium, .high]
+        case .appleIntelligence, .off: []
+        }
+    }
+
+    /// `effort` as `provider` can take it: the strongest level it offers that's no
+    /// stronger, so Max becomes High on an OpenAI-compatible endpoint. Unchanged for a
+    /// provider that takes no effort.
+    public static func effort(_ effort: PolishEffort, offeredBy provider: PolishProvider) -> PolishEffort {
+        let options = effortOptions(for: provider)
+        guard !options.isEmpty, !options.contains(effort) else { return effort }
+        let order = PolishEffort.allCases
+        let rank = order.firstIndex(of: effort) ?? order.startIndex
+        return options.last { (order.firstIndex(of: $0) ?? order.startIndex) <= rank } ?? .standard
+    }
 
     /// "Claude Code · claude-haiku-5-5 · Low effort"
     public var summary: String {

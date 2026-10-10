@@ -491,7 +491,7 @@ final class PolishService {
             if key == nil, !Self.isLocal(baseURL) {
                 return .failure(Unavailable(reason: "Add the API key for this endpoint.", note: "No API key"))
             }
-            return .success(OpenAICompatibleClient(baseURL: baseURL, apiKey: key ?? "", model: model))
+            return .success(OpenAICompatibleClient(baseURL: baseURL, apiKey: key ?? "", model: model, effort: effort))
 
         case .claudeCode:
             // Whether it's installed and signed in is only known by trying; the polisher
