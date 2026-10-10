@@ -44,7 +44,8 @@ actor VocabularyBooster {
     /// could otherwise start on the same models: a boost that outlived its budget is still
     /// running when the next window of a long recording asks for its own.
     private var ctcBusy = false
-    private var ctcWaiters: [CheckedContinuation<Void, Never>] = []
+    private var ctcWaiters: [(id: Int, continuation: CheckedContinuation<Void, Error>)] = []
+    private var lastCtcWaiterID = 0
 
     /// How sure the rescorer must be before it rewrites a word. FluidAudio's defaults are tuned
     /// for keyword-spotting benchmarks, where missing a term costs more than inventing one. In
@@ -111,7 +112,7 @@ actor VocabularyBooster {
         // One CTC pass at a time on the shared models: live windows, the key-up tail and a
         // Retry can all ask at once. Waiting counts against the caller's time budget; a caller
         // that gave up while waiting has nothing left to rescore for.
-        await acquireCtc()
+        guard (try? await acquireCtc()) != nil else { return nil }
         defer { releaseCtc() }
         guard !Task.isCancelled else { return nil }
         return await Self.rescore(text: text, tokenTimings: tokenTimings, samples: samples, session: session)
@@ -188,12 +189,31 @@ actor VocabularyBooster {
         return await configuredSession(for: terms, models: models) != nil
     }
 
-    private func acquireCtc() async {
+    /// Throws `CancellationError` when the caller is cancelled while it waits (its budget ran
+    /// out), and leaves the queue, as `ParakeetEngine.acquire` does.
+    private func acquireCtc() async throws {
         guard ctcBusy else {
             ctcBusy = true
             return
         }
-        await withCheckedContinuation { ctcWaiters.append($0) }
+        lastCtcWaiterID += 1
+        let id = lastCtcWaiterID
+        try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+                guard !Task.isCancelled else {
+                    continuation.resume(throwing: CancellationError())
+                    return
+                }
+                ctcWaiters.append((id: id, continuation: continuation))
+            }
+        } onCancel: {
+            Task { await self.cancelCtcWaiter(id) }
+        }
+    }
+
+    private func cancelCtcWaiter(_ id: Int) {
+        guard let index = ctcWaiters.firstIndex(where: { $0.id == id }) else { return }
+        ctcWaiters.remove(at: index).continuation.resume(throwing: CancellationError())
     }
 
     private func releaseCtc() {
@@ -201,7 +221,7 @@ actor VocabularyBooster {
             ctcBusy = false
         } else {
             // Ownership passes straight to the next caller; `ctcBusy` stays true.
-            ctcWaiters.removeFirst().resume()
+            ctcWaiters.removeFirst().continuation.resume()
         }
     }
 

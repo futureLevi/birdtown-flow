@@ -738,7 +738,7 @@ struct TextSettingsPane: View {
                     }
                     SettingsDivider()
                 }
-                SettingsRow(title: "Time limit", detail: "If polish takes longer, Birdtown Flow types the plain transcript.") {
+                SettingsRow(title: "Time limit", detail: "For a normal dictation; long ones get more. If polish takes longer, Birdtown Flow types the plain transcript.") {
                     Stepper(value: $settings.polishTimeout, in: 1...15, step: 1) {
                         Text("\(Int(settings.polishTimeout)) s")
                             .font(Typography.body)

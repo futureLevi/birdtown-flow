@@ -19,6 +19,11 @@ public enum PolishError: LocalizedError, Sendable {
     case http(status: Int, message: String)
     case emptyResponse
     case timedOut
+    /// The reply stopped before the end: the model ran out of output tokens or context.
+    /// What came back is only the start of the text, so it isn't used.
+    case truncated
+    /// The model declined the request, or the provider withheld its reply.
+    case refused
 
     public var errorDescription: String? {
         switch self {
@@ -32,6 +37,8 @@ public enum PolishError: LocalizedError, Sendable {
             }
         case .emptyResponse: "The model returned nothing."
         case .timedOut: "Polish took too long, so the unpolished text was used."
+        case .truncated: "The model's reply was cut off before the end, so the unpolished text was used."
+        case .refused: "The model declined to edit this text, so the unpolished text was used."
         }
     }
 }
@@ -287,11 +294,18 @@ public enum PolishPrompt {
         3. Snacks
         """
 
-    /// Output budget: dictation rarely grows under editing, so a multiple of the input with
-    /// headroom, capped so a runaway reply can't run up a bill.
+    /// Output budget: dictation rarely grows under editing, so three tokens a word (a word is
+    /// about 1.3; a character of Chinese or Japanese, which counts as a word here
+    /// (`PolishTimeLimit.words(in:)`), one to three), plus room for the brief reasoning a
+    /// model with adaptive thinking may do first, which counts against it too.
+    ///
+    /// Capped so a runaway reply can't run up a bill, but only at about what the fastest
+    /// models write in the longest polish may take (`PolishTimeLimit.maximum`): the cap
+    /// stops a runaway, never a long dictation polished whole (`polishInParts` off) or a
+    /// long part. A reply that hits it anyway is cut off, and `parseResponse` turns it down.
     public static func maxTokens(for text: String) -> Int {
-        let words = text.split { $0.isWhitespace }.count
-        return min(2048, max(256, words * 3 + 64))
+        let words = PolishTimeLimit.words(in: text)
+        return min(8_192, max(512, words * 3 + 256))
     }
 }
 
@@ -628,8 +642,10 @@ public struct AnthropicClient: PolishClient {
     public var model: String
     /// `nil` picks automatically (low on models that take it); otherwise exactly this.
     public var effort: PolishEffort?
-    /// Per-request network timeout. PolishService enforces its own, shorter, overall deadline.
-    public var timeout: TimeInterval = 20
+    /// Per-request network timeout, a backstop. PolishService enforces its own, shorter
+    /// deadline: at most `PolishTimeLimit.maximum` for a dictation, a minute in the Lab. The
+    /// reply arrives in one piece, so this must last as long as the longest of those.
+    public var timeout: TimeInterval = 60
 
     public init(apiKey: String, model: String = AnthropicClient.defaultModel, effort: PolishEffort? = nil) {
         self.apiKey = apiKey
@@ -679,6 +695,13 @@ public struct AnthropicClient: PolishClient {
             throw PolishError.http(status: status, message: HTTP.errorMessage(from: data, status: status))
         }
         let response = try JSONDecoder().decode(Response.self, from: data)
+        // A reply cut off at `max_tokens` can still read like a finished edit and pass
+        // `PolishGuard`, silently dropping the end of the dictation.
+        switch response.stop_reason ?? "" {
+        case "max_tokens", "model_context_window_exceeded": throw PolishError.truncated
+        case "refusal": throw PolishError.refused
+        default: break
+        }
         guard let text = response.content.first(where: { $0.type == "text" })?.text,
             !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         else { throw PolishError.emptyResponse }
@@ -705,13 +728,17 @@ public struct AnthropicClient: PolishClient {
     }
     // swiftlint:enable identifier_name
 
+    // swiftlint:disable identifier_name
     struct Response: Decodable {
         struct Block: Decodable {
             var type: String
             var text: String?
         }
         var content: [Block]
+        /// "end_turn" for a finished reply. Optional so a proxy that leaves it out still works.
+        var stop_reason: String?
     }
+    // swiftlint:enable identifier_name
 }
 
 /// Any OpenAI-compatible `/chat/completions` endpoint.
@@ -719,7 +746,8 @@ public struct OpenAICompatibleClient: PolishClient {
     public var baseURL: URL
     public var apiKey: String
     public var model: String
-    public var timeout: TimeInterval = 20
+    /// A backstop, like `AnthropicClient.timeout`.
+    public var timeout: TimeInterval = 60
 
     public init(baseURL: URL, apiKey: String, model: String) {
         self.baseURL = baseURL
@@ -791,7 +819,15 @@ public struct OpenAICompatibleClient: PolishClient {
             throw PolishError.http(status: status, message: HTTP.errorMessage(from: data, status: status))
         }
         let response = try JSONDecoder().decode(Response.self, from: data)
-        guard let content = response.choices.first?.message.content,
+        let choice = response.choices.first
+        // No `max_tokens` is sent here, but servers have their own (Ollama's `num_predict`), and
+        // a reply cut off at it can pass `PolishGuard`. "max_tokens" is how some proxies say it.
+        switch choice?.finish_reason ?? "" {
+        case "length", "max_tokens": throw PolishError.truncated
+        case "content_filter": throw PolishError.refused
+        default: break
+        }
+        guard let content = choice?.message.content,
             !content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         else { throw PolishError.emptyResponse }
         return content
@@ -808,13 +844,17 @@ public struct OpenAICompatibleClient: PolishClient {
         var messages: [Message]
     }
 
+    // swiftlint:disable identifier_name
     struct Response: Decodable {
         struct Choice: Decodable {
             struct Message: Decodable { var content: String? }
             var message: Message
+            /// "stop" for a finished reply. Not every server sends it.
+            var finish_reason: String?
         }
         var choices: [Choice]
     }
+    // swiftlint:enable identifier_name
 }
 
 // MARK: - HTTP

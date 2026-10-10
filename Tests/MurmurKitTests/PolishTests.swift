@@ -121,11 +121,27 @@ struct PolishPromptTests {
 
     @Test("Token budget scales with input and is capped")
     func maxTokens() {
-        #expect(PolishPrompt.maxTokens(for: "hi") == 256)
+        #expect(PolishPrompt.maxTokens(for: "hi") == 512)
         let long = Array(repeating: "word", count: 400).joined(separator: " ")
-        #expect(PolishPrompt.maxTokens(for: long) == 1264)
+        #expect(PolishPrompt.maxTokens(for: long) == 1456)
         let huge = Array(repeating: "word", count: 5000).joined(separator: " ")
-        #expect(PolishPrompt.maxTokens(for: huge) == 2048)
+        #expect(PolishPrompt.maxTokens(for: huge) == 8192)
+    }
+
+    @Test("The budget never cuts off a long part, or a long text polished whole")
+    func maxTokensForLongText() {
+        // About 1.3 tokens a word; twice that leaves room for edits and brief reasoning.
+        for words in [PolishChunker.targetWords, PolishChunker.hardMaxWords, 1_000, 2_500] {
+            let text = Array(repeating: "word", count: words).joined(separator: " ")
+            #expect(PolishPrompt.maxTokens(for: text) >= words * 2 + 256)
+        }
+    }
+
+    @Test("The budget never cuts off a text written without spaces")
+    func maxTokensForUnspacedText() {
+        // 660 characters with no space in them: counted by spaces, one word and 512 tokens.
+        let japanese = String(repeating: "今日は会議があります。", count: 60)
+        #expect(PolishPrompt.maxTokens(for: japanese) == 660 * 3 + 256)
     }
 }
 
@@ -360,7 +376,7 @@ struct PolishClientTests {
         let body = try json(urlRequest.httpBody)
         #expect(body["model"] as? String == AnthropicClient.defaultModel)
         #expect(body["temperature"] as? Double == 0)
-        #expect(body["max_tokens"] as? Int == 256)
+        #expect(body["max_tokens"] as? Int == 512)
         #expect((body["system"] as? String)?.contains("copy editor") == true)
         let messages = try #require(body["messages"] as? [[String: Any]])
         #expect(messages.count == 1)
@@ -432,6 +448,92 @@ struct PolishClientTests {
             #expect(message == "invalid x-api-key")
         }
         #expect(PolishError.http(status: 401, message: "invalid x-api-key").errorDescription?.contains("rejected") == true)
+    }
+
+    /// How `parse` ended: `nil` for a reply, otherwise which error it threw.
+    private func ending(_ parse: () throws -> String) -> String? {
+        do {
+            _ = try parse()
+            return nil
+        } catch PolishError.truncated {
+            return "truncated"
+        } catch PolishError.refused {
+            return "refused"
+        } catch PolishError.emptyResponse {
+            return "empty"
+        } catch {
+            return "other: \(error)"
+        }
+    }
+
+    @Test("A reply cut off part-way can pass the guard, so the stop reason has to be read")
+    func cutOffReplyPassesGuard() throws {
+        let said = "so the plan for next week is to finish the report on monday then review it with the team on tuesday and send it out on wednesday"
+        let cut = "So the plan for next week is to finish the report on Monday, then review it with the team on Tuesday"
+        #expect(PolishGuard.accept(cut, original: said) != nil)
+
+        let body = Data(#"{"content":[{"type":"text","text":"\#(cut)"}],"stop_reason":"max_tokens"}"#.utf8)
+        #expect(ending { try AnthropicClient.parseResponse(data: body, status: 200) } == "truncated")
+    }
+
+    @Test("Anthropic: a reply that stopped short is turned down; a finished one is used")
+    func anthropicStopReason() throws {
+        func parse(_ body: String) -> String? {
+            ending { try AnthropicClient.parseResponse(data: Data(body.utf8), status: 200) }
+        }
+        let finished = #"""
+            {"id":"msg_1","type":"message","role":"assistant","model":"claude-haiku-5-5",
+             "content":[{"type":"thinking","thinking":"","signature":"x"},{"type":"text","text":"So I think we should go."}],
+             "stop_reason":"end_turn","stop_sequence":null,"stop_details":null,
+             "usage":{"input_tokens":120,"output_tokens":9}}
+            """#
+        #expect(parse(finished) == nil)
+        #expect(try AnthropicClient.parseResponse(data: Data(finished.utf8), status: 200) == "So I think we should go.")
+
+        #expect(parse(#"{"content":[{"type":"text","text":"So I think we"}],"stop_reason":"max_tokens"}"#) == "truncated")
+        // Reasoning used the whole budget before any text was written.
+        #expect(parse(#"{"content":[{"type":"thinking","thinking":""}],"stop_reason":"max_tokens"}"#) == "truncated")
+        #expect(parse(#"{"content":[{"type":"text","text":"So I"}],"stop_reason":"model_context_window_exceeded"}"#) == "truncated")
+        #expect(parse(#"""
+            {"content":[{"type":"text","text":"So I think"}],"stop_reason":"refusal",
+             "stop_details":{"type":"refusal","category":"cyber","explanation":null}}
+            """#) == "refused")
+        // A proxy that leaves the field out, or sends null, still works.
+        #expect(parse(#"{"content":[{"type":"text","text":"Go."}]}"#) == nil)
+        #expect(parse(#"{"content":[{"type":"text","text":"Go."}],"stop_reason":null}"#) == nil)
+        #expect(parse(#"{"content":[{"type":"text","text":"Go."}],"stop_reason":"stop_sequence"}"#) == nil)
+    }
+
+    @Test("OpenAI-compatible: a reply that stopped short is turned down; a finished one is used")
+    func openAIFinishReason() throws {
+        func parse(_ body: String) -> String? {
+            ending { try OpenAICompatibleClient.parseResponse(data: Data(body.utf8), status: 200) }
+        }
+        let finished = #"""
+            {"id":"chatcmpl-1","object":"chat.completion","created":1,"model":"gpt-4.1-mini",
+             "choices":[{"index":0,"message":{"role":"assistant","content":"Hello there."},"finish_reason":"stop"}],
+             "usage":{"prompt_tokens":90,"completion_tokens":3,"total_tokens":93}}
+            """#
+        #expect(parse(finished) == nil)
+        #expect(try OpenAICompatibleClient.parseResponse(data: Data(finished.utf8), status: 200) == "Hello there.")
+
+        // Ollama, out of `num_predict`.
+        let ollama = #"""
+            {"id":"chatcmpl-7","object":"chat.completion","model":"llama3.2","system_fingerprint":"fp_ollama",
+             "choices":[{"index":0,"message":{"role":"assistant","content":"Hello"},"finish_reason":"length"}]}
+            """#
+        #expect(parse(ollama) == "truncated")
+        #expect(parse(#"{"choices":[{"message":{"content":"Hello"},"finish_reason":"max_tokens"}]}"#) == "truncated")
+        #expect(parse(#"{"choices":[{"message":{"content":null},"finish_reason":"content_filter"}]}"#) == "refused")
+        // Servers that leave it out, or send null, still work.
+        #expect(parse(#"{"choices":[{"message":{"content":"Hello"}}]}"#) == nil)
+        #expect(parse(#"{"choices":[{"message":{"content":"Hello"},"finish_reason":null}]}"#) == nil)
+    }
+
+    @Test("The new failures explain themselves")
+    func incompleteReplyMessages() {
+        #expect(PolishError.truncated.errorDescription?.contains("cut off") == true)
+        #expect(PolishError.refused.errorDescription?.contains("declined") == true)
     }
 
     @Test("OpenAI-compatible request", arguments: [

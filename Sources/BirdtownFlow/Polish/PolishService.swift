@@ -11,8 +11,9 @@ final class PolishService {
         var provider: PolishProvider?
         /// Why polish wasn't used, for History ("timed out", "no API key"…). `nil` on success or when off.
         var note: String?
-        /// The model answered and `PolishGuard` turned it down: asking again won't help.
-        var rejectedByGuard = false
+        /// The model answered, but its reply can't be used: `PolishGuard` turned it down, or it
+        /// was cut off or declined. Asking again with the same request won't help.
+        var rejected = false
     }
 
     private let settings: Settings
@@ -47,16 +48,20 @@ final class PolishService {
             Log.polish.info("polish skipped: \(unavailable.note, privacy: .public)")
             return Outcome(text: request.text, provider: nil, note: unavailable.note)
         }
+        let limit = oneRequestLimit(for: request.text)
         return await polishOne(
-            request, client: client, provider: provider, deadline: ContinuousClock.now + .seconds(timeLimit))
+            request, client: client, provider: provider, deadline: ContinuousClock.now + .seconds(limit),
+            limit: limit)
     }
 
     /// One request, finished by `deadline`: the guarded rewrite, or the request's own text
-    /// with a note for History. The parts of a long dictation share one deadline, so together
-    /// they take no longer than one request would.
+    /// with a note for History. The parts of a long dictation share one deadline (`polishLong`).
+    ///
+    /// - Parameter limit: how long `deadline` allowed, for the note if it passes; `timeLimit`
+    ///   when not given.
     func polishOne(
         _ request: PolishRequest, client: any PolishClient, provider: PolishProvider,
-        deadline: ContinuousClock.Instant
+        deadline: ContinuousClock.Instant, limit: Double? = nil
     ) async -> Outcome {
         let clock = ContinuousClock()
         let started = clock.now
@@ -74,14 +79,14 @@ final class PolishService {
                 Log.polish.info("\(provider.rawValue, privacy: .public) rewrite rejected by the guard")
                 return Outcome(
                     text: request.text, provider: nil, note: "Rewrite rejected: it changed what was said",
-                    rejectedByGuard: true)
+                    rejected: true)
             }
             Log.polish.info("\(provider.rawValue, privacy: .public) polished in \(elapsed, format: .fixed(precision: 2))s")
             return Outcome(text: accepted, provider: provider, note: nil)
         } catch {
-            let note = Self.note(for: error, limit: timeLimit)
+            let note = Self.note(for: error, limit: limit ?? timeLimit)
             Log.polish.info("polish fell back (\(provider.rawValue, privacy: .public)): \(note, privacy: .public)")
-            return Outcome(text: request.text, provider: nil, note: note)
+            return Outcome(text: request.text, provider: nil, note: note, rejected: Self.isUnusableReply(error))
         }
     }
 
@@ -90,8 +95,9 @@ final class PolishService {
     /// From `PolishChunker.minimumWords` prepared words on (with `Settings.polishInParts`), the
     /// text is polished in parts at the same time, under one deadline: parts `progressive`
     /// polished while the person talked are reused, the one it's still polishing is awaited,
-    /// and the rest are sent in parallel. Each part is guarded and falls back on its own; the
-    /// note says how many kept their dictated text. Shorter texts go to `polish`.
+    /// and the rest are sent in parallel. The deadline grows with the parts left to polish
+    /// (`PolishTimeLimit`), up to `overallTimeLimit(for:using:)`. Each part is guarded and falls back
+    /// on its own; the note says how many kept their dictated text. Shorter texts go to `polish`.
     func polishLong(
         _ request: PolishRequest, using configuration: PolishConfiguration?, progressive: ProgressivePolisher?
     ) async -> (Outcome, PolishReport) {
@@ -100,10 +106,10 @@ final class PolishService {
         guard chunks.count > 1, let polisher = polisher(using: configuration) else {
             progressive?.stop(keeping: [])
             report.line.count("chunks", 1)
+            report.line.seconds("limit", oneRequestLimit(for: request.text))
             return (await polish(request, using: configuration), report)
         }
 
-        let deadline = ContinuousClock.now + .seconds(timeLimit)
         let requests = chunks.map { chunk in
             var part = request
             part.text = chunk.text
@@ -131,13 +137,18 @@ final class PolishService {
         }
         // The part still in flight counts against the provider's limit, but never holds back
         // the first fresh part.
-        let local = endpointURL.map { Self.isLocal($0) } ?? false
-        let limit = PolishChunker.concurrency(for: polisher.provider, localEndpoint: local)
-        let parallel = min(max(1, limit - awaited.count), fresh.count)
+        let atOnce = concurrency(for: polisher.provider)
+        let parallel = min(max(1, atOnce - awaited.count), fresh.count)
+        // Only the parts still to polish take time now; cached ones are done.
+        let pending = awaited.map { $0.index } + fresh
+        let limit = PolishTimeLimit.seconds(
+            base: timeLimit, partWords: pending.map { PolishTimeLimit.words(in: requests[$0].text) },
+            concurrency: atOnce)
+        let deadline = ContinuousClock.now + .seconds(limit)
         let client = polisher.client
         let provider = polisher.provider
         let polishPart: @Sendable (Int) async -> Outcome = { [requests] index in
-            await self.polishOne(requests[index], client: client, provider: provider, deadline: deadline)
+            await self.polishOne(requests[index], client: client, provider: provider, deadline: deadline, limit: limit)
         }
 
         let results = await withTaskGroup(of: PartResult.self, returning: [PartResult].self) { group in
@@ -151,7 +162,7 @@ final class PolishService {
                     }
                     // It timed out or failed against its own, earlier deadline: like a part
                     // that failed while the person talked, it gets what's left of this one.
-                    if outcome.provider == nil, !outcome.rejectedByGuard, !Task.isCancelled {
+                    if outcome.provider == nil, !outcome.rejected, !Task.isCancelled {
                         outcome = await polishPart(index)
                     }
                     return PartResult(index: index, outcome: outcome, wait: ContinuousClock.now - started)
@@ -204,8 +215,34 @@ final class PolishService {
         report.line.count("fresh", fresh.count)
         report.line.count("parallel", parallel)
         report.line.count("fallbacks", keptAsDictated)
+        report.line.seconds("limit", limit)
         report.line.ms("slowest", results.map(\.wait).max().map { Self.milliseconds($0) })
         return (outcome, report)
+    }
+
+    /// The longest polishing `request` may take, parts and all: `timeLimit` for a normal
+    /// dictation, more for a long one (`PolishTimeLimit`). `polishLong` allows it no more than
+    /// this, and less when parts were polished while the person talked, so a backstop built
+    /// on it (`DictationController`) never cuts polish short. A long text whose provider
+    /// can't run gets the one-request limit here but never waits: `polish` returns at once.
+    func overallTimeLimit(for request: PolishRequest, using configuration: PolishConfiguration?) -> Double {
+        let chunks = settings.polishInParts ? PolishChunker.chunks(request.text) : []
+        guard chunks.count > 1 else { return oneRequestLimit(for: request.text) }
+        let provider = configuration?.provider ?? settings.polishProvider
+        return PolishTimeLimit.seconds(
+            base: timeLimit, partWords: chunks.map { PolishTimeLimit.words(in: $0.text) },
+            concurrency: concurrency(for: provider))
+    }
+
+    /// One request for `text`: `timeLimit`, or more for a long text.
+    private func oneRequestLimit(for text: String) -> Double {
+        PolishTimeLimit.seconds(base: timeLimit, words: PolishTimeLimit.words(in: text))
+    }
+
+    /// How many parts `provider` is sent at once.
+    private func concurrency(for provider: PolishProvider) -> Int {
+        let local = endpointURL.map { Self.isLocal($0) } ?? false
+        return PolishChunker.concurrency(for: provider, localEndpoint: local)
     }
 
     /// One part of `polishLong`, and how long key-up waited for it.
@@ -486,13 +523,24 @@ final class PolishService {
         return octets.count == 4 && octets[0] == 172 && (16...31).contains(octets[1])
     }
 
-    /// The user's setting, kept within sane bounds: a zero or negative value would make polish
-    /// always fail, and a huge one would hold every dictation hostage to a stalled server.
+    /// The user's setting, kept within sane bounds (`PolishTimeLimit.base`): the limit for a
+    /// normal dictation. A zero or negative value would make polish always fail, and a huge one
+    /// would hold every dictation hostage to a stalled server.
     var timeLimit: Double {
-        min(max(settings.polishTimeout, 0.5), 30)
+        PolishTimeLimit.base(settings.polishTimeout)
     }
 
     // MARK: - Messages
+
+    /// The model replied, but cut off or declining: the same request would get much the same
+    /// reply, so it isn't sent again.
+    private static func isUnusableReply(_ error: Error) -> Bool {
+        guard let polishError = error as? PolishError else { return false }
+        // `if case`, as in `note(for:limit:)`: a new MurmurKit case is simply worth a retry.
+        if case .truncated = polishError { return true }
+        if case .refused = polishError { return true }
+        return false
+    }
 
     /// A few words for History.
     private static func note(for error: Error, limit: Double) -> String {
@@ -515,6 +563,8 @@ final class PolishService {
             if case .missingAPIKey = polishError { return "No API key" }
             if case .timedOut = polishError { return "Timed out after \(format(limit)) s" }
             if case .emptyResponse = polishError { return "The model returned nothing" }
+            if case .truncated = polishError { return "The reply was cut off" }
+            if case .refused = polishError { return "The model declined to edit it" }
             return "Polish failed"
         }
         if let urlError = error as? URLError {
