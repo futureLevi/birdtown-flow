@@ -40,8 +40,35 @@ public enum PolishTimeLimit {
         return min(max(normal, Double(rounds) * perRound), maximum)
     }
 
-    /// Words as the limit counts them: runs of non-whitespace.
+    /// Words as the limits count them, this one and the output budget
+    /// (`PolishPrompt.maxTokens(for:)`): runs of non-whitespace, except that in a script
+    /// written without spaces (Chinese, Japanese, Thai…) every character counts as one.
+    /// Counted by spaces alone, a long Japanese dictation is a word or two, and would get a
+    /// normal dictation's time and too few tokens to finish.
     public static func words(in text: String) -> Int {
-        text.split { $0.isWhitespace }.count
+        var count = 0
+        var inWord = false
+        for character in text {
+            if character.isWhitespace {
+                inWord = false
+            } else if let scalar = character.unicodeScalars.first, isWrittenWithoutSpaces(scalar) {
+                count += 1
+                inWord = false
+            } else if !inWord {
+                count += 1
+                inWord = true
+            }
+        }
+        return count
+    }
+
+    /// Thai, Lao, Myanmar, Khmer, and Chinese and Japanese: their punctuation, kana,
+    /// ideographs and full-width forms. Korean puts spaces between words, so Hangul isn't here.
+    static func isWrittenWithoutSpaces(_ scalar: Unicode.Scalar) -> Bool {
+        switch scalar.value {
+        case 0x0E00...0x0EFF, 0x1000...0x109F, 0x1780...0x17FF: true
+        case 0x2E80...0x9FFF, 0xF900...0xFAFF, 0xFF00...0xFFEF, 0x20000...0x3FFFF: true
+        default: false
+        }
     }
 }

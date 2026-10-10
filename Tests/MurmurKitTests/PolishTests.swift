@@ -136,6 +136,13 @@ struct PolishPromptTests {
             #expect(PolishPrompt.maxTokens(for: text) >= words * 2 + 256)
         }
     }
+
+    @Test("The budget never cuts off a text written without spaces")
+    func maxTokensForUnspacedText() {
+        // 660 characters with no space in them: counted by spaces, one word and 512 tokens.
+        let japanese = String(repeating: "今日は会議があります。", count: 60)
+        #expect(PolishPrompt.maxTokens(for: japanese) == 660 * 3 + 256)
+    }
 }
 
 @Suite("PolishGuard")

@@ -11,8 +11,9 @@ final class PolishService {
         var provider: PolishProvider?
         /// Why polish wasn't used, for History ("timed out", "no API key"…). `nil` on success or when off.
         var note: String?
-        /// The model answered and `PolishGuard` turned it down: asking again won't help.
-        var rejectedByGuard = false
+        /// The model answered, but its reply can't be used: `PolishGuard` turned it down, or it
+        /// was cut off or declined. Asking again with the same request won't help.
+        var rejected = false
     }
 
     private let settings: Settings
@@ -78,14 +79,14 @@ final class PolishService {
                 Log.polish.info("\(provider.rawValue, privacy: .public) rewrite rejected by the guard")
                 return Outcome(
                     text: request.text, provider: nil, note: "Rewrite rejected: it changed what was said",
-                    rejectedByGuard: true)
+                    rejected: true)
             }
             Log.polish.info("\(provider.rawValue, privacy: .public) polished in \(elapsed, format: .fixed(precision: 2))s")
             return Outcome(text: accepted, provider: provider, note: nil)
         } catch {
             let note = Self.note(for: error, limit: limit ?? timeLimit)
             Log.polish.info("polish fell back (\(provider.rawValue, privacy: .public)): \(note, privacy: .public)")
-            return Outcome(text: request.text, provider: nil, note: note)
+            return Outcome(text: request.text, provider: nil, note: note, rejected: Self.isUnusableReply(error))
         }
     }
 
@@ -160,7 +161,7 @@ final class PolishService {
                     }
                     // It timed out or failed against its own, earlier deadline: like a part
                     // that failed while the person talked, it gets what's left of this one.
-                    if outcome.provider == nil, !outcome.rejectedByGuard, !Task.isCancelled {
+                    if outcome.provider == nil, !outcome.rejected, !Task.isCancelled {
                         outcome = await polishPart(index)
                     }
                     return PartResult(index: index, outcome: outcome, wait: ContinuousClock.now - started)
@@ -495,6 +496,16 @@ final class PolishService {
     }
 
     // MARK: - Messages
+
+    /// The model replied, but cut off or declining: the same request would get much the same
+    /// reply, so it isn't sent again.
+    private static func isUnusableReply(_ error: Error) -> Bool {
+        guard let polishError = error as? PolishError else { return false }
+        // `if case`, as in `note(for:limit:)`: a new MurmurKit case is simply worth a retry.
+        if case .truncated = polishError { return true }
+        if case .refused = polishError { return true }
+        return false
+    }
 
     /// A few words for History.
     private static func note(for error: Error, limit: Double) -> String {

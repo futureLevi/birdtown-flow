@@ -295,15 +295,16 @@ public enum PolishPrompt {
         """
 
     /// Output budget: dictation rarely grows under editing, so three tokens a word (a word is
-    /// about 1.3), plus room for the brief reasoning a model with adaptive thinking may do
-    /// first, which counts against it too.
+    /// about 1.3; a character of Chinese or Japanese, which counts as a word here
+    /// (`PolishTimeLimit.words(in:)`), one to three), plus room for the brief reasoning a
+    /// model with adaptive thinking may do first, which counts against it too.
     ///
     /// Capped so a runaway reply can't run up a bill, but only at about what the fastest
     /// models write in the longest polish may take (`PolishTimeLimit.maximum`): the cap
     /// stops a runaway, never a long dictation polished whole (`polishInParts` off) or a
     /// long part. A reply that hits it anyway is cut off, and `parseResponse` turns it down.
     public static func maxTokens(for text: String) -> Int {
-        let words = text.split { $0.isWhitespace }.count
+        let words = PolishTimeLimit.words(in: text)
         return min(8_192, max(512, words * 3 + 256))
     }
 }

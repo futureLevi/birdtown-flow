@@ -17,11 +17,13 @@ struct TranscriptionTimeLimitTests {
         }
     }
 
-    @Test("Parakeet: past the floor, 10 s plus 0.2 s per second of audio")
+    @Test("Parakeet: past the floor, 10 s, 3.4 s per window, and 0.2 s per second of audio")
     func parakeet() {
-        #expect(nearly(TranscriptionTimeLimit.seconds(audioSeconds: 250, engine: .parakeet), 60))
-        #expect(nearly(TranscriptionTimeLimit.seconds(audioSeconds: 600, engine: .parakeet), 130))
-        #expect(nearly(TranscriptionTimeLimit.seconds(audioSeconds: 1800, engine: .parakeet), 370))
+        #expect(TranscriptionTimeLimit.seconds(audioSeconds: 60, engine: .parakeet) == 60)
+        #expect(nearly(TranscriptionTimeLimit.seconds(audioSeconds: 120, engine: .parakeet), 105.4))
+        // 101 windows: one per 6 s, and the tail.
+        #expect(nearly(TranscriptionTimeLimit.seconds(audioSeconds: 600, engine: .parakeet), 473.4))
+        #expect(nearly(TranscriptionTimeLimit.seconds(audioSeconds: 1800, engine: .parakeet), 1393.4))
     }
 
     @Test("Parakeet: room for recognition at a quarter of its slowest measured speed, plus boosting's whole budget")
@@ -30,6 +32,19 @@ struct TranscriptionTimeLimitTests {
             let recognition = seconds / 10
             let limit = TranscriptionTimeLimit.seconds(audioSeconds: seconds, engine: .parakeet)
             #expect(limit > recognition + TranscriptionTimeLimit.boost(audioSeconds: seconds))
+        }
+    }
+
+    @Test("Parakeet: room for a Retry's windows, each a 15 s pass boosted on its own, then a whole pass")
+    func parakeetCoversWindows() {
+        for seconds in [60.0, 300, 600, 1800] {
+            // At most one cut every 6 s, plus the tail.
+            let windows = (seconds / 6).rounded(.up) + 1
+            let segmented = windows * (15.0 / 10 + TranscriptionTimeLimit.boost(audioSeconds: 15))
+            // A window that fails late sends the recording through whole as well.
+            let whole = seconds / 10 + TranscriptionTimeLimit.boost(audioSeconds: seconds)
+            let limit = TranscriptionTimeLimit.seconds(audioSeconds: seconds, engine: .parakeet)
+            #expect(limit > segmented + whole)
         }
     }
 
@@ -128,5 +143,20 @@ struct PolishTimeLimitTests {
     func words() {
         #expect(PolishTimeLimit.words(in: "") == 0)
         #expect(PolishTimeLimit.words(in: "  So,  we ship\nit.\n\nThen rest ") == 6)
+    }
+
+    @Test("In a script written without spaces, every character is a word")
+    func unspacedWords() {
+        #expect(PolishTimeLimit.words(in: "今日は会議があります。") == 11)
+        #expect(PolishTimeLimit.words(in: "我们用Swift写代码") == 7)
+        // Korean puts spaces between words.
+        #expect(PolishTimeLimit.words(in: "안녕하세요 반갑습니다") == 2)
+    }
+
+    @Test("A long dictation without spaces gets a long dictation's time")
+    func unspacedDictation() {
+        let japanese = String(repeating: "今日は会議があります。", count: 60)
+        #expect(PolishTimeLimit.words(in: japanese) == 660)
+        #expect(nearly(PolishTimeLimit.seconds(base: 4, words: PolishTimeLimit.words(in: japanese)), 17.6))
     }
 }

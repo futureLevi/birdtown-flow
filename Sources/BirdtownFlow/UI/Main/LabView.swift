@@ -695,7 +695,9 @@ private struct LabResults: View {
                         VStack(alignment: .leading, spacing: Spacing.m) {
                             LabRunGroupHeader(group: group)
                             ForEach(group.runs) { run in
-                                LabRunCard(run: run, timeLimit: model.settings.polishTimeout)
+                                // What dictation allows a text this long, not just the setting.
+                                LabRunCard(run: run, timeLimit: PolishTimeLimit.seconds(
+                                    base: model.settings.polishTimeout, words: PolishTimeLimit.words(in: run.input)))
                             }
                         }
                     }
@@ -773,7 +775,8 @@ private struct LabRunGroupHeader: View {
 
 private struct LabRunCard: View {
     let run: LabBench.Run
-    /// Dictation's polish time limit, in seconds.
+    /// Dictation's polish time limit for the run's text, in seconds: the setting, or more for
+    /// a long text (`PolishTimeLimit`).
     let timeLimit: Double
 
     @Environment(AppModel.self) private var model
@@ -974,6 +977,7 @@ private struct LabRunCard: View {
         var isFailure = false
         if case .failed = result.verdict { isFailure = true }
         let counts = WordDiff.counts(original: run.input, revised: run.output)
+        let limit = timeLimit.formatted(.number.precision(.fractionLength(0...1)))
         return HStack(spacing: Spacing.m) {
             if wait > 0 {
                 metric("Wait", Self.format(wait))
@@ -990,8 +994,8 @@ private struct LabRunCard: View {
                     .help("This run started Claude Code first. Dictation starts it while you talk, so it wouldn't wait for this.")
             }
             if !isFailure, Double(wait) / 1000 > timeLimit {
-                Badge(text: "Over the \(Int(timeLimit)) s limit", symbol: "timer", tone: .warning)
-                    .help("Dictation gives up after \(Int(timeLimit)) s and types the unpolished text.")
+                Badge(text: "Over the \(limit) s limit", symbol: "timer", tone: .warning)
+                    .help("Dictation gives up on a text this long after \(limit) s and types the unpolished text.")
             }
             if !isFailure {
                 metric("Words", "−\(counts.removed)  +\(counts.added)")

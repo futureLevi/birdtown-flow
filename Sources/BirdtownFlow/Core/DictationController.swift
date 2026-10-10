@@ -1435,6 +1435,13 @@ final class DictationController {
     private func message(for error: Error) -> String {
         if let failure = error as? DictationFailure { return failure.message }
         if error is Watchdog.Expired { return "Transcription took too long" }
+        // Its own limit comes before the watchdog's (`TranscriptionTimeLimit`), so this is
+        // how a stuck Apple Speech usually ends.
+        if let error = error as? AppleSpeechError {
+            switch error {
+            case .timedOut: return "Apple Speech stopped responding"
+            }
+        }
         if let error = error as? TranscriptionError {
             switch error {
             case .modelNotReady: return modelNotReadyMessage()

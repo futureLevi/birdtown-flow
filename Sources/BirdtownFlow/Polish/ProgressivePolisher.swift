@@ -11,8 +11,9 @@ import MurmurKit
 /// different at key-up is simply polished again then.
 @MainActor
 final class ProgressivePolisher {
-    /// Parts polished so far, by request: the ones the guard accepted or turned down.
-    /// A timeout or an error is tried again at key-up.
+    /// Parts polished so far, by request: the ones the guard accepted, and replies that
+    /// can't be used (`PolishService.Outcome.rejected`). A timeout or an error is tried again
+    /// at key-up.
     private(set) var cache: [PolishRequest: PolishService.Outcome] = [:]
     /// The part being polished now.
     private(set) var inFlight: (request: PolishRequest, task: Task<PolishService.Outcome, Never>)?
@@ -123,7 +124,7 @@ final class ProgressivePolisher {
         guard inFlight?.request == request else { return }
         inFlight = nil
         let verdict: String
-        if outcome.provider != nil || outcome.rejectedByGuard {
+        if outcome.provider != nil || outcome.rejected {
             verdict = outcome.provider != nil ? "accepted" : "rejected"
             cache[request] = outcome
             failuresInARow = 0
