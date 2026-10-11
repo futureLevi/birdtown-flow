@@ -31,6 +31,17 @@ enum SettingsTab: String, CaseIterable, Identifiable {
 
     /// The sections that change how dictation works; About sits apart, under a hairline.
     static let preferences: [SettingsTab] = [.general, .audio, .text, .privacy]
+
+    /// The section's icon colour: like the sidebar, the rail walks the logo's colour wheel.
+    var tint: Color {
+        switch self {
+        case .general: Palette.Wheel.orange
+        case .audio: Palette.Wheel.gold
+        case .text: Palette.Wheel.green
+        case .privacy: Palette.Wheel.cyan
+        case .about: Palette.Wheel.blue
+        }
+    }
 }
 
 /// Settings as a modal over the main window, dimming everything behind it. Open it with
@@ -55,8 +66,8 @@ struct SettingsOverlay: View {
     }
 }
 
-/// The Settings card: a column of sections on the left, the chosen section's grouped rows on
-/// the right, each section titled at the top of its pane.
+/// The Settings card: a grey rail of sections on the left; on the right the chosen section's
+/// title and close button over a hairline, then its rows.
 struct SettingsView: View {
     let tab: SettingsTab
     @Environment(AppModel.self) private var model
@@ -66,18 +77,17 @@ struct SettingsView: View {
         HStack(spacing: 0) {
             SettingsSidebar(selection: tab) { model.settingsTab = $0 }
                 .frame(width: Layout.SettingsModal.sidebarWidth)
-            Rectangle()
-                .fill(Palette.hairline)
-                .frame(width: Layout.Setup.hairline)
-            pane(for: tab)
-                .id(tab)
-                // About opens on the app's name; a heading above it would say less.
-                .environment(\.settingsPaneTitle, tab == .about ? nil : tab.title)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .overlay(alignment: .topTrailing) {
-                    IconButton(symbol: "xmark", label: "Close Settings (Esc)") { model.closeSettings() }
-                        .padding(Spacing.m)
-                }
+            VStack(spacing: 0) {
+                header
+                Rectangle()
+                    .fill(Palette.hairline)
+                    .frame(height: Layout.Setup.hairline)
+                pane(for: tab)
+                    .id(tab)
+                    // The header above names the section; the pane doesn't repeat it.
+                    .environment(\.settingsPaneTitle, nil)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
         }
         .frame(maxWidth: Layout.SettingsModal.size.width, maxHeight: Layout.SettingsModal.size.height)
         .background(Palette.canvas)
@@ -91,6 +101,21 @@ struct SettingsView: View {
         .accessibilityElement(children: .contain)
         .accessibilityAddTraits(.isModal)
         .accessibilityLabel("Settings")
+    }
+
+    private var header: some View {
+        HStack(spacing: Spacing.l) {
+            Text(tab.title)
+                .font(Typography.paneTitle)
+                .foregroundStyle(Palette.ink)
+                .lineLimit(1)
+                .accessibilityAddTraits(.isHeader)
+            Spacer(minLength: Spacing.l)
+            IconButton(symbol: "xmark", label: "Close Settings (Esc)") { model.closeSettings() }
+        }
+        .padding(.leading, Layout.SettingsRail.panePadding)
+        .padding(.trailing, Spacing.m)
+        .frame(height: Layout.SettingsRail.headerHeight)
     }
 
     @ViewBuilder
@@ -127,9 +152,10 @@ private struct SettingsSidebar: View {
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.xxs) {
             Text("Settings")
-                .eyebrowStyle()
-                .padding(.horizontal, Spacing.s)
-                .padding(.bottom, Spacing.xs)
+                .font(Typography.sidebarLabel)
+                .foregroundStyle(Palette.inkSecondary)
+                .padding(.horizontal, Layout.SettingsRail.rowPadding)
+                .padding(.bottom, Spacing.s)
                 .accessibilityAddTraits(.isHeader)
             ForEach(SettingsTab.preferences) { tab in
                 SettingsSidebarRow(tab: tab, isSelected: tab == selection) { select(tab) }
@@ -137,26 +163,27 @@ private struct SettingsSidebar: View {
             Rectangle()
                 .fill(Palette.hairline)
                 .frame(height: Layout.Setup.hairline)
-                .padding(.horizontal, Spacing.s)
-                .padding(.vertical, Spacing.s)
+                .padding(.horizontal, Layout.SettingsRail.rowPadding)
+                .padding(.vertical, Spacing.xs)
             SettingsSidebarRow(tab: .about, isSelected: selection == .about) { select(.about) }
             Spacer(minLength: Spacing.l)
             Text(AppVersion.display)
-                .font(Typography.caption)
-                .foregroundStyle(Palette.inkTertiary)
+                .font(Typography.statCaption)
+                .foregroundStyle(Palette.inkSecondary)
                 .lineLimit(1)
-                .padding(.horizontal, Spacing.s)
+                .padding(.horizontal, Layout.SettingsRail.rowPadding)
                 .textSelection(.enabled)
         }
-        .padding(.horizontal, Spacing.m)
-        .padding(.top, Spacing.xl)
-        .padding(.bottom, Spacing.l)
+        .padding(.horizontal, Spacing.s)
+        .padding(.top, Spacing.l + Spacing.xxs)
+        .padding(.bottom, Spacing.m + Spacing.xxs)
         .frame(maxHeight: .infinity, alignment: .top)
-        .background(Palette.sunken)
+        .background(Palette.sidebar)
     }
 }
 
-/// One section in the card's left column: icon and name, a Signal blue wash when chosen.
+/// One section in the card's left column: its icon in the section's colour and its name, a
+/// grey fill when chosen.
 private struct SettingsSidebarRow: View {
     let tab: SettingsTab
     let isSelected: Bool
@@ -166,21 +193,22 @@ private struct SettingsSidebarRow: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        let shape = RoundedRectangle(cornerRadius: Radius.s, style: .continuous)
+        let shape = RoundedRectangle(cornerRadius: Layout.SettingsRail.rowRadius, style: .continuous)
         Button(action: action) {
-            HStack(spacing: Spacing.s) {
+            HStack(spacing: Layout.Sidebar.rowSpacing) {
                 Image(systemName: tab.symbol)
                     .font(Typography.body)
-                    .foregroundStyle(isSelected ? Palette.accent : Palette.inkSecondary)
-                    .frame(width: Layout.iconMedium)
+                    .foregroundStyle(tab.tint)
+                    .frame(width: Layout.SettingsRail.iconColumn)
+                    .accessibilityHidden(true)
                 Text(tab.title)
-                    .font(isSelected ? Typography.bodyEmphasis : Typography.body)
+                    .font(isSelected ? Typography.sidebarRowSelected : Typography.sidebarRow)
                     .foregroundStyle(Palette.ink)
                     .lineLimit(1)
             }
-            .padding(.horizontal, Spacing.s)
+            .padding(.horizontal, Layout.SettingsRail.rowPadding)
             .frame(maxWidth: .infinity, minHeight: Layout.SettingsModal.rowHeight, alignment: .leading)
-            .background(shape.fill(isSelected ? Palette.accentSoft : (isHovered ? Palette.surfaceHover : .clear)))
+            .background(shape.fill(isSelected ? Palette.selection : (isHovered ? Palette.sidebarHover : .clear)))
             .contentShape(shape)
         }
         .buttonStyle(.plain)
@@ -211,8 +239,8 @@ extension EnvironmentValues {
 
 // MARK: - Building blocks
 
-/// A pane: warm canvas, the section's title, then groups stacked with generous rhythm,
-/// scrolling inside whatever height the Settings card has.
+/// A pane: the canvas, then groups of flat rows, scrolling inside whatever height the Settings
+/// card has. Shown on its own (snapshots), it carries the section's title at the top.
 struct SettingsPane<Content: View>: View {
     @ViewBuilder var content: Content
     @Environment(\.settingsPaneTitle) private var title
@@ -225,24 +253,24 @@ struct SettingsPane<Content: View>: View {
     /// cards keep the same width and edges on every tab, scrolling or not.
     private var scrollerGutter: CGFloat {
         guard paneWidth > 0, contentWidth > 0 else { return 0 }
-        return min(max(paneWidth - contentWidth, 0), Spacing.xxl)
+        return min(max(paneWidth - contentWidth, 0), Layout.SettingsRail.panePadding)
     }
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: Spacing.xl) {
+            VStack(alignment: .leading, spacing: Spacing.s) {
                 if let title {
                     Text(title)
-                        .font(Typography.title)
-                        .tracking(Tracking.title)
+                        .font(Typography.paneTitle)
                         .foregroundStyle(Palette.ink)
+                        .padding(.top, Spacing.l)
                         .accessibilityAddTraits(.isHeader)
                 }
                 content
             }
-            .padding(.vertical, Spacing.xxl)
-            .padding(.leading, Spacing.xxl)
-            .padding(.trailing, Spacing.xxl - scrollerGutter)
+            .padding(.bottom, Spacing.xxl)
+            .padding(.leading, Layout.SettingsRail.panePadding)
+            .padding(.trailing, Layout.SettingsRail.panePadding - scrollerGutter)
             .frame(maxWidth: .infinity, alignment: .topLeading)
             .onGeometryChange(for: CGFloat.self) { proxy in
                 proxy.size.width
@@ -262,30 +290,30 @@ struct SettingsPane<Content: View>: View {
     }
 }
 
-/// A titled card of rows. Rows are separated with `SettingsDivider()`.
+/// A titled run of flat rows on the pane: no card, hairlines between rows. Rows are separated
+/// with `SettingsDivider()`.
 struct SettingsGroup<Content: View>: View {
     var title: String?
     var footnote: String?
     @ViewBuilder var content: Content
 
     var body: some View {
-        VStack(alignment: .leading, spacing: Spacing.s) {
+        VStack(alignment: .leading, spacing: Spacing.xxs) {
             if let title {
                 Text(title)
-                    .eyebrowStyle()
-                    .padding(.leading, Spacing.xs)
+                    .font(Typography.groupTitle)
+                    .foregroundStyle(Palette.ink)
+                    .accessibilityAddTraits(.isHeader)
             }
             VStack(spacing: 0) { content }
-                .background(RoundedRectangle(cornerRadius: Radius.m, style: .continuous).fill(Palette.surface))
-                .overlay(RoundedRectangle(cornerRadius: Radius.m, style: .continuous).strokeBorder(Palette.hairline))
             if let footnote {
                 Text(footnote)
-                    .font(Typography.callout)
-                    .foregroundStyle(Palette.inkTertiary)
+                    .font(Typography.settingsRowDetail)
+                    .foregroundStyle(Palette.inkSecondary)
                     .fixedSize(horizontal: false, vertical: true)
-                    .padding(.horizontal, Spacing.xs)
             }
         }
+        .padding(.top, Layout.SettingsRail.groupTop - Spacing.s)
     }
 }
 
@@ -299,11 +327,11 @@ struct SettingsRow<Control: View>: View {
         HStack(alignment: .center, spacing: Spacing.l) {
             VStack(alignment: .leading, spacing: Spacing.xxs) {
                 Text(title)
-                    .font(Typography.body)
+                    .font(Typography.settingsRowTitle)
                     .foregroundStyle(Palette.ink)
                 if let detail {
                     Text(detail)
-                        .font(Typography.callout)
+                        .font(Typography.settingsRowDetail)
                         .foregroundStyle(Palette.inkSecondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -311,19 +339,20 @@ struct SettingsRow<Control: View>: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             control
         }
-        .padding(.horizontal, Spacing.l)
-        .padding(.vertical, Spacing.m)
+        .padding(.horizontal, Layout.SettingsRail.rowInset)
+        .padding(.vertical, Layout.SettingsRail.rowVertical)
         .frame(minHeight: Layout.rowMinHeight)
         .accessibilityElement(children: .contain)
     }
 }
 
+/// The hairline between two rows of a group, as wide as the rows.
 struct SettingsDivider: View {
     var body: some View {
         Rectangle()
             .fill(Palette.hairline)
             .frame(height: Layout.Setup.hairline)
-            .padding(.leading, Spacing.l)
+            .padding(.leading, Layout.SettingsRail.rowInset)
     }
 }
 

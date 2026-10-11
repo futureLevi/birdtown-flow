@@ -43,25 +43,40 @@ Tile: Apple's macOS grid (824 px tile on a 1024 px canvas), continuous corners a
   appearance it adds a faint light rim so the navy tile doesn't sink into a navy window.
 - **Menu bar:** the five bars alone as a template image (`MenuBarGlyph`, `LogoBars`).
 - **Live states:** the spectrum disc on its own is `SpectrumOrb`. It means "your voice is live"
-  and nothing else: the pill's record light, the sidebar and menu bar status while
-  recording, onboarding's try-it moment. While listening it turns slowly (one turn per 9 s)
+  and nothing else: the pill's record light, the menu bar status while recording,
+  onboarding's try-it moment. While listening it turns slowly (one turn per 9 s)
   and swells a little with your voice; while transcribing or polishing it hollows into a ring
   that spins with a comet tail. It is painted once by `LogoPainter.drawDisc` and then only
   turned, so it is the logo's disc, not an imitation of it.
 
-## The app around it ("navy and spectrum")
+## The app around it ("Mono v2")
 
 `Sources/BirdtownFlow/UI/DesignSystem/Tokens.swift` holds the rules; in short:
 
-- Navy ink (`#0E183C`) on porcelain (`#F6F7FB`); in dark mode, porcelain ink on midnight navy
-  (`#0B1026`).
-- Primary actions are navy pills (porcelain in dark mode), like the tile and ring.
-- One solid accent, Signal blue (`#4256F0`, `#8291FF` in dark), for selection, focus, links
-  and toggles.
+- Calm and nearly colourless, with the logo's navy as a whisper in every grey: ink `#0E1426`
+  on white, a `#F7F8FA` sidebar; in dark mode `#E8EAF0` ink on a night navy-charcoal
+  (`#1B1D24`, sidebar `#14161B`).
+- Flat surfaces: soft grey tiles (`#F3F5F8`) and hairlines instead of shadows and boxes.
+  Settings rows sit on the page with hairlines between them; Home's recent dictations are
+  plain rows, not a card.
+- Colour lives in a few small places, all from the logo's disc. The sidebar's icons walk its
+  colour wheel from the top: Home orange, History gold, Dictionary green, Snippets cyan, Style
+  blue, Lab violet, Settings purple (deeper shades in light mode); the Settings rail follows
+  the same order. Each Home stat wears a small badge lit like the app icon, with a soft glow
+  in its corner: This week blue, Pace green, Streak orange, Time saved purple.
+- Primary actions are navy pills (porcelain in dark mode), like the tile and ring. The
+  dictation pill is the icon's navy, lit from the top; hands-free Stop is a navy square on a
+  warm-white disc.
+- One accent, Signal blue, is the orb's own blue (`#3082F8`, `#4C93FA` in dark), for
+  selection, focus and switches; as text (links) it deepens to `#2462BA` (`#6AA6FB` in dark)
+  so it reads at 4.5:1.
 - The spectrum only for live states: the orb, the thinking ring, model download progress.
   Never for static chrome, text or backgrounds. The one exception is Home's hero (below).
-- SF Pro throughout: bold and semibold for titles and big numbers, regular for reading. (SF
-  Pro Expanded, New York and SF Pro Rounded were tried for the large text; SF Pro won.)
+- SF Pro throughout: semibold for titles and big numbers, regular for reading.
+- What Mono v2 leaves out, on purpose: it is not a chat app. No recent dictations in the
+  sidebar, no composer or voice box on Home, no model picker, nothing under Settings at the
+  foot of the sidebar (whether the shortcut and model are ready is in Settings; anything
+  broken is a banner on Home).
 
 ## Home hero: Voiceprint
 

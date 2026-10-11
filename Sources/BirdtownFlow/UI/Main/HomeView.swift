@@ -39,20 +39,28 @@ struct HomeView: View {
         // A first dictation still being recorded has a row already, but not one to show.
         let isFirstRun = visible.isEmpty && pending.isEmpty
         ScrollView {
-            VStack(alignment: .leading, spacing: Spacing.xxl) {
+            VStack(alignment: .leading, spacing: 0) {
                 header(stats: stats, isFirstRun: isFirstRun)
-                // An empty banner stack would still take a slot and double the gap.
                 if HomeBanners.isVisible(status: status, hasCompletedOnboarding: model.settings.hasCompletedOnboarding) {
                     HomeBanners(status: status)
+                        .padding(.top, Layout.Home.bannersTop)
                 }
                 if isFirstRun {
                     FirstRunCard(keyName: status.pushToTalkKey)
+                        .padding(.top, Layout.Home.statsTop)
                 } else {
                     tiles(stats: stats, records: visible)
+                        .padding(.top, Layout.Home.statsTop)
                     recent(recentRecords)
+                        .padding(.top, Layout.Home.recentTop)
                 }
             }
-            .pageLayout()
+            // One calm 660 pt column, centred: the hero's width.
+            .frame(maxWidth: Layout.Home.columnWidth, alignment: .leading)
+            .padding(.horizontal, Spacing.page)
+            .padding(.top, Layout.Home.topPadding)
+            .padding(.bottom, Spacing.page)
+            .frame(maxWidth: .infinity)
         }
         // Room to scroll the last row clear of the undo toast while it's up.
         .contentMargins(.bottom, pending.isEmpty ? 0 : Layout.Main.floatingBarClearance, for: .scrollContent)
@@ -112,12 +120,14 @@ struct HomeView: View {
     private func tiles(stats: DictationStats, records: [HistoryRecord]) -> some View {
         let dictatedToday = records.contains { Calendar.current.isDateInToday($0.createdAt) }
         let speedup = Double(stats.averageWPM) / Double(DictationStats.typingWPM)
-        return HStack(spacing: Spacing.m) {
+        return HStack(alignment: .top, spacing: Layout.Stat.spacing) {
             StatTile(
                 label: "This week",
                 value: stats.wordsThisWeek,
                 unit: "words",
-                caption: "\(stats.totalWords.formatted()) all time"
+                caption: "\(stats.totalWords.formatted()) all time",
+                symbol: "calendar",
+                tone: .blue
             )
             StatTile(
                 label: "Pace",
@@ -125,27 +135,41 @@ struct HomeView: View {
                 unit: "wpm",
                 caption: stats.averageWPM > 0
                     ? "\(speedup.formatted(.number.precision(.fractionLength(1))))× faster than typing"
-                    : "Measured on longer dictations"
+                    : "Measured on longer dictations",
+                symbol: "gauge.with.dots.needle.67percent",
+                tone: .green
             )
             StatTile(
                 label: "Streak",
                 value: stats.dayStreak,
                 unit: stats.dayStreak == 1 ? "day" : "days",
-                caption: dictatedToday ? "Today counts" : "Dictate today to keep it"
+                caption: dictatedToday ? "Today counts" : "Dictate today to keep it",
+                symbol: "flame",
+                tone: .orange
             )
             StatTile(
                 label: "Time saved",
                 value: stats.minutesSaved,
                 unit: "min",
                 // Saved time is all-time (unlike the weekly tile), so the caption says so.
-                caption: "All time, vs. typing"
+                caption: "All time, vs. typing",
+                symbol: "clock",
+                tone: .purple
             )
         }
+        // Equal heights when a caption wraps in a narrow window.
+        .fixedSize(horizontal: false, vertical: true)
     }
 
+    /// The last few dictations as plain rows on the page, a hairline above each: no card.
     private func recent(_ records: [HistoryRecord]) -> some View {
-        VStack(alignment: .leading, spacing: Spacing.m) {
-            SectionHeader(title: "Recent") {
+        VStack(alignment: .leading, spacing: Layout.Home.recentHeaderBottom) {
+            HStack(spacing: Spacing.s) {
+                Text("Recent")
+                    .font(Typography.groupTitle)
+                    .foregroundStyle(Palette.inkSecondary)
+                    .accessibilityAddTraits(.isHeader)
+                Spacer(minLength: Spacing.s)
                 Button {
                     model.section = .history
                 } label: {
@@ -154,15 +178,13 @@ struct HomeView: View {
                         Image(systemName: "chevron.right")
                             .imageScale(.small)
                     }
+                    .font(Typography.link)
                 }
-                .buttonStyle(.flowGhost)
-                .controlSize(.small)
+                .buttonStyle(TextLinkButtonStyle())
             }
             VStack(spacing: 0) {
-                ForEach(Array(records.enumerated()), id: \.element.id) { index, record in
-                    if index > 0 {
-                        RowDivider(leadingInset: HistoryRow.textInset)
-                    }
+                ForEach(records, id: \.id) { record in
+                    RowDivider()
                     HistoryRow(
                         record: record,
                         player: player,
@@ -177,7 +199,6 @@ struct HomeView: View {
                     }
                 }
             }
-            .cardSurface()
         }
     }
 
@@ -210,6 +231,7 @@ private struct HomeBanners: View {
     /// Whether any banner below would show; keep in step with `body`.
     static func isVisible(status: SystemStatus, hasCompletedOnboarding: Bool) -> Bool {
         if !hasCompletedOnboarding || !status.microphone || !status.accessibility { return true }
+        if !status.hotkeyActive { return true }
         switch status.model {
         case .notDownloaded, .downloading, .failed: return true
         case .loading, .ready: return false
@@ -272,6 +294,18 @@ private struct HomeBanners: View {
                         .buttonStyle(.flowSecondary)
                         .controlSize(.small)
                 }
+            } else if !status.hotkeyActive {
+                // The sidebar used to say this; Home is now where anything broken shows.
+                Banner(
+                    symbol: "pause.circle",
+                    title: "Your shortcut is paused",
+                    message: "Birdtown Flow is reconnecting \(status.pushToTalkKey) automatically.",
+                    tone: .warning
+                ) {
+                    Button("Retry") { model.controller.activate() }
+                        .buttonStyle(.flowSecondary)
+                        .controlSize(.small)
+                }
             }
         }
     }
@@ -322,6 +356,18 @@ private struct HomeBanners: View {
         case .loading, .ready:
             EmptyView()
         }
+    }
+}
+
+// MARK: - Links
+
+/// A text link in Signal blue, deep enough to read, dimming while pressed.
+private struct TextLinkButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .foregroundStyle(Palette.accentInk)
+            .opacity(configuration.isPressed ? Layout.Setup.pressedOpacity : 1)
+            .contentShape(Rectangle())
     }
 }
 

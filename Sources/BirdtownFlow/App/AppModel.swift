@@ -75,6 +75,8 @@ final class AppModel {
     /// The Settings section showing in the main window's Settings modal, or `nil` when it's
     /// closed. Open it through `showSettings(_:)`; the modal switches sections by setting it.
     var settingsTab: SettingsTab?
+    /// The main window's sidebar tucked away (its Hide sidebar button, or ⌃⌘S).
+    var sidebarHidden = false
 
     init(
         settings: Settings = .shared,

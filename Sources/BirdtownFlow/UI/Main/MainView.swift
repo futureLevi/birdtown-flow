@@ -3,7 +3,11 @@ import Combine
 import MurmurKit
 import SwiftUI
 
-/// The main window: a sidebar of sections and a quiet detail column.
+/// The main window: a flush grey sidebar of sections and a quiet detail column.
+///
+/// Laid out by hand rather than with `NavigationSplitView`, whose macOS 26 sidebar is a
+/// floating glass panel: Mono v2's sidebar is a flat step off the canvas, running from the top
+/// of the window (under the traffic lights) to the bottom.
 struct MainView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.mainPreview) private var preview
@@ -12,26 +16,38 @@ struct MainView: View {
     var body: some View {
         let status = preview.status ?? SystemStatus.live(model)
         let settingsOpen = model.settingsTab != nil
-        NavigationSplitView {
-            MainSidebar(status: status)
-                .navigationSplitViewColumnWidth(Layout.sidebarWidth)
-                // No title bar to hold it, and the sidebar is where the app's name now lives.
-                .toolbar(removing: .sidebarToggle)
-        } detail: {
+        let sidebarHidden = model.sidebarHidden
+        HStack(spacing: 0) {
+            if !sidebarHidden {
+                MainSidebar()
+                    .frame(width: Layout.Sidebar.width)
+                    .transition(.move(edge: .leading).combined(with: .opacity))
+            }
             ZStack {
                 page(status: status)
                     .id(model.section)
                     .transition(.opacity)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+            // With the sidebar away, the page starts below the traffic lights.
+            .padding(.top, sidebarHidden ? Layout.Sidebar.collapsedTopInset : 0)
             .background(Palette.canvas)
+            .overlay(alignment: .topLeading) {
+                if sidebarHidden {
+                    SidebarToggleButton()
+                        .padding(.leading, Layout.Sidebar.showButtonLeading)
+                        .padding(.top, Layout.Sidebar.hideButtonTop)
+                }
+            }
             // Pages cross-fade; the window never slides.
             .animation(Motion.resolve(Motion.smooth, reduceMotion: reduceMotion), value: model.section)
         }
-        // Signal blue for every system control: sidebar selection, toggles, focus rings.
+        .animation(Motion.resolve(Motion.smooth, reduceMotion: reduceMotion), value: sidebarHidden)
+        // No title bar: the sidebar runs up under the traffic lights and pages start at the
+        // top of the window, as they do in snapshots.
+        .ignoresSafeArea(.container, edges: .top)
+        // Signal blue for every system control: toggles, focus rings.
         .tint(Palette.accent)
-        // Porcelain (midnight in dark mode) shows around the floating sidebar, so the window
-        // reads as one surface.
         .background(Palette.canvas)
         .background { SectionShortcuts() }
         // Settings is modal: nothing behind it takes clicks, keys or focus while it's open.
@@ -74,11 +90,12 @@ struct MainView: View {
 /// The app icon and name, at the top of the sidebar above Home.
 struct SidebarWordmark: View {
     var body: some View {
-        HStack(spacing: Spacing.s) {
+        HStack(spacing: Layout.Sidebar.rowSpacing) {
+            // The artwork keeps the standard icon margin; its tile fills the 28 pt slot.
             AppIconArtwork(size: Layout.Main.sidebarLogo, showsShadow: false)
+                .frame(width: Layout.Sidebar.wordmarkHeight, height: Layout.Sidebar.wordmarkHeight)
             Text("Birdtown Flow")
                 .font(Typography.wordmark)
-                .tracking(Tracking.title)
                 .foregroundStyle(Palette.ink)
                 .lineLimit(1)
                 .fixedSize()
@@ -108,8 +125,24 @@ private struct SectionShortcuts: View {
 
 // MARK: - Sidebar
 
+extension SidebarSection {
+    /// The section's icon colour: the sidebar walks the logo's colour wheel from the top.
+    var tint: Color {
+        switch self {
+        case .home: Palette.Wheel.orange
+        case .history: Palette.Wheel.gold
+        case .dictionary: Palette.Wheel.green
+        case .snippets: Palette.Wheel.cyan
+        case .style: Palette.Wheel.blue
+        case .lab: Palette.Wheel.violet
+        }
+    }
+}
+
+/// The wordmark, the sections, then Settings at the foot. Nothing under Settings: whether the
+/// shortcut and the model are ready is in Settings, and anything that needs fixing is a banner
+/// on Home.
 struct MainSidebar: View {
-    let status: SystemStatus
     @Environment(AppModel.self) private var model
 
     var body: some View {
@@ -119,45 +152,114 @@ struct MainSidebar: View {
         let failed = model.history.failedCount - (pending.isEmpty ? 0 : pending.reduce(0) { count, id in
             count + (model.history.record(id: id)?.outcome == .failed ? 1 : 0)
         })
-        List(selection: selection) {
-            ForEach(SidebarSection.everyday) { section in
-                Label(section.title, systemImage: section.symbol)
-                    .badge(section == .history ? failed : 0)
-                    .tag(section)
-            }
-            Section("Admin") {
-                ForEach(SidebarSection.admin) { section in
-                    Label(section.title, systemImage: section.symbol)
-                        .tag(section)
+        VStack(alignment: .leading, spacing: 0) {
+            SidebarWordmark()
+                .frame(height: Layout.Sidebar.wordmarkHeight)
+                .padding(.horizontal, Layout.Sidebar.rowPadding)
+                .padding(.bottom, Layout.Sidebar.wordmarkBottom)
+            ScrollView {
+                VStack(alignment: .leading, spacing: 0) {
+                    ForEach(SidebarSection.everyday) { section in
+                        row(section, count: section == .history ? failed : 0)
+                    }
+                    Text("Admin")
+                        .font(Typography.sidebarLabel)
+                        .foregroundStyle(Palette.inkSecondary)
+                        .padding(.horizontal, Layout.Sidebar.rowPadding)
+                        .padding(.top, Layout.Sidebar.labelTop)
+                        .padding(.bottom, Layout.Sidebar.labelBottom)
+                        .accessibilityAddTraits(.isHeader)
+                    ForEach(SidebarSection.admin) { section in
+                        row(section)
+                    }
                 }
             }
+            .scrollBounceBehavior(.basedOnSize)
+            .scrollIndicators(.never)
+            SidebarSettingsButton()
         }
-        .listStyle(.sidebar)
-        // Under the traffic lights, above Home; it doesn't scroll with the list.
-        .safeAreaInset(edge: .top, spacing: 0) {
-            SidebarWordmark()
-                .padding(.horizontal, Spacing.l)
-                .padding(.top, Spacing.xs)
-                .padding(.bottom, Spacing.m)
-                .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.top, Layout.Sidebar.topInset)
+        .padding(.horizontal, Layout.Sidebar.horizontalPadding)
+        .padding(.bottom, Layout.Sidebar.bottomPadding)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .background(Palette.sidebar)
+        // The strip under the traffic lights moves the window, as a title bar would.
+        .overlay(alignment: .top) {
+            Color.clear
+                .frame(height: Layout.Sidebar.topInset)
+                .contentShape(Rectangle())
+                .gesture(WindowDragGesture())
+                .allowsWindowActivationEvents(true)
         }
-        // Settings, then the status card at the very bottom.
-        .safeAreaInset(edge: .bottom, spacing: 0) {
-            VStack(alignment: .leading, spacing: Spacing.s) {
-                SidebarSettingsButton()
-                SidebarStatusView(status: status)
-            }
-            .padding(Spacing.m)
+        .overlay(alignment: .topTrailing) {
+            SidebarToggleButton()
+                .padding(.top, Layout.Sidebar.hideButtonTop)
+                .padding(.trailing, Layout.Sidebar.hideButtonTrailing)
         }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Sidebar")
     }
 
-    /// Arrow keys can still reach the list while Settings covers it; the page behind the
-    /// modal stays put until Settings closes.
-    private var selection: Binding<SidebarSection?> {
-        Binding(
-            get: { model.section },
-            set: { if let section = $0, model.settingsTab == nil { model.section = section } }
-        )
+    private func row(_ section: SidebarSection, count: Int = 0) -> some View {
+        SidebarRow(
+            title: section.title,
+            symbol: section.symbol,
+            tint: section.tint,
+            count: count,
+            countLabel: count == 1 ? "1 failed" : "\(count) failed",
+            isSelected: model.section == section
+        ) {
+            // Arrow keys and clicks can't reach the page behind the Settings modal.
+            if model.settingsTab == nil { model.section = section }
+        }
+    }
+}
+
+/// One row of the sidebar: a coloured icon, the name, and a count when there is one. The
+/// chosen row takes a grey fill; colour stays on the icons.
+struct SidebarRow: View {
+    let title: String
+    let symbol: String
+    let tint: Color
+    var count = 0
+    var countLabel = ""
+    var isSelected = false
+    let action: () -> Void
+
+    @State private var isHovered = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        let shape = RoundedRectangle(cornerRadius: Layout.Sidebar.rowRadius, style: .continuous)
+        Button(action: action) {
+            HStack(spacing: Layout.Sidebar.rowSpacing) {
+                Image(systemName: symbol)
+                    .font(Typography.sidebarIcon)
+                    .foregroundStyle(tint)
+                    .frame(width: Layout.Sidebar.iconColumn)
+                    .accessibilityHidden(true)
+                Text(title)
+                    .font(isSelected ? Typography.sidebarRowSelected : Typography.sidebarRow)
+                    .foregroundStyle(Palette.ink)
+                    .lineLimit(1)
+                Spacer(minLength: 0)
+                if count > 0 {
+                    Text(count, format: .number)
+                        .font(Typography.sidebarCount)
+                        .foregroundStyle(Palette.inkSecondary)
+                }
+            }
+            .padding(.horizontal, Layout.Sidebar.rowPadding)
+            .frame(maxWidth: .infinity, minHeight: Layout.Sidebar.rowHeight)
+            .background(shape.fill(isSelected ? Palette.selection : (isHovered ? Palette.sidebarHover : .clear)))
+            .contentShape(shape)
+        }
+        .buttonStyle(.plain)
+        .onHover { isHovered = $0 }
+        .animation(Motion.resolve(Motion.fadeFast, reduceMotion: reduceMotion), value: isHovered)
+        .accessibilityLabel(title)
+        .accessibilityValue(count > 0 ? countLabel : "")
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 }
 
@@ -165,197 +267,41 @@ struct MainSidebar: View {
 struct SidebarSettingsButton: View {
     @Environment(AppModel.self) private var model
     @Environment(\.mainPreview) private var preview
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var isHovered = false
 
     var body: some View {
-        let shape = RoundedRectangle(cornerRadius: Radius.s, style: .continuous)
-        Button {
+        SidebarRow(title: "Settings", symbol: "gearshape", tint: Palette.Wheel.purple) {
             guard preview.status == nil else { return }
             model.showSettings()
+        }
+        .help("Settings (⌘,)")
+    }
+}
+
+/// Hide sidebar (top right of the sidebar) and Show sidebar (beside the traffic lights once
+/// it's hidden). View › Toggle Sidebar (⌃⌘S) does the same.
+struct SidebarToggleButton: View {
+    @Environment(AppModel.self) private var model
+    @State private var isHovered = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        let hidden = model.sidebarHidden
+        let label = hidden ? "Show sidebar" : "Hide sidebar"
+        let shape = RoundedRectangle(cornerRadius: Layout.Sidebar.hideButtonRadius, style: .continuous)
+        Button {
+            model.sidebarHidden.toggle()
         } label: {
-            Label("Settings", systemImage: "gearshape")
-                .font(Typography.body)
-                .foregroundStyle(Palette.ink)
-                .padding(.horizontal, Spacing.s)
-                .frame(maxWidth: .infinity, minHeight: Layout.SettingsModal.rowHeight, alignment: .leading)
-                .background(shape.fill(isHovered ? Palette.surfaceHover : .clear))
+            Image(systemName: "sidebar.left")
+                .font(Typography.sidebarIcon)
+                .foregroundStyle(isHovered ? Palette.inkSecondary : Palette.icon)
+                .frame(width: Layout.Sidebar.hideButton, height: Layout.Sidebar.hideButton)
+                .background(shape.fill(isHovered ? Palette.sidebarHover : .clear))
                 .contentShape(shape)
         }
         .buttonStyle(.plain)
         .onHover { isHovered = $0 }
         .animation(Motion.resolve(Motion.fadeFast, reduceMotion: reduceMotion), value: isHovered)
-        .help("Settings (⌘,)")
-    }
-}
-
-/// The sidebar footer: is the shortcut armed, is the model ready, are we recording.
-struct SidebarStatusView: View {
-    let status: SystemStatus
-    @Environment(AppModel.self) private var model
-    @Environment(\.mainPreview) private var preview
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: Spacing.s) {
-            shortcutLine
-            RowDivider()
-            modelLine
-        }
-        .padding(Spacing.m)
-        .cardSurface(radius: Radius.m)
-    }
-
-    /// Read here, not in `SystemStatus.live`, so a phase change redraws this footer and not the
-    /// whole window. Snapshots still force it through `status`.
-    private var isRecording: Bool {
-        status.isRecording || model.controller.phase.isRecording
-    }
-
-    @ViewBuilder
-    private var shortcutLine: some View {
-        if isRecording {
-            HStack(spacing: Spacing.s) {
-                SpectrumOrb(mode: .live, diameter: Layout.Orb.small, phase: preview.orbPhase)
-                Text("Listening…")
-                    .font(Typography.bodyEmphasis)
-                    .foregroundStyle(Palette.ink)
-                Spacer(minLength: 0)
-                Button("Stop") { model.controller.stopRecording() }
-                    .buttonStyle(.flowGhost)
-                    .controlSize(.small)
-            }
-        } else if !status.accessibility {
-            Button {
-                Permissions.openAccessibilitySettings()
-            } label: {
-                statusLines(
-                    title: "Allow Accessibility",
-                    detail: "Needed for your shortcut",
-                    symbol: "exclamationmark.triangle.fill"
-                ) {
-                    Image(systemName: "arrow.up.forward")
-                        .font(Typography.caption)
-                        .foregroundStyle(Palette.inkTertiary)
-                }
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .help("Open System Settings › Privacy & Security › Accessibility")
-        } else if !status.hotkeyActive {
-            statusLines(
-                title: "Shortcut paused",
-                detail: "Reconnecting automatically…",
-                symbol: "exclamationmark.triangle.fill"
-            ) {
-                Button("Retry") { model.controller.activate() }
-                    .buttonStyle(.flowGhost)
-                    .controlSize(.small)
-            }
-        } else {
-            HStack(spacing: Spacing.xs + Spacing.xxs) {
-                Text("Hold")
-                KeyCap(label: status.pushToTalkKey)
-                Text("to dictate")
-            }
-            .font(Typography.callout)
-            .foregroundStyle(Palette.inkSecondary)
-            .accessibilityElement(children: .ignore)
-            .accessibilityLabel("Hold \(status.pushToTalkKey) to dictate")
-        }
-    }
-
-    /// One title line (with a warning glyph and a trailing accessory) over one detail line.
-    /// Both stay on a single line at sidebar width.
-    private func statusLines<Accessory: View>(
-        title: String,
-        detail: String,
-        symbol: String,
-        @ViewBuilder accessory: () -> Accessory
-    ) -> some View {
-        VStack(alignment: .leading, spacing: Spacing.xxs) {
-            HStack(spacing: Spacing.xs) {
-                Image(systemName: symbol)
-                    .font(Typography.caption)
-                    .foregroundStyle(Palette.warning)
-                Text(title)
-                    .font(Typography.bodyEmphasis)
-                    .foregroundStyle(Palette.ink)
-                    .lineLimit(1)
-                Spacer(minLength: Spacing.xs)
-                accessory()
-            }
-            Text(detail)
-                .font(Typography.caption)
-                .foregroundStyle(Palette.inkSecondary)
-                .lineLimit(1)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
-    @ViewBuilder
-    private var modelLine: some View {
-        switch status.model {
-        case .ready:
-            HStack(spacing: Spacing.s) {
-                StatusDot(color: Palette.success)
-                Text("\(status.engineName) ready")
-                    .font(Typography.caption)
-                    .foregroundStyle(Palette.inkSecondary)
-                    .lineLimit(1)
-            }
-        case .loading:
-            HStack(spacing: Spacing.s) {
-                ProgressView().controlSize(.mini)
-                Text("Loading \(status.engineName)…")
-                    .font(Typography.caption)
-                    .foregroundStyle(Palette.inkSecondary)
-                    .lineLimit(1)
-            }
-        case .downloading(let progress):
-            VStack(alignment: .leading, spacing: Spacing.xs) {
-                HStack(spacing: Spacing.s) {
-                    Text("Downloading model")
-                        .font(Typography.caption)
-                        .foregroundStyle(Palette.inkSecondary)
-                    Spacer(minLength: 0)
-                    if let progress {
-                        Text(progress, format: .percent.precision(.fractionLength(0)))
-                            .font(Typography.caption)
-                            .monospacedDigit()
-                            .foregroundStyle(Palette.inkTertiary)
-                    }
-                }
-                SpectrumProgressBar(progress: progress)
-            }
-        case .notDownloaded:
-            HStack(spacing: Spacing.s) {
-                StatusDot(color: Palette.inkTertiary)
-                Text("No model yet")
-                    .font(Typography.caption)
-                    .foregroundStyle(Palette.inkSecondary)
-                    .lineLimit(1)
-                Spacer(minLength: 0)
-                // The sidebar card is narrow: short copy, and the button never truncates.
-                Button("Get") { Task { await model.models.prepare() } }
-                    .buttonStyle(.flowGhost)
-                    .controlSize(.small)
-                    .fixedSize()
-                    .help("Download \(status.engineName) (\(status.engineDownloadSize))")
-            }
-        case .failed(let message):
-            HStack(spacing: Spacing.s) {
-                StatusDot(color: Palette.danger)
-                Text("Model failed")
-                    .font(Typography.caption)
-                    .foregroundStyle(Palette.inkSecondary)
-                    .lineLimit(1)
-                    .help(message)
-                Spacer(minLength: 0)
-                Button("Retry") { Task { await model.models.prepare() } }
-                    .buttonStyle(.flowGhost)
-                    .controlSize(.small)
-                    .fixedSize()
-            }
-        }
+        .help("\(label) (⌃⌘S)")
+        .accessibilityLabel(label)
     }
 }

@@ -1,60 +1,80 @@
 import AppKit
 import SwiftUI
 
-// MARK: - Birdtown Flow design language
+// MARK: - Birdtown Flow design language ("Mono v2")
 //
-// "Navy and spectrum", taken straight from the logo. Navy ink on porcelain (midnight navy in
-// dark mode), white surfaces, rounded shapes. One solid accent, Signal blue, marks selection,
-// focus and links. Primary actions are navy pills (porcelain in dark mode), like the logo's
-// tile and ring. The spectrum, the logo's disc, means "your voice is live": the recording
-// orb, the thinking ring, download progress and the onboarding hero. Its one resting use is
-// Home's Voiceprint hero, a voice drawn as artwork on the icon's navy. Never static chrome,
-// text or backgrounds. SF Pro throughout: bold and semibold for titles and big numbers,
-// regular for everything you read, including your own words. Motion is springy but brief,
-// and collapses to fades under Reduce Motion.
+// Calm and nearly colourless, with the logo's navy as a whisper in every grey: near-black navy
+// ink on white, a soft grey sidebar, and a night navy-charcoal in dark mode. Surfaces are flat:
+// soft grey fills and hairlines instead of shadows and boxes. The colour lives in a few small,
+// deliberate places, all taken from the logo's disc: the sidebar's icons walk its colour wheel
+// (`Palette.Wheel`), each Home stat wears its own badge and glow (`Palette.Stat`), and Signal
+// blue, the orb's own blue, is the accent for selection, focus, links and switches. Primary actions are navy pills
+// (porcelain in dark mode), like the logo's tile and ring. The spectrum itself, the logo's
+// disc, means "your voice is live": the recording orb, the thinking ring, download progress and
+// the onboarding hero. Its one resting use is Home's Voiceprint hero, a voice drawn as artwork
+// on the icon's navy. SF Pro throughout: semibold for titles and big numbers, regular for
+// everything you read, including your own words. Motion is springy but brief, and collapses to
+// fades under Reduce Motion.
 //
 // Rules:
 //  - Views never contain literal colours, sizes, radii or durations. Use these tokens; if a
 //    token is missing, add it here.
 //  - Spectrum only for live states (`Spectrum`, `SpectrumOrb`) and the Home hero
-//    (`VoiceprintArt`). Signal blue only for selection, focus, links and toggles. At most
-//    one primary (navy) action per view.
+//    (`VoiceprintArt`). Signal blue only for selection, focus, links and toggles. Wheel
+//    colours only on icons (sidebar sections, Settings sections, Home stat badges), never on
+//    text or backgrounds. At most one primary (navy) action per view.
 //  - Every animation goes through `Motion` so Reduce Motion is honoured everywhere.
 
 enum Palette {
-    /// Window background. Porcelain / midnight navy.
-    static let canvas = Color.adaptive(light: 0xF6F7FB, dark: 0x0B1026)
-    /// Raised surfaces: cards, rows, popovers.
-    static let surface = Color.adaptive(light: 0xFFFFFF, dark: 0x141A33)
+    /// Window background: white, a night navy-charcoal in dark mode.
+    static let canvas = Color.adaptive(light: 0xFFFFFF, dark: 0x1B1D24)
+    /// The main window's sidebar and the Settings card's section rail: a step off the canvas.
+    static let sidebar = Color.adaptive(light: 0xF7F8FA, dark: 0x14161B)
+    /// Raised surfaces: cards, popovers. White with a hairline in light mode; a breath lighter
+    /// than the canvas in dark.
+    static let surface = Color.adaptive(light: 0xFFFFFF, dark: 0x1F2128)
     /// Hovered surface.
-    static let surfaceHover = Color.adaptive(light: 0xEEF1F8, dark: 0x1B2242)
+    static let surfaceHover = Color.adaptive(light: 0xF3F5F8, dark: 0x262932)
     /// Inset wells: text inputs, code, empty states.
-    static let sunken = Color.adaptive(light: 0xECEFF6, dark: 0x080C1D)
+    static let sunken = Color.adaptive(light: 0xF3F5F8, dark: 0x14161B)
+    /// The soft grey tile: Home's stat cards, keycaps, badges, chips.
+    static let soft = Color.adaptive(light: 0xF3F5F8, dark: 0x262932)
+    /// The chosen row in the sidebar and the Settings rail: grey, never coloured.
+    static let selection = Color.adaptive(light: 0xEAEDF3, dark: 0x262932)
+    /// A sidebar or rail row under the pointer: half a step toward `selection`.
+    static let sidebarHover = Color.adaptive(light: 0xF0F2F6, dark: 0x1D2026)
     /// 1px separators and card borders, tinted navy.
-    static let hairline = Color.adaptive(light: 0x0E183C, lightAlpha: 0.09, dark: 0xFFFFFF, darkAlpha: 0.08)
+    static let hairline = Color.adaptive(light: 0x0E1426, lightAlpha: 0.08, dark: 0xE8EAF0, darkAlpha: 0.08)
     /// Stronger border for focused inputs and selected cards.
-    static let hairlineStrong = Color.adaptive(light: 0x0E183C, lightAlpha: 0.18, dark: 0xFFFFFF, darkAlpha: 0.18)
+    static let hairlineStrong = Color.adaptive(light: 0x0E1426, lightAlpha: 0.16, dark: 0xE8EAF0, darkAlpha: 0.18)
 
-    /// Primary text: the logo's navy.
-    static let ink = Color.adaptive(light: 0x0E183C, dark: 0xEEF1FA)
+    /// Primary text: near-black with the logo's navy in it.
+    static let ink = Color.adaptive(light: 0x0E1426, dark: 0xE8EAF0)
+    /// The few words that lead a screen: the greeting, the stat numbers. Ink in light mode,
+    /// pure white in dark.
+    static let heading = Color.adaptive(light: 0x0E1426, dark: 0xFFFFFF)
     /// Secondary text: metadata, descriptions.
-    static let inkSecondary = Color.adaptive(light: 0x4A5478, dark: 0xA5ACC6)
+    static let inkSecondary = Color.adaptive(light: 0x596072, dark: 0xA3A8B5)
     /// Tertiary text: placeholders, disabled, timestamps. Still clears 4.5:1 on canvas, surface
     /// and hovered surface in both themes, because people read what it carries.
-    static let inkTertiary = Color.adaptive(light: 0x646B88, dark: 0x848CAB)
+    static let inkTertiary = Color.adaptive(light: 0x666C7E, dark: 0x9197A6)
+    /// Quiet icons (chevrons, the sidebar's hide button). Icons only, never text.
+    static let icon = Color.adaptive(light: 0x8A90A0, dark: 0x8C92A1)
 
     /// The primary action: a navy pill in light mode, porcelain in dark (the logo's tile and ring).
-    static let primaryFill = Color.adaptive(light: 0x0E183C, dark: 0xEEF1FA)
+    static let primaryFill = Color.adaptive(light: 0x0E183C, dark: 0xE8EAF0)
     static let primaryFillHover = Color.adaptive(light: 0x1D2B5E, dark: 0xFFFFFF)
-    static let primaryFillPressed = Color.adaptive(light: 0x08102A, dark: 0xD9DDEC)
+    static let primaryFillPressed = Color.adaptive(light: 0x08102A, dark: 0xD2D5DE)
     /// Text and icons on `primaryFill`.
-    static let onPrimary = Color.adaptive(light: 0xFFFFFF, dark: 0x0E183C)
+    static let onPrimary = Color.adaptive(light: 0xFFFFFF, dark: 0x0E1426)
 
-    /// Signal blue, from the logo's spectrum: selection, focus rings, links, toggles.
-    static let accent = Color.adaptive(light: 0x4256F0, dark: 0x8291FF)
+    /// Signal blue, the orb's own blue: selection rings, focus rings, toggles, checkmarks.
+    static let accent = Color.adaptive(light: 0x3082F8, dark: 0x4C93FA)
     /// Signal blue at low strength: selected backgrounds, badges.
-    static let accentSoft = Color.adaptive(light: 0x4F61FB, lightAlpha: 0.10, dark: 0x8291FF, darkAlpha: 0.18)
-    /// Text drawn on a Signal blue fill.
+    static let accentSoft = Color.adaptive(light: 0x3082F8, lightAlpha: 0.10, dark: 0x4C93FA, darkAlpha: 0.18)
+    /// Signal blue as text (links, "Add a key…"): deep enough to read at 4.5:1.
+    static let accentInk = Color.adaptive(light: 0x2462BA, dark: 0x6AA6FB)
+    /// Text drawn on a blue fill.
     static let onAccent = Color.white
 
     static let success = Color.adaptive(light: 0x1E8F63, dark: 0x4FD39A)
@@ -139,7 +159,7 @@ enum Typography {
     /// Section titles inside a page, sheet titles.
     static let title = Font.system(size: 19, weight: .semibold)
     /// Big numbers in stat tiles.
-    static let numeral = Font.system(size: 30, weight: .semibold).monospacedDigit()
+    static let numeral = Font.system(size: 24, weight: .semibold).monospacedDigit()
     /// Card and row headings.
     static let headline = Font.system(size: 13, weight: .semibold)
     static let body = Font.system(size: 13)
@@ -229,9 +249,9 @@ enum Layout {
 }
 
 enum Elevation {
-    /// Cards at rest.
     struct Shadow { let color: Color; let radius: CGFloat; let y: CGFloat }
-    static let card = Shadow(color: .black.opacity(0.05), radius: 6, y: 2)
+    /// Cards at rest are flat (a hairline carries the edge), so this is no shadow at all.
+    static let card = Shadow(color: .clear, radius: 0, y: 0)
     static let raised = Shadow(color: .black.opacity(0.10), radius: 18, y: 8)
     static let hud = Shadow(color: .black.opacity(0.35), radius: 16, y: 6)
 }
@@ -253,6 +273,14 @@ extension Palette.HUD {
     static let controlHover = Color.white.opacity(0.18)
     /// The done check: the logo's warm white, a nod rather than a celebration.
     static let check = Color(hex: 0xFEFCF8)
+    /// The pill's body: the icon's navy, lit from the top (Mono v2's navy pill).
+    static let fillTop = Color(hex: 0x1C2B57)
+    static let fillBottom = Color(hex: 0x0E183B)
+    /// Stop in hands-free: a warm-white disc holding a navy square, like the logo's ring
+    /// around its tile. It darkens a little under the pointer.
+    static let stopFill = Color(hex: 0xFEFCF8)
+    static let stopGlyph = Color(hex: 0x0E183B)
+    static let stopHover = Color(hex: 0x0E183B, alpha: 0.10)
     static let dangerSoft = Color(hex: 0xFF6B7A, alpha: 0.18)
     /// The pill's shadow is built from stacked layers (see `HUDPillBody`), shaped by
     /// `Elevation.hud`'s radius and offset.
@@ -406,15 +434,15 @@ extension Elevation {
 
 extension Palette {
     /// Dims the main window behind the Settings card.
-    static let scrim = Color.adaptive(light: 0x0E183C, lightAlpha: 0.28, dark: 0x000000, darkAlpha: 0.55)
+    static let scrim = Color.adaptive(light: 0x0E1426, lightAlpha: 0.28, dark: 0x000000, darkAlpha: 0.55)
 }
 
 extension Layout {
     /// Settings as a card over the main window: a column of sections, then a pane as wide
     /// as the old Settings window. In a smaller window the card shrinks and its pane scrolls.
     enum SettingsModal {
-        static let sidebarWidth: CGFloat = 200
-        static let rowHeight: CGFloat = 30
+        static let sidebarWidth: CGFloat = 208
+        static let rowHeight: CGFloat = 32
         static let size = CGSize(
             width: sidebarWidth + Setup.hairline + Layout.settingsWidth,
             height: Setup.settingsHeight
@@ -511,7 +539,6 @@ extension Layout {
         static let rowIcon: CGFloat = 28
         static let progressRing: CGFloat = 14
         static let progressRingLine: CGFloat = 2
-        static let statTileMinHeight: CGFloat = 112
         static let emptyStateBadge: CGFloat = 56
         static let emptyStateTextWidth: CGFloat = 380
         static let bannerIcon: CGFloat = 30
@@ -546,8 +573,9 @@ extension Layout {
         static let progressBarHeight: CGFloat = 4
         /// The logo's bars beside a snippet's trigger.
         static let triggerMark: CGFloat = 10
-        /// The app icon in the sidebar wordmark (its tile is about 80 % of this).
-        static let sidebarLogo: CGFloat = 28
+        /// The app icon in the sidebar wordmark: its tile (about 80 % of this) fills the
+        /// wordmark's 28 pt slot.
+        static let sidebarLogo: CGFloat = 35
     }
 
     /// The Lab: polish configurations, their editor, the test text and results.
@@ -568,9 +596,9 @@ extension Layout {
 
 extension Typography {
     /// The app's name beside its icon at the top of the sidebar.
-    static let wordmark = Font.system(size: 15, weight: .bold)
+    static let wordmark = Font.system(size: 15, weight: .semibold)
     /// The unit beside a stat numeral ("words", "wpm").
-    static let statUnit = Font.system(size: 13, weight: .semibold)
+    static let statUnit = Font.system(size: 13, weight: .medium)
 }
 
 /// Press and disabled feedback shared by every custom control.
@@ -582,20 +610,20 @@ enum Interaction {
 
 extension Palette {
     /// Pressed surfaces and ghost buttons.
-    static let surfacePressed = Color.adaptive(light: 0xE4E8F2, dark: 0x232B4D)
+    static let surfacePressed = Color.adaptive(light: 0xEAEDF3, dark: 0x2E313B)
     /// Keycaps: a face a shade lighter than the surface and a darker lip below it.
-    static let keyFace = Color.adaptive(light: 0xFFFFFF, dark: 0x2A3359)
-    static let keyLip = Color.adaptive(light: 0x0E183C, lightAlpha: 0.20, dark: 0x000000, darkAlpha: 0.60)
+    static let keyFace = Color.adaptive(light: 0xFFFFFF, dark: 0x2E313B)
+    static let keyLip = Color.adaptive(light: 0x0E1426, lightAlpha: 0.20, dark: 0x000000, darkAlpha: 0.60)
     static let keyHighlight = Color.adaptive(light: 0xFFFFFF, lightAlpha: 1, dark: 0xFFFFFF, darkAlpha: 0.12)
     /// Style's sample message bubbles: a step darker than the card in light mode and a step
-    /// lighter in dark, like chat bubbles. `sunken` would read as a hole on navy.
-    static let bubble = Color.adaptive(light: 0xECEFF6, dark: 0x222A4B)
+    /// lighter in dark, like chat bubbles. `sunken` would read as a hole in dark mode.
+    static let bubble = Color.adaptive(light: 0xF3F5F8, dark: 0x262932)
     /// The bubble on a chosen card's Signal blue wash.
-    static let bubbleOnSelection = Color.adaptive(light: 0xFFFFFF, dark: 0x353F72)
+    static let bubbleOnSelection = Color.adaptive(light: 0xFFFFFF, dark: 0x2F3C58)
     /// Small filled marks that sit on a card: neutral badges, monogram tiles, icon tiles. Same
     /// step as `bubble`: darker than the card in light mode, lighter in dark, so they read as
     /// raised. Keep `sunken` for inset wells (inputs, code, practice fields).
-    static let chip = Color.adaptive(light: 0xECEFF6, dark: 0x222A4B)
+    static let chip = Color.adaptive(light: 0xF3F5F8, dark: 0x262932)
 }
 
 extension Motion {
@@ -685,4 +713,152 @@ extension Motion {
     static let heroFirstSweepDelay: Double = 1.2
     /// The glows behind the loudest syllables rising with the opening (easeOutCubic).
     static let heroGlowRise = Animation.timingCurve(0.33, 1, 0.68, 1, duration: 0.85)
+}
+
+// MARK: - Mono v2: the sidebar, the Settings rail and Home's stats
+//
+// The few places colour lives at rest. The sidebar's icons walk the logo's colour wheel from
+// the top (Home orange through Settings purple), the Settings rail follows the same order, and
+// each Home stat wears a small badge built like the app icon plus a soft glow in its corner.
+// Light mode takes deeper shades so the icons hold their own on pale grey.
+
+extension Palette {
+    /// The logo disc's colour wheel, in the order the sidebar walks it.
+    enum Wheel {
+        static let orange = Color.adaptive(light: 0xE8701F, dark: 0xFEA964)
+        static let gold = Color.adaptive(light: 0xD08C00, dark: 0xF6CB4C)
+        static let green = Color.adaptive(light: 0x1FA36A, dark: 0x3CCB8A)
+        static let cyan = Color.adaptive(light: 0x1693C4, dark: 0x2FB8E6)
+        static let blue = Color.adaptive(light: 0x3082F8, dark: 0x4C93FA)
+        static let violet = Color.adaptive(light: 0x6F54FB, dark: 0x8B76FC)
+        static let purple = Color.adaptive(light: 0xB348ED, dark: 0xC26CF2)
+
+        /// The wheel from the top, for lists that walk it in order.
+        static let walk: [Color] = [orange, gold, green, cyan, blue, violet, purple]
+    }
+
+    /// A Home stat's colour: a badge lit from the top like the app icon, and a glow in the
+    /// card's top-right corner.
+    struct StatTone {
+        let badgeTop: Color
+        let badgeBottom: Color
+        let glow: Color
+
+        static let blue = StatTone(top: 0x5A9CFB, bottom: 0x2B6FE6, glow: 0x3082F8)
+        static let green = StatTone(top: 0x4BD394, bottom: 0x18A066, glow: 0x3CCB8A)
+        static let orange = StatTone(top: 0xFFA25C, bottom: 0xEA6A1E, glow: 0xF78C46)
+        static let purple = StatTone(top: 0xC77AF4, bottom: 0x9A3EE0, glow: 0xB348ED)
+
+        private init(top: UInt32, bottom: UInt32, glow: UInt32) {
+            badgeTop = Color(hex: top)
+            badgeBottom = Color(hex: bottom)
+            // A touch stronger on the dark tile, where the same light reads fainter.
+            self.glow = Color.adaptive(light: glow, lightAlpha: 0.16, dark: glow, darkAlpha: 0.22)
+        }
+    }
+
+    enum Stat {
+        /// The badge's top-edge highlight and the small lift under it.
+        static let badgeHighlight = Color.white.opacity(0.35)
+        static let badgeShadow = Color(hex: 0x091231, alpha: 0.16)
+        static let glyph = Color.white
+    }
+}
+
+extension Layout {
+    /// The main window's sidebar: flush, a step off the canvas, under the traffic lights.
+    enum Sidebar {
+        static let width: CGFloat = 244
+        /// Room above the wordmark for the traffic lights.
+        static let topInset: CGFloat = 52
+        static let horizontalPadding: CGFloat = 8
+        static let bottomPadding: CGFloat = 10
+        static let rowHeight: CGFloat = 32
+        static let rowRadius: CGFloat = 10
+        static let rowPadding: CGFloat = 10
+        static let rowSpacing: CGFloat = 10
+        /// The column the icons sit in, so labels line up whatever the symbol's width.
+        static let iconColumn: CGFloat = 18
+        static let wordmarkHeight: CGFloat = 28
+        static let wordmarkBottom: CGFloat = 12
+        /// "Admin" above the Lab.
+        static let labelTop: CGFloat = 14
+        static let labelBottom: CGFloat = 4
+        /// The Hide sidebar button, top right of the sidebar, level with the traffic lights.
+        static let hideButton: CGFloat = 28
+        static let hideButtonRadius: CGFloat = 8
+        static let hideButtonTop: CGFloat = 12
+        static let hideButtonTrailing: CGFloat = 10
+        /// With the sidebar hidden, Show sidebar sits right of the traffic lights, and the
+        /// page starts below them.
+        static let showButtonLeading: CGFloat = 80
+        static let collapsedTopInset: CGFloat = 40
+    }
+
+    /// Home's column and its rhythm.
+    enum Home {
+        static let columnWidth: CGFloat = 660
+        static let topPadding: CGFloat = 28
+        static let statsTop: CGFloat = 20
+        static let recentTop: CGFloat = 28
+        static let recentHeaderBottom: CGFloat = 8
+        static let bannersTop: CGFloat = 20
+    }
+
+    /// Home's stat cards: soft tiles, a badge, the number and a caption.
+    enum Stat {
+        static let spacing: CGFloat = 8
+        static let padding: CGFloat = 14
+        static let radius: CGFloat = 16
+        static let badge: CGFloat = 24
+        static let badgeRadius: CGFloat = 7
+        static let labelSpacing: CGFloat = 8
+        static let numberTop: CGFloat = 10
+        static let unitSpacing: CGFloat = 4
+        static let captionTop: CGFloat = 2
+        /// The corner glow: an ellipse this wide and tall around the top-right corner, fading
+        /// to nothing at `glowFade` of its radius.
+        static let glowWidth: CGFloat = 150
+        static let glowHeight: CGFloat = 110
+        static let glowFade: CGFloat = 0.7
+        static let badgeHighlight: CGFloat = 0.5
+        static let badgeShadowRadius: CGFloat = 1
+        static let badgeShadowY: CGFloat = 1
+    }
+
+    /// The Settings card's section rail and pane header.
+    enum SettingsRail {
+        static let rowHeight: CGFloat = 32
+        static let rowRadius: CGFloat = 10
+        static let rowPadding: CGFloat = 10
+        static let iconColumn: CGFloat = 16
+        static let headerHeight: CGFloat = 52
+        static let panePadding: CGFloat = 28
+        /// Space above a group's title, and between its rows.
+        static let groupTop: CGFloat = 16
+        static let rowVertical: CGFloat = 8
+        /// Rows sit flush with the group's title: no card around them to inset from.
+        static let rowInset: CGFloat = 0
+    }
+}
+
+extension Typography {
+    static let sidebarRow = Font.system(size: 14)
+    static let sidebarRowSelected = Font.system(size: 14, weight: .medium)
+    /// The section icons, drawn to sit in an 18 pt column like the design's line icons.
+    static let sidebarIcon = Font.system(size: 15)
+    /// "Admin", "Settings" above the rail, and the History count.
+    static let sidebarLabel = Font.system(size: 12.5, weight: .medium)
+    static let sidebarCount = Font.system(size: 12.5).monospacedDigit()
+    /// The stat's name beside its badge.
+    static let statLabel = Font.system(size: 12.5, weight: .medium)
+    static let statCaption = Font.system(size: 12).monospacedDigit()
+    static let statGlyph = Font.system(size: 11.5, weight: .semibold)
+    /// "Recent" on Home, and a Settings group's title: small, semibold, not shouted.
+    static let groupTitle = Font.system(size: 13, weight: .semibold)
+    static let link = Font.system(size: 13, weight: .medium)
+    /// A Settings pane's title in its header.
+    static let paneTitle = Font.system(size: 18, weight: .semibold)
+    static let settingsRowTitle = Font.system(size: 14)
+    static let settingsRowDetail = Font.system(size: 12.5)
 }

@@ -23,6 +23,8 @@ extension SnapshotCatalog {
         // CI runner has Reduce Motion on, so the other shots show the hero at rest.)
         var shimmer = sample
         shimmer.heroSweepPhase = VoiceprintMotion.sweepDuration / 2
+        var paused = sample
+        paused.status?.hotkeyActive = false
         var selected = sample
         selected.historySelection = Array(records.filter(\.hasText).prefix(3).map(\.id))
 
@@ -71,10 +73,13 @@ extension SnapshotCatalog {
             },
             // Every configuration deleted: the Lab invites a new one.
             SnapshotRenderer.Shot("lab-empty", size: size) { labEmpty(records: records, preview: sample) },
-            // The sidebar column on its own: macOS 26 hosts it in a glass panel that offscreen
-            // rendering can't capture, so it gets a shot of its own (with each status state).
-            SnapshotRenderer.Shot("main-sidebar", size: CGSize(width: 4 * Layout.sidebarWidth, height: 580)) {
-                sidebars(records: records)
+            // The sidebar tucked away: Show sidebar beside the traffic lights.
+            SnapshotRenderer.Shot("main-sidebar-hidden", size: size) {
+                sidebarHidden(records: records, preview: sample)
+            },
+            // The shortcut lost its event tap: Home says so, now the sidebar has no footer.
+            SnapshotRenderer.Shot("home-shortcut-paused", size: size) {
+                window(.home, records: records, preview: paused)
             },
             // Settings as a modal over the window, on General and on Text & AI.
             SnapshotRenderer.Shot("settings-modal", size: size) {
@@ -134,7 +139,8 @@ extension SnapshotCatalog {
                         SpectrumProgressBar(progress: 0.42)
                     }
                 }
-                StatTile(label: "Pace", value: 152, unit: "wpm", caption: "3.4× faster than typing")
+                StatTile(label: "Pace", value: 152, unit: "wpm", caption: "3.4× faster than typing",
+                         symbol: "gauge.with.dots.needle.67percent", tone: .green)
             }
             .fixedSize(horizontal: false, vertical: true)
             SearchField(text: .constant("migration"), prompt: "Search words or apps")
@@ -171,25 +177,14 @@ extension SnapshotCatalog {
             .transaction { $0.disablesAnimations = true }
     }
 
-    private static func sidebars(records: [HistoryRecord]) -> some View {
-        let ready = SampleData.readyStatus
-        var noAccess = ready
-        noAccess.accessibility = false
-        noAccess.model = .downloading(0.42)
-        var recording = ready
-        recording.isRecording = true
-        var failed = ready
-        failed.model = .failed("The model files are damaged. Birdtown Flow will download them again.")
-        return HStack(spacing: 0) {
-            ForEach(Array([ready, noAccess, recording, failed].enumerated()), id: \.offset) { index, status in
-                MainSidebar(status: status)
-                    .environment(previewModel(records: records, section: index == 0 ? .home : .history))
-                    .environment(\.mainPreview, MainPreview(orbPhase: Self.orbPhase))
-                    .frame(width: Layout.sidebarWidth)
-                    .background(Palette.sunken)
-            }
-        }
-        .transaction { $0.disablesAnimations = true }
+    /// History with the sidebar hidden.
+    private static func sidebarHidden(records: [HistoryRecord], preview: MainPreview) -> some View {
+        let model = previewModel(records: records, section: .history)
+        model.sidebarHidden = true
+        return MainView()
+            .environment(model)
+            .environment(\.mainPreview, preview)
+            .transaction { $0.disablesAnimations = true }
     }
 
     private static func previewModel(records: [HistoryRecord], section: SidebarSection) -> AppModel {

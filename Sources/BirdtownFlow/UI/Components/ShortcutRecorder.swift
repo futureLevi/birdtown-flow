@@ -89,7 +89,7 @@ struct ShortcutRecorder: View {
             if keys.isEmpty {
                 Text(needsKey ? "Add a key…" : "Type shortcut…")
                     .font(Typography.callout.weight(.medium))
-                    .foregroundStyle(Palette.accent)
+                    .foregroundStyle(Palette.accentInk)
             } else {
                 SetupKit.KeyCombo(keys: keys)
             }

@@ -55,7 +55,7 @@ private struct FilterChipBody: View {
         configuration.label
             .font(Typography.caption)
             .lineLimit(1)
-            .foregroundStyle(isSelected ? Palette.accent : (isHovered ? Palette.ink : Palette.inkSecondary))
+            .foregroundStyle(isSelected ? Palette.accentInk : (isHovered ? Palette.ink : Palette.inkSecondary))
             .padding(.horizontal, Spacing.m)
             .frame(height: Layout.Main.chipHeight)
             .background(Capsule().fill(fill))

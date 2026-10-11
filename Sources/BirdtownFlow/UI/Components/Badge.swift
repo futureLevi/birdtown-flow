@@ -29,7 +29,7 @@ struct Badge: View {
     private var foreground: Color {
         switch tone {
         case .neutral: Palette.inkSecondary
-        case .accent: Palette.accent
+        case .accent: Palette.accentInk
         case .success: Palette.success
         case .warning: Palette.warning
         case .danger: Palette.danger
