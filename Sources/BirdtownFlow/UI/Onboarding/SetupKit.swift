@@ -276,7 +276,7 @@ extension SetupKit {
         func makeBody(configuration: Configuration) -> some View {
             configuration.label
                 .font(Typography.callout.weight(.medium))
-                .foregroundStyle(Palette.accent)
+                .foregroundStyle(Palette.accentInk)
                 .opacity(configuration.isPressed ? Layout.Setup.pressedOpacity : 1)
                 .contentShape(Rectangle())
         }

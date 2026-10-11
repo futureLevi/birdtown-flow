@@ -137,8 +137,8 @@ struct HUDBars: View {
 /// The logo's spectrum disc as the pill's live light. One instance lives across listening,
 /// hands-free, transcribing and polishing, so it morphs rather than pops: it turns with the
 /// voice, hollows into the spinning comet ring when the key is released, and in hands-free it
-/// slides to the right end and becomes Stop, a warm-white square on the disc like the logo's
-/// white shapes.
+/// slides to the right end and becomes Stop: a navy square on a warm-white disc, like the
+/// logo's tile inside its ring.
 struct HUDOrb: View {
     let mode: SpectrumOrb.Mode
     let level: Float
@@ -163,17 +163,25 @@ struct HUDOrb: View {
             if isStop { stop() }
         } label: {
             ZStack {
+                // The live orb while listening; it hands over to Stop's warm-white disc once
+                // the dictation is hands-free, so nothing spectral stays on screen that isn't
+                // the record light.
                 SpectrumOrb(mode: mode, diameter: side, level: level, showsHalo: !isStop, phase: phase,
                             time: time, reduceMotionOverride: reduceMotion)
-                // Hovering Stop lightens the orb itself with the same light Cancel's button
-                // takes on hover, so the target reads as pressable without a ring around it.
+                    .opacity(isStop ? 0 : 1)
                 Circle()
-                    .fill(Palette.HUD.controlHover)
+                    .fill(Palette.HUD.stopFill)
+                    .frame(width: side, height: side)
+                    .opacity(isStop ? 1 : 0)
+                // Hovering Stop shades the disc a touch, so it reads as pressable without a
+                // ring around it.
+                Circle()
+                    .fill(Palette.HUD.stopHover)
                     .frame(width: side, height: side)
                     .opacity(isStop && isHovered ? 1 : 0)
                     .allowsHitTesting(false)
                 RoundedRectangle(cornerRadius: Layout.HUD.stopGlyphRadius, style: .continuous)
-                    .fill(Palette.HUD.bar)
+                    .fill(Palette.HUD.stopGlyph)
                     .frame(width: Layout.HUD.stopGlyph, height: Layout.HUD.stopGlyph)
                     .opacity(isStop ? 1 : 0)
             }

@@ -174,7 +174,11 @@ struct HUDPillBody: View {
                          with: .color(Palette.HUD.shadow.opacity(Palette.HUD.contactShadowOpacity)))
 
             let capsule = Path(roundedRect: pill, cornerRadius: pill.height / 2, style: .continuous)
-            context.fill(capsule, with: .color(Palette.HUD.fill))
+            context.fill(capsule, with: .linearGradient(
+                Gradient(colors: [Palette.HUD.fillTop, Palette.HUD.fillBottom]),
+                startPoint: CGPoint(x: pill.midX, y: pill.minY),
+                endPoint: CGPoint(x: pill.midX, y: pill.maxY)
+            ))
             let lineWidth = Layout.HUD.strokeWidth
             let edge = pill.insetBy(dx: lineWidth / 2, dy: lineWidth / 2)
             context.stroke(Path(roundedRect: edge, cornerRadius: edge.height / 2, style: .continuous),

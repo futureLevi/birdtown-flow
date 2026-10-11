@@ -276,7 +276,7 @@ struct HistoryRow: View {
                     Text("Transcribing again…")
                 }
                 .font(Typography.caption)
-                .foregroundStyle(Palette.accent)
+                .foregroundStyle(Palette.accentInk)
                 .fixedSize()
                 .accessibilityElement(children: .combine)
             }
@@ -431,7 +431,8 @@ struct HistoryRow: View {
         } else if isHovered {
             Palette.surfaceHover
         } else {
-            Palette.surface
+            // Whatever the row sits on shows through: History's card, Home's page.
+            Color.clear
         }
     }
 
@@ -616,7 +617,7 @@ private struct RowLinkBody: View {
     var body: some View {
         configuration.label
             .font(Typography.caption)
-            .foregroundStyle(Palette.accent)
+            .foregroundStyle(Palette.accentInk)
             .underline(isHovered)
             .opacity(configuration.isPressed ? Interaction.dimmedOpacity : 1)
             .contentShape(Rectangle())

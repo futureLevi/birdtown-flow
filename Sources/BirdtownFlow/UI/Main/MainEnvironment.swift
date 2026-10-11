@@ -20,17 +20,13 @@ enum ModelDisplayState: Equatable, Sendable {
     }
 }
 
-/// Everything the sidebar footer and Home banners say about the system, gathered in one
+/// Everything Home's banners say about the system, gathered in one
 /// value so snapshots can show a healthy (or broken) Mac without touching real state.
 struct SystemStatus: Equatable, Sendable {
     var accessibility: Bool
     var microphone: Bool
     var hotkeyActive: Bool
     var model: ModelDisplayState
-    /// Forces the footer's recording line, for snapshots. `live` leaves it off: the footer
-    /// reads the controller's phase itself, so the main window doesn't observe every phase
-    /// change (and Home doesn't re-render) during a dictation.
-    var isRecording: Bool
     var engineName: String
     var engineDownloadSize: String
     var pushToTalkKey: String
@@ -42,7 +38,6 @@ struct SystemStatus: Equatable, Sendable {
             microphone: model.permissions.microphone,
             hotkeyActive: model.controller.isHotkeyActive,
             model: ModelDisplayState(model.models.state),
-            isRecording: false,
             engineName: model.settings.engine.displayName,
             engineDownloadSize: model.settings.engine.downloadSize,
             pushToTalkKey: model.settings.pushToTalkKey.displayName

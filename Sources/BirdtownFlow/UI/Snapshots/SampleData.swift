@@ -222,7 +222,6 @@ enum SampleData {
         microphone: true,
         hotkeyActive: true,
         model: .ready,
-        isRecording: false,
         engineName: SpeechEngineChoice.parakeetUltra.displayName,
         engineDownloadSize: SpeechEngineChoice.parakeetUltra.downloadSize,
         pushToTalkKey: PushToTalkKey.fn.displayName

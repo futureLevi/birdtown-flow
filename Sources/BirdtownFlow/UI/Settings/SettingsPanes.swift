@@ -215,7 +215,7 @@ struct GeneralSettingsPane: View {
     @ViewBuilder private func notice(for role: ShortcutRole) -> some View {
         if let verdict = shortcutNotices[role], verdict != .accepted {
             ShortcutNotice(verdict: verdict)
-                .padding(.horizontal, Spacing.l)
+                .padding(.horizontal, Layout.SettingsRail.rowInset)
                 .padding(.bottom, Spacing.m)
         }
     }
@@ -475,8 +475,8 @@ private struct EngineRow: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             trailing
         }
-        .padding(.horizontal, Spacing.l)
-        .padding(.vertical, Spacing.m)
+        .padding(.horizontal, Layout.SettingsRail.rowInset)
+        .padding(.vertical, Layout.SettingsRail.rowVertical)
         .accessibilityElement(children: .contain)
         .accessibilityAddTraits(selected ? .isSelected : [])
     }
@@ -763,7 +763,7 @@ struct TextSettingsPane: View {
                 }
                 if let testResult {
                     testOutcome(testResult)
-                        .padding(.horizontal, Spacing.l)
+                        .padding(.horizontal, Layout.SettingsRail.rowInset)
                         .padding(.bottom, Spacing.m)
                 }
             }

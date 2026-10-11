@@ -2,7 +2,7 @@ import CoreGraphics
 import SwiftUI
 
 /// The logo's spectrum disc as a live indicator. It means "your voice is live" and nothing
-/// else: the pill's record light, the sidebar and menu bar status while recording, and
+/// else: the pill's record light, the menu bar status while recording, and
 /// the onboarding hero. As a spinning ring it means "working on what you said".
 ///
 /// The disc is painted once per pixel size by `LogoPainter`, the code that draws the app icon,

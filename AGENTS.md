@@ -18,8 +18,11 @@ make snapshots      # every screen to ./snapshots, light and dark
   the speech smoke test, and force-pushes logs and PNGs to `snapshots/<branch>`. Review UI
   changes there; the renderer is `UI/Snapshots/SnapshotRenderer.swift` and each area
   registers screens in its own `SnapshotCatalog+*.swift`.
-- Offscreen snapshots can't capture the macOS 26 glass sidebar (it renders as a white
-  panel) and the runner has Reduce Motion on. Neither is a bug in the app.
+- The runner has Reduce Motion on, so moving things render at rest unless a shot pins a
+  phase (`MainPreview.heroSweepPhase`, `orbPhase`). Not a bug in the app.
+- The main window's sidebar is laid out by hand (`MainSidebar`), not a `NavigationSplitView`:
+  macOS 26 would float it as a glass panel, and Mono v2's sidebar is flat and flush. That also
+  means View › Toggle Sidebar is ours (`AppModel.sidebarHidden`, ⌃⌘S).
 
 ## Rules
 

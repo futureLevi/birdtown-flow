@@ -14,10 +14,10 @@ struct MurmurApp: App {
         .defaultSize(width: Layout.windowIdealWidth, height: Layout.windowIdealHeight)
         // No title bar: the traffic lights sit over the sidebar, under them the app's name.
         .windowStyle(.hiddenTitleBar)
+        // With no title bar to grab, the window moves by any empty background.
+        .windowBackgroundDragBehavior(.enabled)
         .commands {
             MurmurCommands()
-            // View › Toggle Sidebar (⌃⌘S): the only way to collapse it now the toolbar's gone.
-            SidebarCommands()
         }
 
         MenuBarExtra {
@@ -49,6 +49,11 @@ struct MurmurCommands: Commands {
                 NSApp.activate()
             }
             .keyboardShortcut("o", modifiers: .command)
+        }
+        // View › Toggle Sidebar (⌃⌘S), beside the sidebar's own Hide sidebar button.
+        CommandGroup(replacing: .sidebar) {
+            Button("Toggle Sidebar") { AppModel.shared.sidebarHidden.toggle() }
+                .keyboardShortcut("s", modifiers: [.control, .command])
         }
         CommandGroup(after: .pasteboard) {
             // Shows ⌃⌥V only while that is the paste-last shortcut. A recorded chord is still
