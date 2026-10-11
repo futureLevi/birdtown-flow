@@ -19,11 +19,16 @@ extension SnapshotCatalog {
         // The hit is at the end of a long email, past the collapsed preview.
         var excerptSearch = sample
         excerptSearch.historyQuery = "afternoon"
+        // Halfway through a Shimmer sweep, the band of light over the loudest syllables. (The
+        // CI runner has Reduce Motion on, so the other shots show the hero at rest.)
+        var shimmer = sample
+        shimmer.heroSweepPhase = VoiceprintMotion.sweepDuration / 2
         var selected = sample
         selected.historySelection = Array(records.filter(\.hasText).prefix(3).map(\.id))
 
         return [
             SnapshotRenderer.Shot("home", size: size) { window(.home, records: records, preview: sample) },
+            SnapshotRenderer.Shot("home-shimmer", size: size) { window(.home, records: records, preview: shimmer) },
             SnapshotRenderer.Shot("home-empty", size: size) { window(.home, records: [], preview: firstRun) },
             SnapshotRenderer.Shot("history", size: size) { window(.history, records: records, preview: sample) },
             SnapshotRenderer.Shot("history-search", size: size) { window(.history, records: records, preview: search) },

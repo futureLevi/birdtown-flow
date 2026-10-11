@@ -6,17 +6,19 @@ import SwiftUI
 // "Navy and spectrum", taken straight from the logo. Navy ink on porcelain (midnight navy in
 // dark mode), white surfaces, rounded shapes. One solid accent, Signal blue, marks selection,
 // focus and links. Primary actions are navy pills (porcelain in dark mode), like the logo's
-// tile and ring. The spectrum, the logo's disc, means "your voice is live" and nothing else:
-// the recording orb, the thinking ring, download progress and the onboarding hero. Never
-// static chrome, text or backgrounds. SF Pro throughout: bold and semibold for titles and
-// big numbers, regular for everything you read, including your own words. Motion is
-// springy but brief, and collapses to fades under Reduce Motion.
+// tile and ring. The spectrum, the logo's disc, means "your voice is live": the recording
+// orb, the thinking ring, download progress and the onboarding hero. Its one resting use is
+// Home's Voiceprint hero, a voice drawn as artwork on the icon's navy. Never static chrome,
+// text or backgrounds. SF Pro throughout: bold and semibold for titles and big numbers,
+// regular for everything you read, including your own words. Motion is springy but brief,
+// and collapses to fades under Reduce Motion.
 //
 // Rules:
 //  - Views never contain literal colours, sizes, radii or durations. Use these tokens; if a
 //    token is missing, add it here.
-//  - Spectrum only for live states (`Spectrum`, `SpectrumOrb`). Signal blue only for
-//    selection, focus, links and toggles. At most one primary (navy) action per view.
+//  - Spectrum only for live states (`Spectrum`, `SpectrumOrb`) and the Home hero
+//    (`VoiceprintArt`). Signal blue only for selection, focus, links and toggles. At most
+//    one primary (navy) action per view.
 //  - Every animation goes through `Motion` so Reduce Motion is honoured everywhere.
 
 enum Palette {
@@ -607,4 +609,80 @@ extension Motion {
     static let undoWindow: Duration = .seconds(5)
     /// The first-run keycap pressing and releasing to act out "hold".
     static let demoKeyInterval: Duration = .milliseconds(1400)
+}
+
+// MARK: - Home hero (Voiceprint)
+//
+// The navy band at the top of Home with the greeting on it, and the one place the spectrum
+// appears at rest: a voice drawn as artwork (`VoiceprintArt`), which reads as the logo's big
+// echo, not as a live state. It is the app icon's tile, so it stays navy in both appearances.
+
+extension Palette {
+    enum Hero {
+        /// The icon tile's ground, top to bottom.
+        static let ground: [Gradient.Stop] = [
+            .init(color: Color(hex: 0x263B6E), location: 0),
+            .init(color: Color(hex: 0x203569), location: 0.10),
+            .init(color: Color(hex: 0x0E183B), location: 0.45),
+            .init(color: Color(hex: 0x091231), location: 1),
+        ]
+        /// A faint inner edge, so the tile reads as an object on midnight navy.
+        static let edge = Color.white.opacity(0.06)
+        static let ink = Color.white
+        static let inkSecondary = Color.white.opacity(0.72)
+        /// The logo's warm-white bars before the hint.
+        static let mark = Color(hex: 0xFEFCF8)
+        /// The shortcut's keycap on navy.
+        static let keyFill = Color.white.opacity(0.12)
+        static let keyStroke = Color.white.opacity(0.22)
+        /// The lift under the hero on a light page (none in dark, where it would be lost).
+        static let shadow = Color(hex: 0x091231)
+    }
+}
+
+extension Layout {
+    enum Hero {
+        static let height: CGFloat = 150
+        /// The width the art was designed at. Wider heroes add calm room on the left; narrower
+        /// ones squeeze the art horizontally, so the voice always ends at the right edge.
+        static let designWidth: CGFloat = 660
+        static let cornerRadius: CGFloat = 18
+        static let edge: CGFloat = 1
+        /// The greeting's left inset and the gap between it and the hint.
+        static let textInset: CGFloat = 28
+        static let textSpacing: CGFloat = 8
+        /// Where, in the design's space, the greeting and the hint should end: the voice is
+        /// only a whisper until about here, and full strength past it.
+        static let greetingEndX: CGFloat = 360
+        static let hintEndX: CGFloat = 300
+        /// The logo's bars before the hint, and the gaps around the shortcut keycap.
+        static let markHeight: CGFloat = 12
+        static let hintSpacing: CGFloat = 8
+        static let keySpacing: CGFloat = 5
+        static let keyHeight: CGFloat = 20
+        static let keyPadding: CGFloat = 6
+        static let keyRadius: CGFloat = 6
+    }
+}
+
+extension Typography {
+    /// The hint under the greeting on the hero, a step up from body so it holds its own on navy.
+    static let heroHint = Font.system(size: 14.5)
+    static let heroKey = Font.system(size: 11.5, weight: .medium)
+}
+
+extension Elevation {
+    /// The hero's lift on a light page: a tight contact shadow and a soft, wider one.
+    static let heroContact = Shadow(color: Palette.Hero.shadow.opacity(0.10), radius: 1, y: 1)
+    static let heroLift = Shadow(color: Palette.Hero.shadow.opacity(0.14), radius: 14, y: 10)
+}
+
+extension Motion {
+    /// The hero redraws at most this often while it moves (never between sweeps).
+    static let heroFrameInterval: Double = 1.0 / 60.0
+    /// The first Shimmer sweep starts this long after the opening ends; later ones follow
+    /// every `VoiceprintMotion.sweepInterval`.
+    static let heroFirstSweepDelay: Double = 1.2
+    /// The glows behind the loudest syllables rising with the opening (easeOutCubic).
+    static let heroGlowRise = Animation.timingCurve(0.33, 1, 0.68, 1, duration: 0.85)
 }

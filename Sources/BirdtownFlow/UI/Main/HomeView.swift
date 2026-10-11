@@ -2,7 +2,8 @@ import AppKit
 import MurmurKit
 import SwiftUI
 
-/// Home: a greeting, what needs fixing, the week in numbers, and the last few dictations.
+/// Home: a greeting on the Voiceprint hero, what needs fixing, the week in numbers, and the
+/// last few dictations.
 struct HomeView: View {
     let status: SystemStatus
 
@@ -62,24 +63,49 @@ struct HomeView: View {
     }
 
     private func header(stats: DictationStats, isFirstRun: Bool) -> some View {
-        VStack(alignment: .leading, spacing: Spacing.xs) {
-            Text(Self.greeting(name: preview.firstName ?? Self.firstName))
-                .font(Typography.display)
-                .tracking(Tracking.display)
-                .foregroundStyle(Palette.ink)
-                .accessibilityAddTraits(.isHeader)
+        VoiceprintHero(sweepPhase: preview.heroSweepPhase) { room in
+            VStack(alignment: .leading, spacing: Layout.Hero.textSpacing) {
+                Text(Self.greeting(name: preview.firstName ?? Self.firstName))
+                    .font(Typography.display)
+                    .tracking(Tracking.display)
+                    .foregroundStyle(Palette.Hero.ink)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.75)
+                    .frame(maxWidth: room.greeting, alignment: .leading)
+                    .accessibilityAddTraits(.isHeader)
+                hint(stats: stats, isFirstRun: isFirstRun)
+                    .frame(maxWidth: room.hint, alignment: .leading)
+            }
+        }
+    }
+
+    /// The line under the greeting, after the logo's bars: the voice's small, white echo.
+    private func hint(stats: DictationStats, isFirstRun: Bool) -> some View {
+        HStack(alignment: .center, spacing: Layout.Hero.hintSpacing) {
+            LogoBars()
+                .fill(Palette.Hero.mark)
+                .frame(width: LogoBars.groupWidth(height: Layout.Hero.markHeight), height: Layout.Hero.markHeight)
+                .accessibilityHidden(true)
             Group {
                 if isFirstRun {
                     Text("Birdtown Flow turns your voice into clean text, wherever you're typing.")
+                        .fixedSize(horizontal: false, vertical: true)
                 } else if stats.wordsThisWeek > 0 {
                     // The week's word count is the first tile below; don't say it twice.
-                    Text("Hold \(status.pushToTalkKey) anywhere to dictate.")
+                    HStack(spacing: Layout.Hero.keySpacing) {
+                        Text("Hold")
+                        HeroKeyCap(label: status.pushToTalkKey)
+                        Text("anywhere to dictate.")
+                    }
+                    .fixedSize()
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel("Hold \(status.pushToTalkKey) anywhere to dictate.")
                 } else {
                     Text("Ready when you are.")
                 }
             }
-            .font(Typography.body)
-            .foregroundStyle(Palette.inkSecondary)
+            .font(Typography.heroHint)
+            .foregroundStyle(Palette.Hero.inkSecondary)
         }
     }
 
@@ -296,6 +322,29 @@ private struct HomeBanners: View {
         case .loading, .ready:
             EmptyView()
         }
+    }
+}
+
+// MARK: - Hero
+
+/// The push-to-talk key as a keycap on the hero's navy.
+private struct HeroKeyCap: View {
+    let label: String
+
+    var body: some View {
+        Text(label)
+            .font(Typography.heroKey)
+            .foregroundStyle(Palette.Hero.ink)
+            .padding(.horizontal, Layout.Hero.keyPadding)
+            .frame(height: Layout.Hero.keyHeight)
+            .background {
+                RoundedRectangle(cornerRadius: Layout.Hero.keyRadius, style: .continuous)
+                    .fill(Palette.Hero.keyFill)
+            }
+            .overlay {
+                RoundedRectangle(cornerRadius: Layout.Hero.keyRadius, style: .continuous)
+                    .strokeBorder(Palette.Hero.keyStroke, lineWidth: Layout.Hero.edge)
+            }
     }
 }
 

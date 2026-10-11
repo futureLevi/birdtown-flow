@@ -59,9 +59,29 @@ Tile: Apple's macOS grid (824 px tile on a 1024 px canvas), continuous corners a
 - One solid accent, Signal blue (`#4256F0`, `#8291FF` in dark), for selection, focus, links
   and toggles.
 - The spectrum only for live states: the orb, the thinking ring, model download progress.
-  Never for static chrome, text or backgrounds.
+  Never for static chrome, text or backgrounds. The one exception is Home's hero (below).
 - SF Pro throughout: bold and semibold for titles and big numbers, regular for reading. (SF
   Pro Expanded, New York and SF Pro Rounded were tried for the large text; SF Pro won.)
+
+## Home hero: Voiceprint
+
+The top of Home is a navy band (the icon's tile ground, 150 pt tall, 18 pt corners) with the
+greeting on its left and the **Voiceprint** on its right: a mirrored voice waveform of fine
+tapered lines in the orb's colours, shaped by the pill's 18-bar rhythm. It rises out of the
+navy in violet under the end of the greeting, burns cyan at its loudest and trails off in warm
+gold. No birds, no pill, orb, microphone or meter: it is artwork, not a control.
+
+- **Source:** `tools/voiceprint/gen.py` is the generator the design was made with;
+  `tools/voiceprint/export_swift.py` turns it into `UI/Brand/VoiceprintData.swift`, which
+  `VoiceprintArt` draws. Change the design there and re-export; never edit the data by hand.
+- **Motion, "Shimmer":** the lines hold still while a soft band of light (a gaussian, sigma
+  26 pt) glides left to right in 2.8 s, once every 7.5 s, lifting the lines it passes by 4.5 %.
+  As Home appears the voice rises once from left to right (1.4 s). The numbers live in
+  `MurmurKit/Brand/VoiceprintMotion.swift`.
+- **Polite:** still with Reduce Motion, paused while the window is in the background or the
+  hero is scrolled away, and nothing redraws between sweeps.
+- **Width:** the art is designed at 660 pt and anchored right. A wider hero gives the words
+  more calm room; a narrower one squeezes the art horizontally.
 
 ## Later
 
