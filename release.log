@@ -1,0 +1,40 @@
+swift build -c release --scratch-path "/Users/runner/Library/Caches/BirdtownFlowBuild/scratch"
+Fetching https://github.com/FluidInference/FluidAudio.git from cache
+Fetched https://github.com/FluidInference/FluidAudio.git from cache (0.02s)
+Creating working copy for https://github.com/FluidInference/FluidAudio.git
+Working copy of https://github.com/FluidInference/FluidAudio.git resolved at 0.17.7
+Fetching binary artifact https://github.com/FluidInference/text-processing-rs/releases/download/v0.3.1/NemoTextProcessing.xcframework.zip from cache
+Fetched https://github.com/FluidInference/text-processing-rs/releases/download/v0.3.1/NemoTextProcessing.xcframework.zip from cache (3.23s)
+Building for production...
+[0/11] Write sources
+[2/11] Copying luxtts_en_us_lexicon.tsv.zz
+[3/11] Copying luxtts_en_us_g2p_aux.json
+[4/11] Write sources
+[5/11] Write swift-version-7974D3F7F03D5E95.txt
+[6/11] Write sources
+[7/12] Compiling MachTaskSelfWrapper MachTaskSelf.c
+[8/12] Compiling FastClusterWrapper FastClusterWrapper.cpp
+[10/13] Compiling MurmurDictionary DictionaryCorrector.swift
+/Users/runner/work/birdtown-flow/birdtown-flow/Sources/MurmurDictionary/DictionaryCorrector.swift:162:5: warning: 'public' modifier is redundant for static property declared in a public extension
+160 |     /// or ambiguous audio they start inventing text from the vocabulary they were primed
+161 |     /// with, which is a far worse failure than the misspelling it was meant to fix.
+162 |     public static let biasLimit = 40
+    |     `- warning: 'public' modifier is redundant for static property declared in a public extension
+163 | 
+164 |     /// - Returns: the correct spellings — `.term` words and the *write* side of corrections —
+
+/Users/runner/work/birdtown-flow/birdtown-flow/Sources/MurmurDictionary/DictionaryCorrector.swift:166:5: warning: 'public' modifier is redundant for static method declared in a public extension
+164 |     /// - Returns: the correct spellings — `.term` words and the *write* side of corrections —
+165 |     ///   most recently useful first, capped at `biasLimit`.
+166 |     public static func biasPhrases(from entries: [DictionaryEntry]) -> [String] {
+    |     `- warning: 'public' modifier is redundant for static method declared in a public extension
+167 |         var seen = Set<String>()
+168 |         var phrases: [String] = []
+[11/14] Compiling MurmurKit VoiceprintMotion.swift
+[12/14] Compiling FluidAudio CanaryConfig.swift
+[13/15] Compiling BirdtownFlow AppModel.swift
+[13/15] Write Objects.LinkFileList
+[14/15] Linking BirdtownFlow
+Build complete! (207.00s)
+/Users/runner/work/birdtown-flow/birdtown-flow/dist/Birdtown Flow.app: replacing existing signature
+built /Users/runner/work/birdtown-flow/birdtown-flow/dist/Birdtown Flow.app  [signed: -]
