@@ -1,0 +1,9 @@
+sha=94bf800733607da7edf5f88c0a547071f810d09c
+branch=feature/mono-v2-look
+build=success
+test=success
+snapshots=success
+synth=success
+speech=success
+segmented=success
+release=skipped
