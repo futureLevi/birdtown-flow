@@ -65,8 +65,8 @@ Tile: Apple's macOS grid (824 px tile on a 1024 px canvas), continuous corners a
   the same order. Each Home stat wears a small badge lit like the app icon, with a soft glow
   in its corner: This week blue, Pace green, Streak orange, Time saved purple.
 - Primary actions are navy pills (porcelain in dark mode), like the tile and ring. The
-  dictation pill is the icon's navy, lit from the top; hands-free Stop is a navy square on a
-  warm-white disc.
+  dictation pill is the icon's navy, lit from the top; hands-free Stop keeps the colour wheel, a
+  warm-white square on the live orb.
 - One accent, Signal blue, is the orb's own blue (`#3082F8`, `#4C93FA` in dark), for
   selection, focus and switches; as text (links) it deepens to `#2462BA` (`#6AA6FB` in dark)
   so it reads at 4.5:1.
