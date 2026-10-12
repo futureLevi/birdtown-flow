@@ -1,0 +1,9 @@
+sha=1796924d14310ad0a247db0eb260014de68d9d68
+branch=feature/hud-colour-wheel
+build=success
+test=success
+snapshots=success
+synth=success
+speech=success
+segmented=success
+release=skipped
