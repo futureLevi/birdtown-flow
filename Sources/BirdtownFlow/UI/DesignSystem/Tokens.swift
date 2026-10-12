@@ -276,11 +276,6 @@ extension Palette.HUD {
     /// The pill's body: the icon's navy, lit from the top (Mono v2's navy pill).
     static let fillTop = Color(hex: 0x1C2B57)
     static let fillBottom = Color(hex: 0x0E183B)
-    /// Stop in hands-free: a warm-white disc holding a navy square, like the logo's ring
-    /// around its tile. It darkens a little under the pointer.
-    static let stopFill = Color(hex: 0xFEFCF8)
-    static let stopGlyph = Color(hex: 0x0E183B)
-    static let stopHover = Color(hex: 0x0E183B, alpha: 0.10)
     static let dangerSoft = Color(hex: 0xFF6B7A, alpha: 0.18)
     /// The pill's shadow is built from stacked layers (see `HUDPillBody`), shaped by
     /// `Elevation.hud`'s radius and offset.
