@@ -222,7 +222,8 @@ struct HUDLiveContent: View {
         let thinking = state.kind == .transcribing || state.kind == .polishing
         let midY = size.height / 2
         let handsFree = state.kind == .handsFree
-        let layout = HUDMetrics.handsFreeLayout(width: size.width)
+        let slot = HUDMetrics.handsFreeSlot(for: state)
+        let layout = HUDMetrics.handsFreeLayout(width: size.width, slot: slot)
         let barsX = handsFree ? layout.bars : HUDMetrics.listeningBarsX(width: size.width)
 
         return ZStack {
@@ -232,7 +233,18 @@ struct HUDLiveContent: View {
             HUDBars(heights: heights, opacities: wave.opacities)
                 .position(x: barsX, y: midY)
 
-            if handsFree {
+            if handsFree, state.isFeedbackNote {
+                // Nothing will be typed: say what this recording is for.
+                Text(HUDMetrics.feedbackLabel)
+                    .font(Typography.hud)
+                    .foregroundStyle(Palette.HUD.ink)
+                    .lineLimit(1)
+                    .fixedSize()
+                    .frame(width: slot, alignment: .trailing)
+                    .position(x: layout.timer, y: midY)
+                    .transition(.opacity)
+                    .accessibilityLabel("Recording feedback for the developer")
+            } else if handsFree {
                 let now = Date(timeIntervalSinceReferenceDate: time)
                 Text(HUDMetrics.elapsedText(since: state.recordingStartedAt, now: now))
                     .font(Typography.hudNumeral)

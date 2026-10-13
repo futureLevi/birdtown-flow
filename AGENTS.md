@@ -79,6 +79,10 @@ make snapshots      # every screen to ./snapshots, light and dark
   their own API key.
 - **Decide the `polishWhileSpeaking` default for Anthropic/OpenAI-compatible:** text
   reaches the provider before key-up and Esc can't recall it.
+- **Decide where customers' feedback goes.** The feedback shortcut files GitHub issues with
+  a token the person pastes in, which suits the developer, not customers. Customers' notes
+  need an endpoint of ours (and their consent to attach recent dictations), or the shortcut
+  hidden.
 - **Decide what the Lab is for customers.** It's an admin tool for tuning prompts. Either
   hide it behind an advanced setting or keep it to internal builds, and drop Claude Code
   from its provider list along with the provider itself.

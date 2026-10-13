@@ -19,6 +19,7 @@ a product that can stand next to Wispr Flow.
 | **Snippets** | Say a trigger phrase, get the expansion. |
 | **HUD** | A small dark pill at the bottom of the screen: waveform while listening, shimmer while processing, a check when done, a distinct shape while polishing. Failures and notices (no speech heard, no words, copied instead of typed, polish skipped) appear as a message pill that can be clicked once the pointer moves to it: it opens the History row, the microphone picker or System Settings (`DictationFeedback`, `DictationController.FollowUp`). Never takes focus. |
 | **Onboarding** | Microphone → Accessibility → model download → shortcut → try it. |
+| **Feedback** | **⌃⌥F** (by default) records a note about Birdtown Flow itself, hands-free, and types nothing; the HUD says "Feedback". The note (transcribed, never polished) is saved with its audio in `feedback/` (`FeedbackOutbox`), then filed as a GitHub issue in a private repository (Settings › About › Send feedback, `FeedbackCenter`) with the build, the app in front, the dictation setup and the last few dictations. Notes that can't go yet wait and go later. `scripts/setup-feedback.sh` makes the repository and copies a token. |
 
 ## Layers
 
@@ -30,6 +31,7 @@ Sources/MurmurKit          pure logic. Foundation only, builds and tests on Linu
   History/                 HistoryStore (JSON + recordings/)
   Stats/                   DictationStats, TimingLine (the per-dictation timing summary),
                            TimingRollup (the p50/p90 line atop History's Timings view)
+  Feedback/                FeedbackNote, the GitHub issue it becomes, FeedbackOutbox
   Polish/                  prompts, PolishGuard, Anthropic + OpenAI-compatible clients,
                            the Lab's configurations (PolishLabStore → lab.json) and WordDiff
 Sources/BirdtownFlow             the macOS app
@@ -40,6 +42,7 @@ Sources/BirdtownFlow             the macOS app
                            Keychain, Claude Code (personal builds only: a pre-started
                            `claude -p` session), LabBench (the Lab page's drafts and results)
   Stores/                  DictionaryStore
+  Feedback/                FeedbackCenter (files notes from the feedback shortcut)
   Support/                 Settings, AppPaths, Log, Permissions
   UI/DesignSystem          Tokens.swift, the only place literal design values live
   UI/Brand                 the logo drawn in code (LogoPainter), icon export, SpectrumOrb

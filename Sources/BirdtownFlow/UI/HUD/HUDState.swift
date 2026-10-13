@@ -40,6 +40,9 @@ struct HUDState: Equatable, Sendable {
     var phase: Phase
     var showsIdlePill = true
     var isHandsFree = false
+    /// A feedback note for the developer is being said, not a dictation: the hands-free pill
+    /// says "Feedback" where its timer would be, so nobody waits for text to appear.
+    var isFeedbackNote = false
     var level: Float = 0
     /// Recent levels, oldest first.
     var levels: [Float] = []
@@ -106,6 +109,7 @@ struct HUDState: Equatable, Sendable {
         switch kind {
         case .hidden, .idle, .hint: return "Birdtown Flow is ready. Hold \(keyName) to dictate."
         case .listening, .handsFree:
+            if isFeedbackNote { return "Listening. Recording feedback for the developer." }
             if let appName { return "Listening. Dictating into \(appName)." }
             return "Listening"
         case .transcribing: return "Transcribing"
@@ -144,7 +148,9 @@ enum HUDMetrics {
             // not the size of the thing on screen.
             return CGSize(width: Layout.HUD.listeningWidth, height: height)
         case .handsFree:
-            return CGSize(width: Layout.HUD.handsFreeWidth, height: height)
+            // The feedback label takes the timer's place and is wider than it.
+            let extra = handsFreeSlot(for: state) - Layout.HUD.timerWidth
+            return CGSize(width: Layout.HUD.handsFreeWidth + extra, height: height)
         case .done:
             if let notice = state.notice {
                 return messageSize(notice, lineLimit: Layout.HUD.failureLineLimit, hasAction: state.hasAction)
@@ -213,7 +219,7 @@ enum HUDMetrics {
         case .handsFree:
             guard frame.contains(point) else { return nil }
             let x = point.x - frame.minX
-            let layout = handsFreeLayout(width: frame.width)
+            let layout = handsFreeLayout(width: frame.width, slot: handsFreeSlot(for: state))
             let reach = Layout.HUD.buttonSize / 2 + Spacing.xxs
             if abs(x - layout.cancel) <= reach { return .cancel }
             if abs(x - layout.stop) <= reach { return .stop }
@@ -234,14 +240,24 @@ enum HUDMetrics {
         var stop: CGFloat
     }
 
-    static func handsFreeLayout(width: CGFloat) -> HandsFreeLayout {
+    /// What sits before the Stop button: "Feedback" for a feedback note, else the timer.
+    static let feedbackLabel = "Feedback"
+
+    /// The width of that slot.
+    static func handsFreeSlot(for state: HUDState) -> CGFloat {
+        guard state.isFeedbackNote else { return Layout.HUD.timerWidth }
+        return max(Layout.HUD.timerWidth, textWidth(feedbackLabel, pointSize: Layout.HUD.labelPointSize))
+    }
+
+    /// `slot` is the width before the Stop button: the timer's, or the feedback label's.
+    static func handsFreeLayout(width: CGFloat, slot: CGFloat = Layout.HUD.timerWidth) -> HandsFreeLayout {
         // Both buttons are concentric with the pill's end caps.
         let cancel = capCentre
         let stop = width - capCentre
         let timerTrailing = stop - Layout.HUD.buttonSize / 2 - Spacing.s
-        let timer = timerTrailing - Layout.HUD.timerWidth / 2
+        let timer = timerTrailing - slot / 2
         let barsLeading = cancel + Layout.HUD.buttonSize / 2 + Spacing.s
-        let barsTrailing = timerTrailing - Layout.HUD.timerWidth - Spacing.s
+        let barsTrailing = timerTrailing - slot - Spacing.s
         return HandsFreeLayout(cancel: cancel, bars: (barsLeading + barsTrailing) / 2, timer: timer, stop: stop)
     }
 

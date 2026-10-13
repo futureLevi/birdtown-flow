@@ -134,6 +134,16 @@ final class Settings {
         didSet { defaults.set(pasteLastShortcut.storageValue, forKey: Keys.pasteLastShortcut) }
     }
 
+    /// Records a note about Birdtown Flow itself and files it for the developer, instead of
+    /// typing anything (`FeedbackCenter`).
+    var feedbackShortcutEnabled: Bool {
+        didSet { defaults.set(feedbackShortcutEnabled, forKey: Keys.feedbackShortcutEnabled) }
+    }
+    /// The feedback chord, ⌃⌥F unless the user recorded another.
+    var feedbackShortcut: KeyChord {
+        didSet { defaults.set(feedbackShortcut.storageValue, forKey: Keys.feedbackShortcut) }
+    }
+
     /// The shortcuts each action has, for `ShortcutRules.check(_:for:inUse:)`. A saved chord
     /// counts even while its action is off or set to another gesture, since switching back
     /// is one click and would otherwise bring back a clash. The ⌃⌥ tap and double-tap aren't
@@ -142,6 +152,7 @@ final class Settings {
         var inUse: [ShortcutRole: KeyShortcut] = [
             .pushToTalk: pushToTalkKey,
             .pasteLast: .keys(pasteLastShortcut),
+            .feedback: .keys(feedbackShortcut),
         ]
         if let handsFreeChord { inUse[.handsFree] = .keys(handsFreeChord) }
         return inUse
@@ -270,6 +281,18 @@ final class Settings {
         didSet { defaults.set(historyShowsTimings, forKey: Keys.historyShowsTimings) }
     }
 
+    // MARK: Product feedback
+
+    /// Where feedback notes are filed as issues: "owner/name". A private repository, since a
+    /// note carries the text of recent dictations. The token lives in the Keychain.
+    var feedbackRepository: String {
+        didSet { defaults.set(feedbackRepository, forKey: Keys.feedbackRepository) }
+    }
+    /// Attach the last few dictations to a note, so "that one was wrong" can be acted on.
+    var feedbackIncludesDictations: Bool {
+        didSet { defaults.set(feedbackIncludesDictations, forKey: Keys.feedbackIncludesDictations) }
+    }
+
     // MARK: Lifecycle
 
     var hasCompletedOnboarding: Bool {
@@ -277,6 +300,9 @@ final class Settings {
     }
 
     // MARK: -
+
+    /// The developer's private feedback repository (`scripts/setup-feedback.sh` makes it).
+    static let defaultFeedbackRepository = "futureLevi/birdtown-flow-feedback"
 
     private let defaults: UserDefaults
 
@@ -288,6 +314,10 @@ final class Settings {
         static let handsFreeChord = "handsFreeChord"
         static let pasteLastShortcutEnabled = "pasteLastShortcutEnabled"
         static let pasteLastShortcut = "pasteLastShortcut"
+        static let feedbackShortcutEnabled = "feedbackShortcutEnabled"
+        static let feedbackShortcut = "feedbackShortcut"
+        static let feedbackRepository = "feedbackRepository"
+        static let feedbackIncludesDictations = "feedbackIncludesDictations"
         static let soundEnabled = "soundEnabled"
         static let showIdlePill = "showIdlePill"
         static let duckAudioWhileRecording = "duckAudioWhileRecording"
@@ -327,6 +357,10 @@ final class Settings {
         handsFreeChord = KeyChord(storageValue: defaults.string(forKey: Keys.handsFreeChord) ?? "")
         pasteLastShortcutEnabled = defaults.object(forKey: Keys.pasteLastShortcutEnabled) as? Bool ?? true
         pasteLastShortcut = KeyChord(storageValue: defaults.string(forKey: Keys.pasteLastShortcut) ?? "") ?? .pasteLastDefault
+        feedbackShortcutEnabled = defaults.object(forKey: Keys.feedbackShortcutEnabled) as? Bool ?? true
+        feedbackShortcut = KeyChord(storageValue: defaults.string(forKey: Keys.feedbackShortcut) ?? "") ?? .feedbackDefault
+        feedbackRepository = defaults.string(forKey: Keys.feedbackRepository) ?? Settings.defaultFeedbackRepository
+        feedbackIncludesDictations = defaults.object(forKey: Keys.feedbackIncludesDictations) as? Bool ?? true
         soundEnabled = defaults.object(forKey: Keys.soundEnabled) as? Bool ?? true
         showIdlePill = defaults.object(forKey: Keys.showIdlePill) as? Bool ?? true
         duckAudioWhileRecording = defaults.object(forKey: Keys.duckAudioWhileRecording) as? Bool ?? false
