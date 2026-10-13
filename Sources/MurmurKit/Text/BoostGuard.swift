@@ -23,8 +23,11 @@ public enum BoostGuard {
     /// A short term needs at least this similarity to what was heard, however the words line
     /// up. On five letters or fewer, two edits are most of the word: "board" scores 0.6 against
     /// "BTAR", which the rescorer's own 0.6 gate let through, even spelled out as "B-O-A-R-D".
-    /// One edit still passes: "levy" → "Levi", "BTR" → "BTAR" score 0.75. An acronym is also
-    /// compared with its first letters said by name, so "Beetar" still becomes "BTAR".
+    /// One edit still passes: "levy" → "Levi" scores 0.75.
+    ///
+    /// An acronym is said as letters, so an ordinary word is never one, however close its
+    /// spelling ("bar" → "BTAR" also scores 0.75). It only replaces words the engine wrote as
+    /// letters ("BTR", "B-T-A-R") or that say its first letters by name ("Beetar", "bee tar").
     public static let shortTermSimilarity = 0.75
     /// The longest a term can be, in letters and digits, and still count as short.
     public static let shortTermLength = 5
@@ -49,8 +52,9 @@ public enum BoostGuard {
         let letters = written.joined()
         if letters.count <= shortTermLength {
             let said = Array(spoken.joined())
-            let closest = sayings(of: term, letters: letters).map { PolishGuard.similarity(said, Array($0)) }.max() ?? 0
-            if closest < shortTermSimilarity { return false }
+            let closest = sayings(of: term, letters: letters, heard: heard)
+                .map { PolishGuard.similarity(said, Array($0)) }.max() ?? 0
+            if String(said) != letters, closest < shortTermSimilarity { return false }
         }
         // One word for one: the rescorer's own similarity gate already judged exactly this.
         if spoken.count == 1, written.count == 1 { return true }
@@ -94,14 +98,26 @@ public enum BoostGuard {
         return accepts(heard: heard, term: term) ? 0..<heard.count : nil
     }
 
-    /// How a short term can come out of the engine: as spelled ("btar"), and for an acronym,
-    /// with one or more of its first letters said by name ("beetar", "beeteear").
-    private static func sayings(of term: String, letters: String) -> [String] {
+    /// What `heard` may be compared with for a short term: its spelling, and for an acronym,
+    /// its first letters said by name ("beetar", "beeteear"), plus its spelling only when the
+    /// engine wrote `heard` as letters.
+    private static func sayings(of term: String, letters: String, heard: [String]) -> [String] {
         let capitals = term.filter(\.isLetter)
         guard capitals.count >= 2, capitals.allSatisfy(\.isUppercase) else { return [letters] }
         let characters = Array(letters)
-        return (0...characters.count).map { named in
-            characters[..<named].map { letterNames[$0] ?? String($0) }.joined() + String(characters[named...])
+        let named = (1...characters.count).map { count in
+            characters[..<count].map { letterNames[$0] ?? String($0) }.joined() + String(characters[count...])
+        }
+        return writtenAsLetters(heard) ? [letters] + named : named
+    }
+
+    /// Whether every word is in capitals ("BTR") or has a letter on its own ("B-T-A-R", "B-tar").
+    private static func writtenAsLetters(_ heard: [String]) -> Bool {
+        heard.allSatisfy { word in
+            let letters = word.filter(\.isLetter)
+            guard !letters.isEmpty else { return true }
+            return letters.allSatisfy(\.isUppercase)
+                || word.split(whereSeparator: { !$0.isLetter && !$0.isNumber }).contains { $0.count == 1 }
         }
     }
 
