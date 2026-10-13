@@ -60,6 +60,8 @@ final class AudioRecorder: @unchecked Sendable {
     static let sampleRate: Double = 16_000
     /// Hard cap per recording. A forgotten hands-free session stops here and is processed.
     static let maxDuration: Double = 600
+    /// A replaced engine is freed only after this long without a configuration change.
+    static let retiredEngineQuietPeriod: TimeInterval = 3
 
     private let queue = DispatchQueue(label: "com.birdtownlabs.flow.audio", qos: .userInteractive)
 
@@ -70,6 +72,9 @@ final class AudioRecorder: @unchecked Sendable {
     private var sink: CaptureSink?
     /// The device setting from the last `prewarm` or `start`, so an idle rebuild picks the same one.
     private var lastDeviceUID: String?
+    /// Engines we've finished with, kept alive until AVFAudio has finished with them too.
+    private var retiredEngines = QuietRelease<ObjectIdentifier, RetiredEngine>(quietPeriod: AudioRecorder.retiredEngineQuietPeriod)
+    private var retiredReleaseScheduled = false
 
     private let handlerLock = NSLock()
     private var handler: (@Sendable (Event) -> Void)?
@@ -236,18 +241,67 @@ final class AudioRecorder: @unchecked Sendable {
         return engine
     }
 
+    /// Stops the current engine and hands it to `retire`; it is never freed here.
     private func discardEngine() {
-        if let configObserver { NotificationCenter.default.removeObserver(configObserver) }
+        if let engine {
+            engine.stop()
+            retire(engine, observer: configObserver)
+        } else if let configObserver {
+            NotificationCenter.default.removeObserver(configObserver)
+        }
         configObserver = nil
-        engine?.stop()
         engine = nil
         engineDevice = nil
     }
 
+    /// Keeps a finished engine alive until it has gone quiet, then frees it.
+    ///
+    /// Freeing an engine straight after a hardware change crashed the app (EXC_BAD_ACCESS on
+    /// AVFAudio's `AVAudioIOUnit` queue): the change arrives as a burst of property-listener
+    /// blocks that AVFAudio queues for the engine's input unit, and `-[AVAudioEngine dealloc]`
+    /// on this queue freed the unit while one of those blocks was still waiting to read it.
+    /// So the engine stays here, still observed, and every configuration change it reports
+    /// restarts its quiet period (`configurationChanged`). Only once it has been quiet for
+    /// `retiredEngineQuietPeriod` is its observer removed and the engine released.
+    private func retire(_ engine: AVAudioEngine, observer: (any NSObjectProtocol)?) {
+        retiredEngines.retire(
+            RetiredEngine(engine: engine, observer: observer),
+            key: ObjectIdentifier(engine),
+            at: Self.uptime
+        )
+        scheduleRetiredRelease()
+    }
+
+    private func scheduleRetiredRelease() {
+        guard !retiredReleaseScheduled, let due = retiredEngines.nextDue else { return }
+        retiredReleaseScheduled = true
+        // A little past the due time, so the check doesn't land a hair early and go round again.
+        let delay = max(0, due - Self.uptime) + 0.05
+        queue.asyncAfter(deadline: .now() + delay) {
+            self.retiredReleaseScheduled = false
+            let quiet = self.retiredEngines.takeQuiet(at: Self.uptime)
+            for retired in quiet {
+                if let observer = retired.observer { NotificationCenter.default.removeObserver(observer) }
+            }
+            if !quiet.isEmpty {
+                Log.audio.info("released \(quiet.count) retired audio engine(s)")
+            }
+            // `quiet` goes out of scope here, which frees those engines, observers already gone.
+            self.scheduleRetiredRelease()
+        }
+    }
+
+    /// Monotonic seconds, on the same clock as `DispatchTime` (both stop while asleep).
+    private static var uptime: TimeInterval { ProcessInfo.processInfo.systemUptime }
+
     /// The hardware changed under us. The engine has already stopped itself; keep what was
     /// captured and let the controller finish the dictation normally.
     private func configurationChanged(source: ObjectIdentifier) {
-        guard let engine, ObjectIdentifier(engine) == source else { return }
+        guard let engine, ObjectIdentifier(engine) == source else {
+            // A retired engine is still hearing from the hardware: not safe to free yet.
+            retiredEngines.noteActivity(key: source, at: Self.uptime)
+            return
+        }
         // The notification can also follow our own device selection while the engine keeps
         // running; only a stopped engine means capture actually ended.
         guard !engine.isRunning else { return }
@@ -404,6 +458,12 @@ final class AudioRecorder: @unchecked Sendable {
         }
         return output
     }
+}
+
+/// An engine that's been replaced, with the observer that still watches it while it's retired.
+private struct RetiredEngine {
+    let engine: AVAudioEngine
+    let observer: (any NSObjectProtocol)?
 }
 
 // MARK: - Tap thread

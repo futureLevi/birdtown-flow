@@ -58,6 +58,10 @@ make snapshots      # every screen to ./snapshots, light and dark
   products in `~/Library/Caches/BirdtownFlowBuild`. Sync engines modify files mid-compile.
 - **Secure Event Input** (password fields) hides key events from the tap. `HotkeyMonitor`
   polls the modifier state while it's on, so a hidden key-up can't leave the mic open.
+- **Never free an `AVAudioEngine` straight after a hardware change.** AVFAudio may still have
+  a property-listener block queued for its input unit, and the app crashes in Apple's code
+  when it runs. `AudioRecorder.discardEngine()` retires engines instead; they're released
+  once they've gone quiet (`QuietRelease`). Don't add a path that sets an engine to `nil`.
 - **AX calls into other apps need short timeouts**; an unresponsive app must never hang
   Birdtown Flow's main thread.
 - **`log` may be shadowed in your shell.** Use `/usr/bin/log show --predicate
