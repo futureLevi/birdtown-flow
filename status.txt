@@ -1,0 +1,11 @@
+sha=64d9bb0afc8018cd57ccd6f15ae7ba5ad049684a
+branch=ci/stable-nightly-signing
+build=success
+test=success
+snapshots=success
+synth=success
+speech=success
+segmented=success
+signcheck=success
+signing=skipped
+release=skipped
