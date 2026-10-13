@@ -51,7 +51,9 @@ make snapshots      # every screen to ./snapshots, light and dark
   `RunLoop.main`). Otherwise `await MainActor.run`.
 - **TCC keys Accessibility to the code signature.** Ad-hoc signatures change every build, so
   the grant silently stops working while the toggle still shows on. `make` signs with a
-  Developer ID when one exists. To reset one app only:
+  Developer ID when one exists; CI signs the nightly with the self-signed identity in the
+  `MACOS_SIGNING_P12` secret (`scripts/make-signing-identity.sh`), and falls back to ad-hoc
+  without it. Replacing that certificate costs every user one re-grant. To reset one app only:
   `tccutil reset Accessibility com.birdtownlabs.flow` (never omit the bundle ID), then
   quit System Settings before reopening it.
 - **Keep the checkout out of iCloud-synced folders**, or build with `make`, which puts build
