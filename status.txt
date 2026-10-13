@@ -1,0 +1,11 @@
+sha=288900a6c2ccd72d4621d2376e0f61e26ac9ee99
+branch=feature/feedback-shortcut
+build=success
+test=success
+snapshots=success
+synth=success
+speech=success
+segmented=success
+signcheck=success
+signing=skipped
+release=skipped
