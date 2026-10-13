@@ -33,8 +33,9 @@ public struct QuietRelease<Key: Hashable, Item> {
     /// - Returns: `false` when nothing is held under `key`.
     @discardableResult
     public mutating func noteActivity(key: Key, at now: TimeInterval) -> Bool {
-        guard held[key] != nil else { return false }
-        held[key]?.lastActivity = max(held[key]?.lastActivity ?? now, now)
+        guard var entry = held[key] else { return false }
+        entry.lastActivity = max(entry.lastActivity, now)
+        held[key] = entry
         return true
     }
 
