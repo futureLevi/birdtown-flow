@@ -42,8 +42,10 @@ turned off.
 **Download:** grab `BirdtownFlow.zip` from the [nightly release](https://github.com/futureLevi/murmur-youtube/releases/tag/nightly),
 unzip, and move `Birdtown Flow.app` to Applications. It isn't notarized, so macOS blocks the first
 launch: open **System Settings → Privacy & Security** and click **Open Anyway** (or run
-`xattr -dr com.apple.quarantine /Applications/Birdtown Flow.app`). The nightly is ad-hoc signed, so
-after each update macOS asks for Accessibility again.
+`xattr -dr com.apple.quarantine /Applications/Birdtown Flow.app`). Once the repository has a
+signing identity (run `scripts/make-signing-identity.sh` once), every nightly is signed with the same
+certificate and keeps the Accessibility and Microphone grants across updates. Without one it's ad-hoc
+signed, and after each update macOS asks for Accessibility again.
 
 **Build from source** (macOS 26, Xcode 26):
 
