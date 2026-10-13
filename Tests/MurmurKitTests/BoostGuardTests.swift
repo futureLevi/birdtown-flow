@@ -10,6 +10,18 @@ struct BoostGuardTests {
         (["cloud-code."], "Claude Code"),
         (["parakeet,"], "Parakeet"),
         (["shivon"], "Siobhan"),
+        (["cloud"], "Claude"),
+        // Short terms, one letter off or spelled out.
+        (["levy"], "Levi"),
+        (["btar"], "BTAR"),
+        (["BTR"], "BTAR"),
+        (["B-T-A-R"], "BTAR"),
+        (["B-tar"], "BTAR"),
+        (["B", "T", "A", "R"], "BTAR"),
+        // An acronym said with its first letter as a name ("bee-tar" is how Levi says it).
+        (["Beetar"], "BTAR"),
+        (["bee", "tar"], "BTAR"),
+        (["bee-tee-go"], "BTGO"),
     ])
     func accepted(heard: [String], term: String) {
         #expect(BoostGuard.accepts(heard: heard, term: term))
@@ -24,6 +36,15 @@ struct BoostGuardTests {
         // One word standing in for two it only half sounds like.
         (["Claude"], "Claude Code"),
         ([], "Claude Code"),
+        // A short term two letters off an ordinary word (Levi, Oct 13: "board" became "BTAR",
+        // even spelled out).
+        (["board"], "BTAR"),
+        (["board."], "BTAR"),
+        (["B-O-A-R-D"], "BTAR"),
+        (["B", "O", "A", "R", "D"], "BTAR"),
+        // An ordinary word one letter off an acronym is still an ordinary word.
+        (["bar"], "BTAR"),
+        (["Bar."], "BTAR"),
     ])
     func rejected(heard: [String], term: String) {
         #expect(!BoostGuard.accepts(heard: heard, term: term))
@@ -61,6 +82,10 @@ struct BoostGuardTests {
         (["Claude.", "I've", "been"], "Claude Code"),
         (["Claude"], "Claude Code"),
         ([], "Claude Code"),
+        (["board"], "BTAR"),
+        (["the", "board"], "BTAR"),
+        (["the", "bar"], "BTAR"),
+        (["B-O-A-R-D"], "BTAR"),
     ])
     func vetoed(heard: [String], term: String) {
         #expect(BoostGuard.span(heard: heard, term: term) == nil)
