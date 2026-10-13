@@ -1,0 +1,11 @@
+sha=24f3b2b8f65681e63850b2649cf4c29e8842d4a7
+branch=fix/short-term-boost
+build=success
+test=success
+snapshots=success
+synth=success
+speech=success
+segmented=success
+signcheck=success
+signing=skipped
+release=skipped
