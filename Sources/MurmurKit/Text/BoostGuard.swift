@@ -20,6 +20,13 @@ public enum BoostGuard {
     /// "BirdTown Flow" out of "BirdTown Flow will" scores 1, "cloud code" out of "cloud code
     /// is" 0.8.
     public static let narrowedSimilarity = 0.8
+    /// A short term needs at least this similarity to what was heard, however the words line
+    /// up. On five letters or fewer, two edits are most of the word: "board" scores 0.6 against
+    /// "BTAR", which the rescorer's own 0.6 gate let through, even spelled out as "B-O-A-R-D".
+    /// One edit still passes: "levy" → "Levi", "BTR" → "BTAR" score 0.75.
+    public static let shortTermSimilarity = 0.75
+    /// The longest a term can be, in letters and digits, and still count as short.
+    public static let shortTermLength = 5
 
     /// Punctuation that ends a clause. A term never spans one.
     private static let clauseEnders: Set<Character> = [".", ",", ";", ":", "!", "?", "…"]
@@ -38,6 +45,11 @@ public enum BoostGuard {
         let written = words(of: term)
         guard !spoken.isEmpty, !written.isEmpty else { return false }
 
+        let term = written.joined()
+        if term.count <= shortTermLength,
+           PolishGuard.similarity(Array(spoken.joined()), Array(term)) < shortTermSimilarity {
+            return false
+        }
         // One word for one: the rescorer's own similarity gate already judged exactly this.
         if spoken.count == 1, written.count == 1 { return true }
         if spoken.count == written.count {
@@ -45,7 +57,7 @@ public enum BoostGuard {
                 PolishGuard.similarity(Array(pair.0), Array(pair.1)) >= wordSimilarity
             }
         }
-        let joined = PolishGuard.similarity(Array(spoken.joined()), Array(written.joined()))
+        let joined = PolishGuard.similarity(Array(spoken.joined()), Array(term))
         return joined >= (spoken.count < written.count ? expandingSimilarity : joinedSimilarity)
     }
 
