@@ -3,50 +3,58 @@ import AppKit
 import ApplicationServices
 import Foundation
 
-/// Birdtown Flow needs two grants, and neither can be worked around:
-/// - **Microphone** — obviously.
-/// - **Accessibility** — for both the `CGEventTap` (hotkey) and the AX text insert.
+/// The two privacy grants the app can't work without, and the ways to ask for them.
 ///
-/// Accessibility has no programmatic request; the OS only shows the prompt, and the user
-/// must toggle it in System Settings. TCC also keys on the code signature, so re-signing
-/// the app resets the grant.
+/// The microphone records you, and Accessibility does everything else: the hotkey's event
+/// tap and typing into other apps both depend on it. The microphone can be requested in
+/// code. Accessibility can't: the most we can do is have macOS show its alert, after which
+/// the user turns the switch on in System Settings themselves. The grant is tied to the
+/// app's code signature, so a build signed differently is a stranger to TCC.
 @MainActor
 enum Permissions {
-    static var hasAccessibility: Bool {
-        AXIsProcessTrusted()
+    /// A pane of System Settings › Privacy & Security, by its URL anchor.
+    private enum PrivacyPane: String {
+        case accessibility = "Privacy_Accessibility"
+        case microphone = "Privacy_Microphone"
     }
 
-    static var hasMicrophone: Bool {
-        AVCaptureDevice.authorizationStatus(for: .audio) == .authorized
+    private static var microphoneStatus: AVAuthorizationStatus {
+        AVCaptureDevice.authorizationStatus(for: .audio)
     }
 
-    /// Shows the system Accessibility prompt if the app isn't yet trusted.
+    static var hasMicrophone: Bool { microphoneStatus == .authorized }
+
+    static var hasAccessibility: Bool { AXIsProcessTrusted() }
+
+    /// Asks once, the first time; after that the answer stands until the user changes it in
+    /// System Settings, so a denial just reports `false`.
+    static func requestMicrophone() async -> Bool {
+        let status = microphoneStatus
+        guard status == .notDetermined else { return status == .authorized }
+        return await AVCaptureDevice.requestAccess(for: .audio)
+    }
+
+    /// Has macOS show its "would like to control this computer" alert when the app isn't
+    /// trusted yet. Returns whether it already is.
     @discardableResult
     static func promptForAccessibility() -> Bool {
-        // Spelled out rather than using `kAXTrustedCheckOptionPrompt`, which imports as a
-        // mutable global and so isn't usable from concurrency-checked code.
-        let options = ["AXTrustedCheckOptionPrompt": true] as CFDictionary
-        return AXIsProcessTrustedWithOptions(options)
-    }
-
-    static func requestMicrophone() async -> Bool {
-        switch AVCaptureDevice.authorizationStatus(for: .audio) {
-        case .authorized:
-            return true
-        case .notDetermined:
-            return await AVCaptureDevice.requestAccess(for: .audio)
-        default:
-            return false
-        }
+        // The option's name as a plain string: the SDK's `kAXTrustedCheckOptionPrompt` is a
+        // mutable global, which strict concurrency won't let us read.
+        let showAlert = ["AXTrustedCheckOptionPrompt": true] as CFDictionary
+        return AXIsProcessTrustedWithOptions(showAlert)
     }
 
     static func openAccessibilitySettings() {
-        let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!
-        NSWorkspace.shared.open(url)
+        openPane(.accessibility)
     }
 
     static func openMicrophoneSettings() {
-        let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone")!
+        openPane(.microphone)
+    }
+
+    private static func openPane(_ pane: PrivacyPane) {
+        let address = "x-apple.systempreferences:com.apple.preference.security?" + pane.rawValue
+        guard let url = URL(string: address) else { return }
         NSWorkspace.shared.open(url)
     }
 }

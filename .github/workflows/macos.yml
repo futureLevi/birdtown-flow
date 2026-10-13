@@ -279,11 +279,3 @@ jobs:
       - name: Fail if build or tests failed
         if: steps.build.outcome != 'success' || steps.test.outcome != 'success'
         run: exit 1
-
-  dictionary-contract:
-    name: Dictionary contract (vectors in sync)
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Confirm the vectors on both sides are identical
-        run: diff -q shared/dictionary-test-vectors.json Tests/MurmurDictionaryTests/dictionary-test-vectors.json

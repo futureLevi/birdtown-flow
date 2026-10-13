@@ -1,53 +1,63 @@
 import Foundation
 
-/// One thing the dictionary knows.
+/// A single line of the user's dictionary.
 ///
-/// Two kinds, because the two jobs are genuinely different:
+/// An entry is either a spelling to teach the engine or a fix to apply afterwards:
 ///
-/// - `.term` — a word or phrase the engine should know exists: "Anthropic", "Vercel".
-///   Feeds engine biasing only; it has no "wrong" spelling to correct.
-/// - `.correction` — a mapping: when you hear X, write Y. "cloud code" → "Claude Code".
-///   Feeds both biasing (on Y, the correct form) and the correction pass (X → Y).
+/// - A **term** is a word or name the user wants spelled their way, like "Birdtown" or
+///   "Parakeet". It only steers the speech engine; there's nothing to rewrite.
+/// - A **correction** says "if the transcript has `hear`, put `write` there instead", like
+///   "bird town" becoming "Birdtown". The `write` side steers the engine too.
+///
+/// The property names are the keys in the saved file, so renaming one breaks every
+/// existing dictionary.
 public struct DictionaryEntry: Identifiable, Codable, Hashable, Sendable {
+    /// Stored as its raw value; don't rename the cases.
     public enum Kind: String, Codable, Sendable {
-        case term
-        case correction
+        case term, correction
     }
 
     public var id: UUID
     public var kind: Kind
 
-    /// The correct text. For `.term` this is the word itself; for `.correction` it's Y —
-    /// what gets written. Either way this is what the engine gets biased toward.
+    /// The spelling the user wants to see. For a term it's the whole entry; for a correction
+    /// it's the replacement. Engine hints are always taken from this side.
     public var write: String
 
-    /// For `.correction` only: the X in "when you hear X". Empty for `.term`.
+    /// What the engine gets wrong, for corrections. Terms leave it empty.
     public var hear: String
 
-    /// Disabled entries stay in the file but stop affecting anything, so you can test
-    /// whether a rule is helping without deleting it.
+    /// Switched-off entries stay in the file so they can be turned back on, but neither
+    /// steer the engine nor rewrite anything.
     public var isEnabled: Bool
 
     public init(id: UUID = UUID(), kind: Kind, write: String, hear: String = "", isEnabled: Bool = true) {
         self.id = id
         self.kind = kind
-        self.write = write
         self.hear = hear
+        self.write = write
         self.isEnabled = isEnabled
     }
 
+    /// A term entry for `word`.
     public static func term(_ word: String) -> DictionaryEntry {
-        DictionaryEntry(kind: .term, write: word)
+        Self(kind: .term, write: word)
     }
 
+    /// A correction entry that puts `write` wherever `hear` turns up.
     public static func correction(hear: String, write: String) -> DictionaryEntry {
-        DictionaryEntry(kind: .correction, write: write, hear: hear)
+        Self(kind: .correction, write: write, hear: hear)
     }
 
-    /// How this entry reads in the plain-text file.
+    /// The entry as one line of the plain-text dictionary file: `hear -> write` for a
+    /// correction, the bare word for a term, and a `# off: ` prefix when it's switched off.
     public var fileLine: String {
-        let body = kind == .correction ? "\(hear) -> \(write)" : write
-        return isEnabled ? body : "# off: \(body)"
+        let line: String
+        switch kind {
+        case .term: line = write
+        case .correction: line = "\(hear) -> \(write)"
+        }
+        return isEnabled ? line : "# off: " + line
     }
 
     /// `parsed` with each entry's id taken from an identical entry in `existing`, where there
@@ -90,66 +100,83 @@ public struct DictionaryEntry: Identifiable, Codable, Hashable, Sendable {
     }
 }
 
-/// A reason an entry looks likely to fire on text you didn't mean it to.
+/// A heads-up that a correction might rewrite text the user didn't mean it to.
 ///
-/// Surfaced in the UI when an entry is added — the spec's "warn me if an entry looks like
-/// it would match something common". Never blocks; you may genuinely want to rewrite a
-/// common word, and it's your dictionary.
+/// Shown next to the entry in the Dictionary screen. It's advice only: saving still works,
+/// because sometimes rewriting an everyday word is exactly what the user wants.
 public struct DictionaryWarning: Identifiable, Sendable {
-    public var id: String { message }
     public let message: String
 
-    /// Ordinary English words that would fire constantly if used as a whole trigger.
-    /// Deliberately short — this catches the obvious foot-guns, not every possible one.
-    private static let common: Set<String> = [
-        "a", "about", "all", "also", "and", "any", "are", "as", "at", "back", "be", "because",
-        "but", "by", "call", "can", "case", "check", "class", "close", "cloud", "code", "come",
-        "could", "data", "day", "did", "do", "does", "down", "each", "even", "file", "find",
-        "first", "for", "from", "get", "give", "go", "good", "great", "group", "had", "has",
-        "have", "he", "her", "here", "him", "his", "how", "if", "in", "into", "is", "it",
-        "its", "just", "key", "know", "like", "line", "list", "look", "make", "man", "many",
-        "may", "me", "more", "most", "my", "need", "new", "no", "not", "now", "number", "of",
-        "off", "on", "one", "only", "open", "or", "other", "our", "out", "over", "page",
-        "part", "people", "point", "put", "read", "right", "run", "said", "same", "say",
-        "see", "set", "she", "should", "show", "side", "so", "some", "state", "still", "such",
-        "take", "team", "test", "than", "that", "the", "their", "them", "then", "there",
-        "these", "they", "thing", "think", "this", "time", "to", "two", "type", "up", "us",
-        "use", "user", "very", "want", "was", "way", "we", "well", "were", "what", "when",
-        "where", "which", "who", "will", "with", "word", "work", "would", "year", "you",
-        "your",
+    public var id: String { message }
+
+    /// Everyday words that would fire all the time as a one-word trigger: the most frequent
+    /// English words, plus the ones people say constantly while talking about software.
+    /// It's meant to catch the obvious mistakes, not to be complete.
+    private static let everydayWords: Set<String> = [
+        // Function words.
+        "a", "about", "after", "again", "all", "also", "am", "an", "and", "any", "are", "around",
+        "as", "at", "be", "because", "been", "before", "but", "by", "can", "could", "did", "do",
+        "does", "down", "each", "even", "every", "few", "for", "from", "had", "has", "have", "he",
+        "her", "here", "him", "his", "how", "i", "if", "in", "into", "is", "it", "its", "just",
+        "may", "me", "might", "more", "most", "must", "my", "never", "no", "nor", "not", "now",
+        "of", "off", "on", "once", "only", "or", "other", "our", "out", "over", "same", "she",
+        "should", "so", "some", "still", "such", "than", "that", "the", "their", "them", "then",
+        "there", "these", "they", "this", "those", "to", "too", "under", "up", "us", "very", "was",
+        "we", "were", "what", "when", "where", "which", "while", "who", "why", "will", "with",
+        "without", "would", "yes", "yet", "you", "your",
+        // Everyday verbs, nouns and adjectives.
+        "bad", "big", "bird", "book", "build", "call", "come", "day", "done", "end", "fine",
+        "flow", "get", "give", "go", "good", "great", "help", "home", "keep", "know", "last",
+        "let", "like", "long", "look", "lot", "made", "make", "mean", "move", "need", "new",
+        "next", "note", "old", "real", "really", "right", "said", "say", "see", "send", "show",
+        "start", "stop", "sure", "talk", "tell", "thanks", "thing", "think", "time", "today",
+        "town", "try", "turn", "use", "want", "way", "week", "well", "word", "work", "write",
+        "year",
+        // Words that come up all the time when talking about software.
+        "app", "branch", "bug", "button", "change", "chat", "click", "copy", "data", "deploy",
+        "doc", "draft", "email", "error", "field", "file", "fix", "folder", "link", "log", "mail",
+        "merge", "model", "page", "paste", "push", "save", "screen", "server", "test", "text",
+        "type", "update", "user", "view", "voice", "window",
     ]
 
-    /// - Returns: warnings for `entry`, or empty if it looks safe.
+    /// Warnings for `entry`, or none when it looks safe.
     public static func check(_ entry: DictionaryEntry) -> [DictionaryWarning] {
-        // Only the trigger side can misfire. A `.term` is never matched against text.
-        guard entry.kind == .correction else { return [] }
+        // Terms are never matched against the transcript, so they can't misfire.
+        if entry.kind == .term { return [] }
 
-        let trigger = entry.hear.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trigger.isEmpty else { return [] }
+        let trigger = entry.hear.trimmed
+        if trigger.isEmpty { return [] }
 
-        var warnings: [DictionaryWarning] = []
-        let words = trigger.lowercased().split(whereSeparator: { $0 == " " || $0 == "-" })
+        var found: [DictionaryWarning] = []
+        let words = trigger.lowercased().split(whereSeparator: { " -".contains($0) })
 
-        if words.count == 1, let only = words.first {
-            if common.contains(String(only)) {
-                warnings.append(DictionaryWarning(
-                    message: "“\(trigger)” is an ordinary word. This will rewrite every use of it, "
-                        + "not just the ones you mean. Consider a longer phrase."
+        // A phrase of two or more words is specific enough; only a lone word gets checked.
+        if words.count == 1 {
+            let word = String(words[0])
+            if everydayWords.contains(word) {
+                found.append(DictionaryWarning(
+                    message: "“\(trigger)” is an everyday word, so this changes it every time you "
+                        + "say it. A longer phrase is safer."
                 ))
-            } else if only.count <= 3 {
-                warnings.append(DictionaryWarning(
-                    message: "“\(trigger)” is very short and will match often. Consider a longer phrase."
+            } else if word.count <= 3 {
+                found.append(DictionaryWarning(
+                    message: "“\(trigger)” is only a few letters long and may turn up where you "
+                        + "don't expect it. A longer phrase is safer."
                 ))
             }
         }
 
-        if entry.write.trimmingCharacters(in: .whitespacesAndNewlines)
-            .caseInsensitiveCompare(trigger) == .orderedSame {
-            warnings.append(DictionaryWarning(
-                message: "This rewrites “\(trigger)” to itself, so it will never change anything."
+        if entry.write.trimmed.caseInsensitiveCompare(trigger) == .orderedSame {
+            found.append(DictionaryWarning(
+                message: "This writes back the same word it listens for, so it won't change anything."
             ))
         }
 
-        return warnings
+        return found
     }
+}
+
+extension String {
+    /// The string without whitespace or line breaks at either end.
+    var trimmed: String { trimmingCharacters(in: .whitespacesAndNewlines) }
 }

@@ -4,7 +4,7 @@ import PackageDescription
 // Birdtown Flow: push-to-talk dictation for macOS.
 //
 // Three layers:
-//   MurmurDictionary  correction rules (platform-neutral, shared contract with windows/)
+//   MurmurDictionary  correction rules (Foundation only, like MurmurKit)
 //   MurmurKit         everything that is pure logic: text pipeline, styles, snippets,
 //                     history persistence, stats, AI-polish prompts and HTTP clients.
 //                     Foundation-only, so it builds and tests on Linux as well as macOS.

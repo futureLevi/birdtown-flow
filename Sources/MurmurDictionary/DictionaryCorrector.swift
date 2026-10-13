@@ -1,13 +1,12 @@
 import Foundation
 
-/// One correction that actually fired, kept so history can show whether the dictionary is
-/// earning its place.
+/// A dictionary correction that changed a transcript, kept with the History entry.
 public struct AppliedCorrection: Codable, Hashable, Sendable {
-    /// The text as the engine produced it.
+    /// The words as the engine wrote them, from the first place the rule changed something.
     public let from: String
-    /// What it was rewritten to.
+    /// The dictionary's spelling that went in their place.
     public let to: String
-    /// How many times it fired in this transcript.
+    /// How many places in the transcript the rule changed.
     public let count: Int
 
     public init(from: String, to: String, count: Int) {
@@ -17,163 +16,178 @@ public struct AppliedCorrection: Codable, Hashable, Sendable {
     }
 }
 
-/// Rewrites transcribed text using the dictionary's correction pairs.
+/// Applies the dictionary's corrections to a finished transcript.
 ///
-/// This is the guaranteed half of the dictionary. Engine biasing is a nudge — it raises the
-/// odds of the right word and promises nothing — so anything that must be correct has to be
-/// fixed here, after the fact, deterministically.
+/// Engine hints only make a spelling more likely. This is the step that makes it certain:
+/// once the text is final, every enabled correction is applied by plain text matching, with
+/// the same result every time.
 ///
-/// The rules, all load-bearing:
+/// What counts as a match for a trigger:
 ///
-/// **Longest match first.** "Claude Code" is applied before "Claude", so the longer rule
-/// isn't pre-empted by a shorter one that overlaps it.
+/// - Letter case is ignored, and an accented letter matches however it was encoded, because
+///   the trigger and the text are both converted to the composed Unicode form (NFC) first.
+/// - Only whole words match. There can't be a letter or digit directly before or after the
+///   match, so a "bird town" rule leaves "birdtowns" and "lovebird town" alone.
+/// - The words of a trigger can be joined by any run of spaces and hyphens, or by nothing,
+///   because engines produce all of those: "bird town" also matches "Birdtown", "bird-town"
+///   and "bird  town".
 ///
-/// **Whole matches only.** Every pattern is fenced by word boundaries, so a rule for
-/// "cloud code" can never touch "Cloudflare" or the ordinary word "cloud".
+/// How rules interact:
 ///
-/// **Glued words still match.** Engines run words together — "CloudCode", "cloud-code" — so
-/// the gap between the parts of a phrase is matched as *optional* whitespace or hyphens
-/// rather than a literal space.
-///
-/// **One pass.** Every rule matches against what was heard, and a span a longer rule claims
-/// is off limits to the rest, so no rule ever rewrites another's output: "data@birdtown.com"
-/// stays as written even with a "bird town -> Birdtown" rule around.
-///
-/// **Only changes count.** A match already written exactly as its rule writes it is left
-/// alone and not reported, so History credits the dictionary only for real fixes.
+/// - Longer triggers are tried first, so "flow lab" gets its say before "flow" does.
+/// - Every rule looks at the transcript as the engine wrote it, in a single pass. Once a rule
+///   has matched some text, no other rule can match any part of it, so one rule never
+///   rewrites what another one wrote.
+/// - A match that already reads exactly the way the rule would write it is left as it is and
+///   isn't reported, so History only credits the dictionary with real fixes.
 public struct DictionaryCorrector: Sendable {
-    private let rules: [Rule]
-
-    private struct Rule: Sendable {
-        let regex: NSRegularExpression
-        /// What the rule writes, verbatim.
-        let write: String
-        /// The same in NFC, to compare with text (which is NFC by then).
-        let normalizedWrite: String
-        let trigger: String
+    /// One enabled correction, compiled.
+    private struct CompiledRule: Sendable {
+        let pattern: NSRegularExpression
+        let replacement: String
     }
+
+    /// A stretch of the transcript, in UTF-16 units, and what goes there instead.
+    private struct Splice {
+        let range: NSRange
+        let text: String
+    }
+
+    /// Longest trigger first.
+    private let rules: [CompiledRule]
 
     public init(entries: [DictionaryEntry]) {
-        // Longest trigger first. Sorting by the trigger's length is what makes "Claude Code"
-        // win over "Claude": the longer rule claims the span first, and the shorter one may
-        // not match inside it.
-        let corrections = entries
-            .filter { $0.isEnabled && $0.kind == .correction }
-            .filter { !$0.hear.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
-            .sorted { $0.hear.count > $1.hear.count }
-
-        rules = corrections.compactMap { entry in
-            guard let regex = Self.makeRegex(for: entry.hear) else { return nil }
-            return Rule(
-                regex: regex,
-                write: entry.write,
-                normalizedWrite: entry.write.precomposedStringWithCanonicalMapping,
-                trigger: entry.hear
-            )
+        let usable = entries.enumerated().filter {
+            $0.element.isEnabled && $0.element.kind == .correction
+                && !$0.element.hear.trimmed.isEmpty
+        }
+        // Ordering by trigger length is what lets a longer rule claim its text before a
+        // shorter one that overlaps it. Equal lengths keep the order the entries came in.
+        let longestFirst = usable.sorted { lhs, rhs in
+            let lhsLength = lhs.element.hear.count
+            let rhsLength = rhs.element.hear.count
+            return lhsLength == rhsLength ? lhs.offset < rhs.offset : lhsLength > rhsLength
+        }
+        rules = longestFirst.compactMap { candidate in
+            guard let pattern = Self.pattern(for: candidate.element.hear) else { return nil }
+            return CompiledRule(pattern: pattern, replacement: candidate.element.write)
         }
     }
 
+    /// True when there are no enabled corrections, so `apply(to:)` would change nothing.
     public var isEmpty: Bool { rules.isEmpty }
 
-    /// Applies every rule, longest trigger first, in a single pass over the text.
+    /// Runs every rule over `text`.
     ///
-    /// - Returns: the rewritten text, plus one `AppliedCorrection` per rule that changed something.
+    /// - Returns: the corrected text, and one `AppliedCorrection` for each rule that changed
+    ///   at least one place.
     public func apply(to text: String) -> (text: String, applied: [AppliedCorrection]) {
-        guard !rules.isEmpty, !text.isEmpty else { return (text, []) }
+        if rules.isEmpty || text.isEmpty { return (text, []) }
 
-        // Normalize to NFC before matching. macOS hands back decomposed (NFC vs NFD) strings
-        // in several places — a filesystem read of the dictionary being the obvious one — and
-        // "café" decomposed is five scalars where composed is four. The pattern and the text
-        // must be in the same form or an accented trigger silently never matches. The Windows
-        // implementation normalizes identically; this is part of the shared contract.
-        let source = text.precomposedStringWithCanonicalMapping
-        let heardText = source as NSString
-        let whole = NSRange(location: 0, length: heardText.length)
-        var claimed: [NSRange] = []
-        var edits: [(range: NSRange, write: String)] = []
-        var applied: [AppliedCorrection] = []
+        // Text can arrive decomposed (a plain letter followed by a combining accent), from a
+        // file read or another app. The patterns are composed, so the text has to be too, or
+        // an accented trigger would never match.
+        let heard = text.precomposedStringWithCanonicalMapping
+        let units = NSString(string: heard)
+        let whole = NSRange(location: 0, length: units.length)
+
+        // UTF-16 offsets that some rule has already matched.
+        var claimed = IndexSet()
+        var splices: [Splice] = []
+        var report: [AppliedCorrection] = []
 
         for rule in rules {
-            var heard: String?
-            var changed = 0
-            for match in rule.regex.matches(in: source, range: whole) {
-                // A longer rule got here first; its span, and what it writes there, are final.
-                guard !claimed.contains(where: { NSIntersectionRange($0, match.range).length > 0 }) else { continue }
-                claimed.append(match.range)
-                let original = heardText.substring(with: match.range)
-                // Already right: nothing to change, nothing to report.
-                guard original != rule.normalizedWrite else { continue }
-                edits.append((match.range, rule.write))
-                // Record what the engine actually produced, not the rule's trigger — seeing
-                // the real mishearing is the point, and it can differ from the trigger in case
-                // or spacing ("CloudCode" matched by "cloud code").
-                if heard == nil { heard = original }
-                changed += 1
+            var firstChanged: String?
+            var changes = 0
+
+            for match in rule.pattern.matches(in: heard, range: whole) {
+                let span = match.range.location ..< match.range.location + match.range.length
+                if claimed.intersects(integersIn: span) { continue }
+                claimed.insert(integersIn: span)
+
+                let found = units.substring(with: match.range)
+                // Swift compares strings by canonical equivalence, so this also holds when
+                // the rule's spelling was typed in decomposed form.
+                if found == rule.replacement { continue }
+
+                splices.append(Splice(range: match.range, text: rule.replacement))
+                changes += 1
+                if firstChanged == nil { firstChanged = found }
             }
-            if let heard {
-                applied.append(AppliedCorrection(from: heard, to: rule.write, count: changed))
+
+            if let firstChanged {
+                report.append(AppliedCorrection(from: firstChanged, to: rule.replacement, count: changes))
             }
         }
 
-        guard !edits.isEmpty else { return (source, applied) }
-        // From the end backwards, so each range still points at the text it matched.
-        let result = NSMutableString(string: source)
-        for edit in edits.sorted(by: { $0.range.location > $1.range.location }) {
-            result.replaceCharacters(in: edit.range, with: edit.write)
-        }
-        return (result as String, applied)
+        return (Self.splice(splices, into: units), report)
     }
 
-    /// Builds the pattern for one trigger phrase.
+    /// `text` with each splice's range replaced by its text. Splices never overlap.
+    private static func splice(_ splices: [Splice], into text: NSString) -> String {
+        var output = ""
+        var cursor = 0
+        for splice in splices.sorted(by: { $0.range.location < $1.range.location }) {
+            output += text.substring(with: NSRange(location: cursor, length: splice.range.location - cursor))
+            output += splice.text
+            cursor = splice.range.location + splice.range.length
+        }
+        output += text.substring(from: cursor)
+        return output
+    }
+
+    /// The regular expression for one trigger, or nil when there's nothing to match.
     ///
-    /// The parts are joined with `[\s\-]*` — zero or more spaces or hyphens — which is what
-    /// catches "CloudCode" and "Cloud-Code" alongside the spaced form.
+    /// The trigger is split into words at spaces, tabs and hyphens. Each word is escaped, so
+    /// punctuation in it is matched literally, and the words are joined by `[\s\-]*`: any
+    /// run of whitespace and hyphens, including none.
     ///
-    /// The fences are lookarounds on letters and digits rather than `\b`. `\b` would treat a
-    /// trailing hyphen or apostrophe as a boundary and let a rule bite into a longer word;
-    /// requiring that no letter or digit sits on either side is the stricter guarantee, and
-    /// it's what keeps "cloud code" off "Cloudflare".
-    private static func makeRegex(for trigger: String) -> NSRegularExpression? {
-        // NFC here too, matching `apply(to:)` — a trigger typed into the UI and a trigger read
-        // back from the dictionary file can arrive in different normal forms.
-        let parts = trigger
-            .precomposedStringWithCanonicalMapping
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-            .split(whereSeparator: { $0 == " " || $0 == "-" || $0 == "\t" })
-            .map { NSRegularExpression.escapedPattern(for: String($0)) }
+    /// Both ends are guarded by lookarounds that forbid a letter or digit. `\b` isn't strict
+    /// enough: it counts a hyphen or apostrophe as the edge of a word, which would let a rule
+    /// fire on part of a longer word.
+    private static func pattern(for trigger: String) -> NSRegularExpression? {
+        // Composed, like the text in `apply(to:)`: a trigger typed in the app and one read
+        // back from the dictionary file aren't always in the same form.
+        let words = trigger.precomposedStringWithCanonicalMapping.trimmed
+            .split(whereSeparator: { " \t-".contains($0) })
+        if words.isEmpty { return nil }
 
-        guard !parts.isEmpty else { return nil }
-
-        let body = parts.joined(separator: "[\\s\\-]*")
-        let pattern = "(?<![\\p{L}\\p{N}])\(body)(?![\\p{L}\\p{N}])"
-
-        return try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive])
+        let gap = #"[\s\-]*"#
+        let wordCharacter = #"[\p{L}\p{N}]"#
+        let body = words
+            .map { word in NSRegularExpression.escapedPattern(for: String(word)) }
+            .joined(separator: gap)
+        return try? NSRegularExpression(
+            pattern: "(?<!\(wordCharacter))\(body)(?!\(wordCharacter))", options: .caseInsensitive)
     }
 }
 
-// MARK: - Engine biasing
+// MARK: - Engine hints
 
-public extension DictionaryCorrector {
-    /// The phrases to hand the speech engine as context before it transcribes.
+extension DictionaryCorrector {
+    /// The most phrases handed to the speech engine as hints.
     ///
-    /// Kept deliberately short. These models drift when given a long context list — on quiet
-    /// or ambiguous audio they start inventing text from the vocabulary they were primed
-    /// with, which is a far worse failure than the misspelling it was meant to fix.
+    /// More isn't better. With a long hint list, the engine starts writing hint words nobody
+    /// said when the audio is quiet or unclear, which is worse than an occasional misspelling.
     public static let biasLimit = 40
 
-    /// - Returns: the correct spellings — `.term` words and the *write* side of corrections —
-    ///   most recently useful first, capped at `biasLimit`.
+    /// The spellings to give the speech engine as hints, in the order of `entries`.
+    ///
+    /// Takes the `write` side of every enabled entry, trimmed. Blank phrases are skipped, as is
+    /// any phrase that only differs in case from one already taken, and the list stops at
+    /// `biasLimit`.
     public static func biasPhrases(from entries: [DictionaryEntry]) -> [String] {
-        var seen = Set<String>()
-        var phrases: [String] = []
+        var hints: [String] = []
+        var taken = Set<String>()
 
-        for entry in entries where entry.isEnabled {
-            let phrase = entry.write.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !phrase.isEmpty, seen.insert(phrase.lowercased()).inserted else { continue }
-            phrases.append(phrase)
-            if phrases.count == biasLimit { break }
+        for entry in entries {
+            guard hints.count < biasLimit else { break }
+            guard entry.isEnabled else { continue }
+            let hint = entry.write.trimmed
+            if hint.isEmpty || !taken.insert(hint.lowercased()).inserted { continue }
+            hints.append(hint)
         }
 
-        return phrases
+        return hints
     }
 }

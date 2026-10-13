@@ -1,8 +1,7 @@
 # Birdtown Flow, architecture and working agreement
 
 Birdtown Flow is push-to-talk dictation for macOS: hold a key, speak, release, and polished text
-lands wherever you were typing. It is a fork of `per-simmons/murmur-youtube`, rebuilt to be
-a product that can stand next to Wispr Flow.
+lands wherever you were typing. It is built to be a product that can stand next to Wispr Flow.
 
 ## Product surface
 
@@ -23,7 +22,7 @@ a product that can stand next to Wispr Flow.
 ## Layers
 
 ```
-Sources/MurmurDictionary   correction rules. Platform-neutral; shared contract with windows/.
+Sources/MurmurDictionary   correction rules. Foundation only, builds and tests on Linux too.
 Sources/MurmurKit          pure logic. Foundation only, builds and tests on Linux too.
   Models/                  shared value types (HistoryRecord, AppContext, Snippet, styles…)
   Text/                    TextPipeline, SnippetStore

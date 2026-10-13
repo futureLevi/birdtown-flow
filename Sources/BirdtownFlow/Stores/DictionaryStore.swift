@@ -3,29 +3,38 @@ import MurmurKit
 import Foundation
 import Observation
 
-/// The dictionary, persisted as a plain text file you can edit by hand.
+/// The user's dictionary, kept in `dictionary.txt` so it can be changed in any text editor.
 ///
-/// A text file rather than JSON, because the spec asks for something editable outside the UI
-/// and JSON is only nominally that — quoting, escaping and a trailing-comma trap for anyone
-/// adding a line in a hurry. The format is one entry per line:
+/// Plain lines rather than JSON on purpose: someone adding a word by hand shouldn't have to
+/// get quotes, escapes and commas right. Each line is one entry:
 ///
 /// ```
-/// Anthropic
-/// Vercel
-/// cloud code -> Claude Code
-/// # off: whisper flow -> Wispr Flow
+/// Birdtown
+/// bird town -> Birdtown
+/// # off: para keet -> Parakeet
 /// ```
 ///
-/// A bare line is a term. `X -> Y` is a correction. `#` starts a comment, and a disabled
-/// entry is written as a `# off:` comment so it survives a round trip through the file
-/// without silently disappearing.
+/// A line on its own is a term, and `heard -> written` is a correction. Lines starting with
+/// `#` are notes and are skipped, except `# off:`, which holds a switched-off entry: turning
+/// an entry off in the app keeps it in the file instead of deleting it.
 ///
-/// The file is watched, so editing it in a text editor updates the UI live and vice versa.
+/// While the app runs, edits go both ways: saving the file updates the Dictionary screen,
+/// and changes made in the app are written straight back to the file.
 @MainActor
 @Observable
 final class DictionaryStore {
     static let shared = DictionaryStore()
 
+    static var fileURL: URL {
+        AppPaths.support.appendingPathComponent("dictionary.txt")
+    }
+
+    static var aliasesURL: URL {
+        AppPaths.support.appendingPathComponent("dictionary-usage.json")
+    }
+
+    /// Every entry in file order, including any still inside a delete's undo window; most
+    /// callers want `visible`.
     private(set) var entries: [DictionaryEntry] = []
 
     /// Bumped whenever entries change. `corrector` and `biasPhrases` are cached against it,
@@ -41,7 +50,8 @@ final class DictionaryStore {
     /// closes; the page hides them and dictation ignores them.
     let deletion: UndoableDeletion
 
-    private var watcher: DispatchSourceFileSystemObject?
+    /// What's watching the file (or, until the file exists, its folder) for outside edits.
+    @ObservationIgnored private var fileWatch: DispatchSourceFileSystemObject?
     /// Exactly what we last wrote (or read), so our own save — which the watcher only sees
     /// after `save()` has returned — doesn't read back as an external edit.
     @ObservationIgnored private var lastWrittenText: String?
@@ -51,19 +61,11 @@ final class DictionaryStore {
     /// user's real dictionary file.
     @ObservationIgnored private var persists = true
 
-    static var fileURL: URL {
-        AppPaths.support.appendingPathComponent("dictionary.txt")
-    }
-
-    static var aliasesURL: URL {
-        AppPaths.support.appendingPathComponent("dictionary-usage.json")
-    }
-
     private init() {
         deletion = UndoableDeletion()
-        load()
+        reloadFromDisk()
         aliases = UsageAliases.load(from: Self.aliasesURL)
-        startWatching()
+        watchFile()
     }
 
     /// In-memory only — for previews and snapshots. Never reads, writes or watches the file.
@@ -74,7 +76,7 @@ final class DictionaryStore {
         revision = 1
     }
 
-    // MARK: - Editing
+    // MARK: - Changing entries
 
     func add(_ entry: DictionaryEntry) {
         // Adding moves on from a delete, and may reuse its wording: make that delete final.
@@ -83,6 +85,7 @@ final class DictionaryStore {
         save()
     }
 
+    /// Replaces the entry that has `entry`'s id. Does nothing if that entry is gone.
     func update(_ entry: DictionaryEntry) {
         // Taking the wording of an entry waiting out its delete makes that delete final, so
         // Undo can't bring back a duplicate (the editor ignores pending entries when it
@@ -139,10 +142,10 @@ final class DictionaryStore {
     /// Case- and diacritic-insensitive search across both sides of an entry. Entries waiting
     /// out a delete's undo window are left out.
     func filtered(by query: String) -> [DictionaryEntry] {
-        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return visible }
-        return visible.filter {
-            $0.write.localizedStandardContains(trimmed) || $0.hear.localizedStandardContains(trimmed)
+        let needle = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !needle.isEmpty else { return visible }
+        return visible.filter { entry in
+            [entry.write, entry.hear].contains { $0.localizedStandardContains(needle) }
         }
     }
 
@@ -202,13 +205,14 @@ final class DictionaryStore {
         saveAliases()
     }
 
-    // MARK: - Persistence
+    // MARK: - Reading and writing
 
-    private func load() {
+    /// Reads the file again: at launch, and whenever it changes underneath us. A missing or
+    /// unreadable file is an empty dictionary.
+    private func reloadFromDisk() {
         guard let text = try? String(contentsOf: Self.fileURL, encoding: .utf8) else {
             lastWrittenText = nil
-            entries = []
-            revision += 1
+            replaceEntries(with: [])
             return
         }
         // Our own save echoing back through the watcher: nothing changed.
@@ -219,9 +223,36 @@ final class DictionaryStore {
         // and an open editor, a pending delete or a selection can still find its entry.
         let parsed = Self.keepingIDs(of: entries, in: Self.parse(text))
         guard parsed != entries else { return }  // e.g. only a comment changed
-        entries = parsed
+        replaceEntries(with: parsed)
+    }
+
+    private func replaceEntries(with new: [DictionaryEntry]) {
+        entries = new
         revision += 1
     }
+
+    /// Call after every change to `entries`: bumps `revision`, then writes the file (unless
+    /// this is an in-memory store).
+    private func save() {
+        revision += 1
+        guard persists else { return }
+        let text = Self.fileText(for: entries)
+        do {
+            try text.write(to: Self.fileURL, atomically: true, encoding: .utf8)
+            lastWrittenText = text
+        } catch {}
+    }
+
+    /// Writes the aliases, dropping any whose replacement is gone (edited or deleted in the
+    /// text file, where no rename can be seen).
+    private func saveAliases() {
+        let owners = Set(entries.filter { $0.kind == .correction }.map(Self.usageKey))
+        aliases.prune(keeping: owners)
+        guard persists else { return }
+        aliases.save(to: Self.aliasesURL)
+    }
+
+    // MARK: - File format
 
     /// The file has no ids, so every read makes new ones. An entry that's still there after
     /// a reload keeps the id it had, so an open editor, a pending delete or a selection
@@ -247,99 +278,97 @@ final class DictionaryStore {
         "\(entry.kind.rawValue)\u{1F}\(entry.hear)\u{1F}\(entry.write)"
     }
 
+    /// Reads entries from the file's text. Blank lines, notes and lines that don't make a
+    /// whole entry (`-> Birdtown`, a bare `# off:`) are skipped.
     static func parse(_ text: String) -> [DictionaryEntry] {
-        text.split(separator: "\n", omittingEmptySubsequences: false).compactMap { rawLine in
-            var line = rawLine.trimmingCharacters(in: .whitespaces)
-            guard !line.isEmpty else { return nil }
-
-            // `# off:` is a disabled entry; any other comment is just a comment.
-            var isEnabled = true
-            if line.hasPrefix("#") {
-                let stripped = line.dropFirst().trimmingCharacters(in: .whitespaces)
-                guard stripped.lowercased().hasPrefix("off:") else { return nil }
-                line = stripped.dropFirst(4).trimmingCharacters(in: .whitespaces)
-                isEnabled = false
-                guard !line.isEmpty else { return nil }
-            }
-
-            if let arrow = line.range(of: "->") {
-                let hear = line[..<arrow.lowerBound].trimmingCharacters(in: .whitespaces)
-                let write = line[arrow.upperBound...].trimmingCharacters(in: .whitespaces)
-                guard !hear.isEmpty, !write.isEmpty else { return nil }
-                return DictionaryEntry(kind: .correction, write: write, hear: hear, isEnabled: isEnabled)
-            }
-
-            return DictionaryEntry(kind: .term, write: line, isEnabled: isEnabled)
+        text.split(separator: "\n").compactMap { line in
+            entry(from: line.trimmingCharacters(in: .whitespaces))
         }
     }
 
-    private func save() {
-        revision += 1
-        guard persists else { return }
+    /// One trimmed line as an entry, or `nil` when it isn't one.
+    private static func entry(from line: String) -> DictionaryEntry? {
+        var body = line
+        var isEnabled = true
+        if body.hasPrefix("#") {
+            guard let switchedOff = switchedOffEntry(inNote: body) else { return nil }
+            body = switchedOff
+            isEnabled = false
+        }
+        guard !body.isEmpty else { return nil }
 
-        let body = entries.map(\.fileLine).joined(separator: "\n")
-        let text = Self.header + body + "\n"
-        do {
-            try text.write(to: Self.fileURL, atomically: true, encoding: .utf8)
-            lastWrittenText = text
-        } catch {}
+        guard let separator = body.range(of: "->") else {
+            return DictionaryEntry(kind: .term, write: body, isEnabled: isEnabled)
+        }
+        let heard = body[..<separator.lowerBound].trimmingCharacters(in: .whitespaces)
+        let written = body[separator.upperBound...].trimmingCharacters(in: .whitespaces)
+        guard !heard.isEmpty, !written.isEmpty else { return nil }
+        return DictionaryEntry(kind: .correction, write: written, hear: heard, isEnabled: isEnabled)
     }
 
-    /// Writes the aliases, dropping any whose replacement is gone (edited or deleted in the
-    /// text file, where no rename can be seen).
-    private func saveAliases() {
-        let owners = Set(entries.filter { $0.kind == .correction }.map(Self.usageKey))
-        aliases.prune(keeping: owners)
-        guard persists else { return }
-        aliases.save(to: Self.aliasesURL)
+    /// The entry text of a `# off:` line (the marker in any case), or `nil` for an ordinary note.
+    private static func switchedOffEntry(inNote line: String) -> String? {
+        let note = line.dropFirst().trimmingCharacters(in: .whitespaces)
+        let marker = "off:"
+        guard note.lowercased().hasPrefix(marker) else { return nil }
+        return note.dropFirst(marker.count).trimmingCharacters(in: .whitespaces)
     }
 
+    /// What `save()` writes: the header, then one line per entry, in order.
+    private static func fileText(for entries: [DictionaryEntry]) -> String {
+        header + entries.map(\.fileLine).joined(separator: "\n") + "\n"
+    }
+
+    /// A reminder of the format at the top of the file. Every line is a note, so reading it
+    /// back adds nothing.
     private static let header = """
-        # Birdtown Flow dictionary
+        # Birdtown Flow dictionary. One entry per line:
         #
-        #   Anthropic                 a term — the engine is told this word exists
-        #   cloud code -> Claude Code a correction — when you hear X, write Y
-        #   # off: some rule -> Rule  a disabled entry
+        #   Birdtown                        a word, spelled the way you want it
+        #   bird town -> Birdtown           when you say the left side, write the right
+        #   # off: bird town -> Birdtown    switched off, kept for later
         #
-        # Edit this file directly if you like; the app picks up changes immediately.
+        # Other lines starting with # are skipped. Save, and the app picks up your changes.
 
         """
 
-    // MARK: - External edits
+    // MARK: - Outside edits
 
-    /// Watches the file so a hand edit shows up in the UI without a relaunch.
+    /// Written to, grown, replaced or removed: anything that can mean new contents.
+    private static let watchedChanges: DispatchSource.FileSystemEvent = [.write, .extend, .rename, .delete]
+
+    /// Watches for the file being changed by something other than the app.
     ///
-    /// Rearms after every event: an atomic write replaces the inode, so the descriptor we
-    /// were watching is gone the moment the file changes — including when *we* save.
-    private func startWatching() {
-        watcher?.cancel()
-        watcher = nil
+    /// Saving replaces the file with a new one (ours too: `save()` writes atomically), and
+    /// the descriptor being watched still points at the old one, so the watch is set up
+    /// again after every change. Until the file exists its folder is watched instead, so a
+    /// dictionary.txt made in an editor or Terminal is noticed as well.
+    private func watchFile() {
+        fileWatch?.cancel()
+        fileWatch = nil
 
-        // No file yet: watch its folder instead, so a dictionary.txt created in a text editor
-        // or Terminal is picked up too, not just one the app wrote first.
-        let exists = FileManager.default.fileExists(atPath: Self.fileURL.path)
-        let watched = exists ? Self.fileURL : Self.fileURL.deletingLastPathComponent()
-        let descriptor = open(watched.path, O_EVTONLY)
+        let fileExisted = FileManager.default.fileExists(atPath: Self.fileURL.path)
+        let target = fileExisted ? Self.fileURL : Self.fileURL.deletingLastPathComponent()
+        let descriptor = open(target.path, O_EVTONLY)
         guard descriptor >= 0 else { return }
 
         let source = DispatchSource.makeFileSystemObjectSource(
-            fileDescriptor: descriptor,
-            eventMask: [.write, .delete, .rename, .extend],
-            queue: .main
-        )
-
+            fileDescriptor: descriptor, eventMask: Self.watchedChanges, queue: .main)
         source.setEventHandler { [weak self] in
-            guard let self else { return }
-            // A folder event is any file in it changing; only reload once ours exists.
-            let appeared = !exists && FileManager.default.fileExists(atPath: Self.fileURL.path)
-            // `load()` ignores our own saves by content — a timing flag can't, since this
-            // handler only runs after `save()` has returned.
-            if exists || appeared { self.load() }
-            if exists || appeared { self.startWatching() }
+            self?.watchedPathChanged(fileExisted: fileExisted)
         }
         source.setCancelHandler { close(descriptor) }
         source.resume()
+        fileWatch = source
+    }
 
-        watcher = source
+    private func watchedPathChanged(fileExisted: Bool) {
+        // While the folder is watched, any file in it changing lands here; act only once the
+        // dictionary itself is there.
+        guard fileExisted || FileManager.default.fileExists(atPath: Self.fileURL.path) else { return }
+        // `reloadFromDisk()` ignores our own saves by content — a timing flag can't, since
+        // this handler only runs after `save()` has returned.
+        reloadFromDisk()
+        watchFile()
     }
 }
