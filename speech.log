@@ -1,0 +1,48 @@
+[05:31:26.086] [INFO] [FluidAudio.AsrModels] Loading ASR models from: /Users/runner/Library/Application Support/FluidAudio/Models/parakeet-ultra
+[05:31:26.087] [INFO] [FluidAudio.AsrModels] Loading ASR models from: /Users/runner/Library/Application Support/FluidAudio/Models/parakeet-ultra
+[05:31:26.090] [INFO] [FluidAudio.DownloadUtils] Host environment: macOS Version 26.6.2 (Build 25G83), arch=arm64, chip=Apple M1 (Virtual), cores=3/3, mem=7 GB, rosetta=false
+[05:31:26.092] [INFO] [FluidAudio.DownloadUtils] Found parakeet-ultra locally, no download needed
+[05:31:26.092] [INFO] [FluidAudio.DownloadUtils] Found parakeet-ultra locally, no download needed
+[05:31:26.209] [INFO] [FluidAudio.DownloadUtils] Compiled model Preprocessor.mlmodelc in 116.00 ms :: macOS Version 26.6.2 (Build 25G83), arch=arm64, chip=Apple M1 (Virtual), cores=3/3, mem=7 GB, rosetta=false
+[05:31:26.209] [INFO] [FluidAudio.DownloadUtils] Compiled model Preprocessor.mlmodelc in 116.06 ms :: macOS Version 26.6.2 (Build 25G83), arch=arm64, chip=Apple M1 (Virtual), cores=3/3, mem=7 GB, rosetta=false
+[05:31:26.209] [INFO] [FluidAudio.AsrModels] Loaded Preprocessor.mlmodelc with compute units: cpuOnly
+[05:31:26.209] [INFO] [FluidAudio.AsrModels] Loaded Preprocessor.mlmodelc with compute units: cpuOnly
+[05:31:26.209] [INFO] [FluidAudio.DownloadUtils] Found parakeet-ultra locally, no download needed
+[05:31:26.209] [INFO] [FluidAudio.DownloadUtils] Found parakeet-ultra locally, no download needed
+[05:31:28.892] [INFO] [FluidAudio.DownloadUtils] Compiled model Encoder.mlmodelc in 2682.50 ms :: macOS Version 26.6.2 (Build 25G83), arch=arm64, chip=Apple M1 (Virtual), cores=3/3, mem=7 GB, rosetta=false
+[05:31:28.892] [INFO] [FluidAudio.AsrModels] Loaded Encoder.mlmodelc with compute units: cpuAndNeuralEngine
+[05:31:28.893] [INFO] [FluidAudio.DownloadUtils] Found parakeet-ultra locally, no download needed
+[05:31:28.923] [INFO] [FluidAudio.DownloadUtils] Compiled model Encoder.mlmodelc in 2713.78 ms :: macOS Version 26.6.2 (Build 25G83), arch=arm64, chip=Apple M1 (Virtual), cores=3/3, mem=7 GB, rosetta=false
+[05:31:28.923] [INFO] [FluidAudio.AsrModels] Loaded Encoder.mlmodelc with compute units: cpuAndNeuralEngine
+[05:31:28.923] [INFO] [FluidAudio.DownloadUtils] Found parakeet-ultra locally, no download needed
+[05:31:29.158] [INFO] [FluidAudio.DownloadUtils] Compiled model Decoder.mlmodelc in 264.54 ms :: macOS Version 26.6.2 (Build 25G83), arch=arm64, chip=Apple M1 (Virtual), cores=3/3, mem=7 GB, rosetta=false
+[05:31:29.158] [INFO] [FluidAudio.DownloadUtils] Compiled model Decoder.mlmodelc in 234.39 ms :: macOS Version 26.6.2 (Build 25G83), arch=arm64, chip=Apple M1 (Virtual), cores=3/3, mem=7 GB, rosetta=false
+[05:31:29.158] [INFO] [FluidAudio.DownloadUtils] Found parakeet-ultra locally, no download needed
+[05:31:29.158] [INFO] [FluidAudio.DownloadUtils] Found parakeet-ultra locally, no download needed
+[05:31:29.235] [INFO] [FluidAudio.DownloadUtils] Compiled model JointDecisionv3.mlmodelc in 76.99 ms :: macOS Version 26.6.2 (Build 25G83), arch=arm64, chip=Apple M1 (Virtual), cores=3/3, mem=7 GB, rosetta=false
+[05:31:29.235] [INFO] [FluidAudio.AsrModels] Loaded JointDecisionv3.mlmodelc
+[05:31:29.235] [INFO] [FluidAudio.DownloadUtils] Compiled model JointDecisionv3.mlmodelc in 77.14 ms :: macOS Version 26.6.2 (Build 25G83), arch=arm64, chip=Apple M1 (Virtual), cores=3/3, mem=7 GB, rosetta=false
+[05:31:29.235] [INFO] [FluidAudio.AsrModels] Loaded JointDecisionv3.mlmodelc
+[05:31:29.246] [INFO] [FluidAudio.AsrModels] Loaded vocabulary with 8192 tokens from /Users/runner/Library/Application Support/FluidAudio/Models/parakeet-ultra/parakeet_vocab.json
+[05:31:29.246] [INFO] [FluidAudio.AsrModels] Loaded vocabulary with 8192 tokens from /Users/runner/Library/Application Support/FluidAudio/Models/parakeet-ultra/parakeet_vocab.json
+[05:31:29.246] [INFO] [FluidAudio.AsrModels] Successfully loaded all ASR models with optimized compute units
+[05:31:29.247] [INFO] [FluidAudio.AsrModels] Successfully loaded all ASR models with optimized compute units
+[05:31:29.856] [INFO] [FluidAudio.CtcModels] Preparing CTC models (Parakeet CTC 110M (hybrid)) at: /Users/runner/Library/Application Support/FluidAudio/Models/parakeet-ctc-110m-coreml
+[05:31:29.856] [INFO] [FluidAudio.CtcModels] Preparing CTC models (Parakeet CTC 110M (hybrid)) at: /Users/runner/Library/Application Support/FluidAudio/Models/parakeet-ctc-110m-coreml
+[05:31:29.856] [INFO] [FluidAudio.CtcModels] CTC models already present at: /Users/runner/Library/Application Support/FluidAudio/Models/parakeet-ctc-110m-coreml
+[05:31:29.857] [INFO] [FluidAudio.CtcModels] CTC models already present at: /Users/runner/Library/Application Support/FluidAudio/Models/parakeet-ctc-110m-coreml
+[05:31:29.857] [INFO] [FluidAudio.CtcModels] Loading CTC models (Parakeet CTC 110M (hybrid)) from: /Users/runner/Library/Application Support/FluidAudio/Models/parakeet-ctc-110m-coreml
+[05:31:29.857] [INFO] [FluidAudio.CtcModels] Loading CTC models (Parakeet CTC 110M (hybrid)) from: /Users/runner/Library/Application Support/FluidAudio/Models/parakeet-ctc-110m-coreml
+[05:31:29.857] [INFO] [FluidAudio.DownloadUtils] Found parakeet-ctc-110m-coreml locally, no download needed
+[05:31:29.857] [INFO] [FluidAudio.DownloadUtils] Found parakeet-ctc-110m-coreml locally, no download needed
+[05:31:29.890] [INFO] [FluidAudio.DownloadUtils] Compiled model MelSpectrogram.mlmodelc in 33.23 ms :: macOS Version 26.6.2 (Build 25G83), arch=arm64, chip=Apple M1 (Virtual), cores=3/3, mem=7 GB, rosetta=false
+[05:31:29.890] [INFO] [FluidAudio.DownloadUtils] Compiled model MelSpectrogram.mlmodelc in 33.62 ms :: macOS Version 26.6.2 (Build 25G83), arch=arm64, chip=Apple M1 (Virtual), cores=3/3, mem=7 GB, rosetta=false
+[smoke] preparing Parakeet Ultra
+[smoke] model state ready after 3.771486333 seconds
+[smoke] 105204 samples, 6.58 s
+[smoke] pass 1 · Parakeet Ultra · 0.330691417 seconds
+[smoke] raw:   Hello Birdtown Flow. This is a quick test of the dictation pipeline, um, running entirely on this Mac.
+[smoke] final: Hello Birdtown Flow. This is a quick test of the dictation pipeline running entirely on this Mac.
+[smoke] pass 2 · Parakeet Ultra · 0.2571665 seconds
+[smoke] raw:   Hello Birdtown Flow. This is a quick test of the dictation pipeline, um, running entirely on this Mac.
+[smoke] final: Hello Birdtown Flow. This is a quick test of the dictation pipeline running entirely on this Mac.
