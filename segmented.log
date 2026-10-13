@@ -1,0 +1,344 @@
+[21:42:12.668] [INFO] [FluidAudio.AsrModels] Loading ASR models from: /Users/runner/Library/Application Support/FluidAudio/Models/parakeet-ultra
+[21:42:12.681] [INFO] [FluidAudio.AsrModels] Loading ASR models from: /Users/runner/Library/Application Support/FluidAudio/Models/parakeet-tdt-0.6b-v3
+[21:42:12.681] [INFO] [FluidAudio.DownloadUtils] Host environment: macOS Version 26.6.2 (Build 25G83), arch=arm64, chip=Apple M1 (Virtual), cores=3/3, mem=7 GB, rosetta=false
+[21:42:12.683] [INFO] [FluidAudio.DownloadUtils] Found parakeet-ultra locally, no download needed
+[21:42:12.684] [INFO] [FluidAudio.DownloadUtils] Found parakeet-tdt-0.6b-v3 locally, no download needed
+[21:42:12.742] [INFO] [FluidAudio.DownloadUtils] Compiled model Preprocessor.mlmodelc in 60.36 ms :: macOS Version 26.6.2 (Build 25G83), arch=arm64, chip=Apple M1 (Virtual), cores=3/3, mem=7 GB, rosetta=false
+[21:42:12.742] [INFO] [FluidAudio.AsrModels] Loaded Preprocessor.mlmodelc with compute units: cpuOnly
+[21:42:12.744] [INFO] [FluidAudio.DownloadUtils] Found parakeet-ultra locally, no download needed
+[21:42:12.853] [INFO] [FluidAudio.DownloadUtils] Compiled model Preprocessor.mlmodelc in 170.15 ms :: macOS Version 26.6.2 (Build 25G83), arch=arm64, chip=Apple M1 (Virtual), cores=3/3, mem=7 GB, rosetta=false
+[21:42:12.854] [INFO] [FluidAudio.AsrModels] Loaded Preprocessor.mlmodelc with compute units: cpuOnly
+[21:42:12.854] [INFO] [FluidAudio.DownloadUtils] Found parakeet-tdt-0.6b-v3 locally, no download needed
+[21:42:13.131] [INFO] [FluidAudio.DownloadUtils] Compiled model Encoder.mlmodelc in 388.31 ms :: macOS Version 26.6.2 (Build 25G83), arch=arm64, chip=Apple M1 (Virtual), cores=3/3, mem=7 GB, rosetta=false
+[21:42:13.132] [INFO] [FluidAudio.AsrModels] Loaded Encoder.mlmodelc with compute units: cpuAndNeuralEngine
+[21:42:13.132] [INFO] [FluidAudio.DownloadUtils] Found parakeet-ultra locally, no download needed
+[21:42:22.434] [INFO] [FluidAudio.DownloadUtils] Compiled model Decoder.mlmodelc in 9299.81 ms :: macOS Version 26.6.2 (Build 25G83), arch=arm64, chip=Apple M1 (Virtual), cores=3/3, mem=7 GB, rosetta=false
+[21:42:22.437] [INFO] [FluidAudio.DownloadUtils] Found parakeet-ultra locally, no download needed
+[21:42:22.443] [INFO] [FluidAudio.DownloadUtils] Compiled model Encoder.mlmodelc in 9588.92 ms :: macOS Version 26.6.2 (Build 25G83), arch=arm64, chip=Apple M1 (Virtual), cores=3/3, mem=7 GB, rosetta=false
+[21:42:22.443] [INFO] [FluidAudio.AsrModels] Loaded Encoder.mlmodelc with compute units: cpuAndNeuralEngine
+[21:42:22.443] [INFO] [FluidAudio.DownloadUtils] Found parakeet-tdt-0.6b-v3 locally, no download needed
+[21:42:22.457] [INFO] [FluidAudio.DownloadUtils] Compiled model JointDecisionv3.mlmodelc in 19.64 ms :: macOS Version 26.6.2 (Build 25G83), arch=arm64, chip=Apple M1 (Virtual), cores=3/3, mem=7 GB, rosetta=false
+[21:42:22.457] [INFO] [FluidAudio.AsrModels] Loaded JointDecisionv3.mlmodelc
+[21:42:22.497] [INFO] [FluidAudio.AsrModels] Loaded vocabulary with 8192 tokens from /Users/runner/Library/Application Support/FluidAudio/Models/parakeet-ultra/parakeet_vocab.json
+[21:42:22.499] [INFO] [FluidAudio.AsrModels] Successfully loaded all ASR models with optimized compute units
+[21:42:22.956] [INFO] [FluidAudio.DownloadUtils] Compiled model Decoder.mlmodelc in 512.80 ms :: macOS Version 26.6.2 (Build 25G83), arch=arm64, chip=Apple M1 (Virtual), cores=3/3, mem=7 GB, rosetta=false
+[21:42:22.956] [INFO] [FluidAudio.DownloadUtils] Found parakeet-tdt-0.6b-v3 locally, no download needed
+[21:42:23.118] [INFO] [FluidAudio.DownloadUtils] Compiled model JointDecisionv3.mlmodelc in 161.31 ms :: macOS Version 26.6.2 (Build 25G83), arch=arm64, chip=Apple M1 (Virtual), cores=3/3, mem=7 GB, rosetta=false
+[21:42:23.118] [INFO] [FluidAudio.AsrModels] Loaded JointDecisionv3.mlmodelc
+[21:42:23.129] [INFO] [FluidAudio.AsrModels] Loaded vocabulary with 8192 tokens from /Users/runner/Library/Application Support/FluidAudio/Models/parakeet-tdt-0.6b-v3/parakeet_vocab.json
+[21:42:23.129] [INFO] [FluidAudio.AsrModels] Successfully loaded all ASR models with optimized compute units
+[21:42:24.111] [INFO] [FluidAudio.CtcModels] Preparing CTC models (Parakeet CTC 110M (hybrid)) at: /Users/runner/Library/Application Support/FluidAudio/Models/parakeet-ctc-110m-coreml
+[21:42:24.111] [INFO] [FluidAudio.CtcModels] CTC models already present at: /Users/runner/Library/Application Support/FluidAudio/Models/parakeet-ctc-110m-coreml
+[21:42:24.111] [INFO] [FluidAudio.CtcModels] Loading CTC models (Parakeet CTC 110M (hybrid)) from: /Users/runner/Library/Application Support/FluidAudio/Models/parakeet-ctc-110m-coreml
+[21:42:24.111] [INFO] [FluidAudio.DownloadUtils] Found parakeet-ctc-110m-coreml locally, no download needed
+[21:42:24.148] [INFO] [FluidAudio.DownloadUtils] Compiled model MelSpectrogram.mlmodelc in 35.25 ms :: macOS Version 26.6.2 (Build 25G83), arch=arm64, chip=Apple M1 (Virtual), cores=3/3, mem=7 GB, rosetta=false
+[21:42:24.913] [INFO] [FluidAudio.CtcModels] Preparing CTC models (Parakeet CTC 110M (hybrid)) at: /Users/runner/Library/Application Support/FluidAudio/Models/parakeet-ctc-110m-coreml
+[21:42:24.913] [INFO] [FluidAudio.CtcModels] CTC models already present at: /Users/runner/Library/Application Support/FluidAudio/Models/parakeet-ctc-110m-coreml
+[21:42:24.913] [INFO] [FluidAudio.CtcModels] Loading CTC models (Parakeet CTC 110M (hybrid)) from: /Users/runner/Library/Application Support/FluidAudio/Models/parakeet-ctc-110m-coreml
+[21:42:24.914] [INFO] [FluidAudio.DownloadUtils] Found parakeet-ctc-110m-coreml locally, no download needed
+[21:42:29.987] [INFO] [FluidAudio.DownloadUtils] Compiled model MelSpectrogram.mlmodelc in 5071.48 ms :: macOS Version 26.6.2 (Build 25G83), arch=arm64, chip=Apple M1 (Virtual), cores=3/3, mem=7 GB, rosetta=false
+[21:42:30.000] [INFO] [FluidAudio.DownloadUtils] Compiled model AudioEncoder.mlmodelc in 5852.55 ms :: macOS Version 26.6.2 (Build 25G83), arch=arm64, chip=Apple M1 (Virtual), cores=3/3, mem=7 GB, rosetta=false
+[21:42:30.005] [INFO] [FluidAudio.CtcModels] Loaded CTC vocabulary with 1024 tokens from /Users/runner/Library/Application Support/FluidAudio/Models/parakeet-ctc-110m-coreml/vocab.json
+[21:42:30.005] [INFO] [FluidAudio.CtcModels] Successfully loaded CTC models (Parakeet CTC 110M (hybrid)) and vocabulary
+[21:42:30.024] [DEBUG] [FluidAudio.CtcKeywordSpotter]   Audio input: count=16000/240000, abs_max=0.0001, mean=-0.000001
+[21:42:30.024] [DEBUG] [FluidAudio.CtcKeywordSpotter]   mid_5=[-0.0000, -0.0000, 0.0000, -0.0000, -0.0001]
+[21:42:30.036] [DEBUG] [FluidAudio.CtcKeywordSpotter] Mel features shape: [1, 1, 1501, 80], mel_length: 1501
+[21:42:30.268] [DEBUG] [FluidAudio.CtcKeywordSpotter] CTC outputs available: ctc_head_raw_output=true, ctc_head_output=true
+[21:42:30.268] [DEBUG] [FluidAudio.CtcKeywordSpotter] CTC raw output shape: [1, 1025, 1, 188]
+[21:42:30.268] [DEBUG] [FluidAudio.CtcKeywordSpotter] Using output: ctc_head_raw_output (raw logits)
+[21:42:30.411] [INFO] [FluidAudio.DownloadUtils] Compiled model AudioEncoder.mlmodelc in 423.26 ms :: macOS Version 26.6.2 (Build 25G83), arch=arm64, chip=Apple M1 (Virtual), cores=3/3, mem=7 GB, rosetta=false
+[21:42:30.413] [INFO] [FluidAudio.CtcModels] Loaded CTC vocabulary with 1024 tokens from /Users/runner/Library/Application Support/FluidAudio/Models/parakeet-ctc-110m-coreml/vocab.json
+[21:42:30.413] [INFO] [FluidAudio.CtcModels] Successfully loaded CTC models (Parakeet CTC 110M (hybrid)) and vocabulary
+[21:42:30.424] [DEBUG] [FluidAudio.CtcKeywordSpotter]   Audio input: count=16000/240000, abs_max=0.0001, mean=-0.000001
+[21:42:30.425] [DEBUG] [FluidAudio.CtcKeywordSpotter]   mid_5=[-0.0000, -0.0000, 0.0000, -0.0000, -0.0001]
+[21:42:30.427] [DEBUG] [FluidAudio.CtcKeywordSpotter] Mel features shape: [1, 1, 1501, 80], mel_length: 1501
+[21:42:30.571] [DEBUG] [FluidAudio.CtcKeywordSpotter] CTC outputs available: ctc_head_raw_output=true, ctc_head_output=true
+[21:42:30.571] [DEBUG] [FluidAudio.CtcKeywordSpotter] CTC raw output shape: [1, 1025, 1, 188]
+[21:42:30.571] [DEBUG] [FluidAudio.CtcKeywordSpotter] Using output: ctc_head_raw_output (raw logits)
+[21:42:30.782] [DEBUG] [FluidAudio.CtcKeywordSpotter] [DEBUG] Trimming CTC frames:
+[21:42:30.782] [DEBUG] [FluidAudio.CtcKeywordSpotter] [DEBUG]   totalFrames=188, sampleCount=16000, maxModelSamples=240000
+[21:42:30.782] [DEBUG] [FluidAudio.CtcKeywordSpotter] [DEBUG]   samplesPerFrame=1276.60, validFrames=13, clampedFrames=13
+[21:42:30.782] [DEBUG] [FluidAudio.CtcKeywordSpotter] Log-probs: 13 frames (total: 188), vocab size: 1025
+[21:42:30.862] [DEBUG] [FluidAudio.ChunkProcessor] ChunkProcessor using worker pool of size 4
+[21:42:31.132] [DEBUG] [FluidAudio.CtcKeywordSpotter] [DEBUG] Trimming CTC frames:
+[21:42:31.132] [DEBUG] [FluidAudio.CtcKeywordSpotter] [DEBUG]   totalFrames=188, sampleCount=16000, maxModelSamples=240000
+[21:42:31.140] [DEBUG] [FluidAudio.CtcKeywordSpotter] [DEBUG]   samplesPerFrame=1276.60, validFrames=13, clampedFrames=13
+[21:42:31.140] [DEBUG] [FluidAudio.CtcKeywordSpotter] Log-probs: 13 frames (total: 188), vocab size: 1025
+[21:42:34.848] [DEBUG] [FluidAudio.CtcKeywordSpotter] === Chunked CTC Processing ===
+[21:42:34.849] [DEBUG] [FluidAudio.CtcKeywordSpotter] Total samples: 1442889 (90.18s)
+[21:42:34.849] [DEBUG] [FluidAudio.CtcKeywordSpotter] Chunk size: 240000, overlap: 32000, stride: 208000
+[21:42:34.849] [DEBUG] [FluidAudio.CtcKeywordSpotter] Number of chunks: 7
+[21:42:34.849] [DEBUG] [FluidAudio.CtcKeywordSpotter]   Chunk 1/7: samples [0-240000] = [0.00-15.00s]
+[21:42:35.086] [DEBUG] [FluidAudio.CtcKeywordSpotter]   Audio input: count=240000/240000, abs_max=0.7195, mean=0.000674
+[21:42:35.086] [DEBUG] [FluidAudio.CtcKeywordSpotter]   mid_5=[-0.2599, -0.2898, -0.3074, -0.2994, -0.2562]
+[21:42:35.092] [DEBUG] [FluidAudio.CtcKeywordSpotter] Mel features shape: [1, 1, 1501, 80], mel_length: 1501
+[21:42:35.500] [DEBUG] [FluidAudio.CtcKeywordSpotter] CTC outputs available: ctc_head_raw_output=true, ctc_head_output=true
+[21:42:35.501] [DEBUG] [FluidAudio.CtcKeywordSpotter] CTC raw output shape: [1, 1025, 1, 188]
+[21:42:35.501] [DEBUG] [FluidAudio.CtcKeywordSpotter] Using output: ctc_head_raw_output (raw logits)
+[21:42:35.922] [DEBUG] [FluidAudio.CtcKeywordSpotter] Log-probs: 188 frames (total: 188), vocab size: 1025
+[21:42:35.923] [DEBUG] [FluidAudio.CtcKeywordSpotter]     -> 188 frames, frameDuration=0.0798s
+[21:42:35.923] [DEBUG] [FluidAudio.CtcKeywordSpotter]   Chunk 2/7: samples [208000-448000] = [13.00-28.00s]
+[21:42:36.078] [DEBUG] [FluidAudio.CtcKeywordSpotter]   Audio input: count=240000/240000, abs_max=0.7573, mean=0.000555
+[21:42:36.078] [DEBUG] [FluidAudio.CtcKeywordSpotter]   mid_5=[0.0220, 0.0324, 0.0429, 0.0338, 0.0086]
+[21:42:36.082] [DEBUG] [FluidAudio.CtcKeywordSpotter] Mel features shape: [1, 1, 1501, 80], mel_length: 1501
+[21:42:36.182] [DEBUG] [FluidAudio.CtcKeywordSpotter] CTC outputs available: ctc_head_raw_output=true, ctc_head_output=true
+[21:42:36.182] [DEBUG] [FluidAudio.CtcKeywordSpotter] CTC raw output shape: [1, 1025, 1, 188]
+[21:42:36.182] [DEBUG] [FluidAudio.CtcKeywordSpotter] Using output: ctc_head_raw_output (raw logits)
+[21:42:36.641] [DEBUG] [FluidAudio.CtcKeywordSpotter] Log-probs: 188 frames (total: 188), vocab size: 1025
+[21:42:36.642] [DEBUG] [FluidAudio.CtcKeywordSpotter]     -> 188 frames, frameDuration=0.0798s
+[21:42:36.642] [DEBUG] [FluidAudio.CtcKeywordSpotter]   Chunk 3/7: samples [416000-656000] = [26.00-41.00s]
+[21:42:36.837] [DEBUG] [FluidAudio.CtcKeywordSpotter]   Audio input: count=240000/240000, abs_max=0.7095, mean=0.000490
+[21:42:36.837] [DEBUG] [FluidAudio.CtcKeywordSpotter]   mid_5=[-0.0000, -0.0001, -0.0000, -0.0001, 0.0001]
+[21:42:36.840] [DEBUG] [FluidAudio.CtcKeywordSpotter] Mel features shape: [1, 1, 1501, 80], mel_length: 1501
+[21:42:36.966] [DEBUG] [FluidAudio.CtcKeywordSpotter] CTC outputs available: ctc_head_raw_output=true, ctc_head_output=true
+[21:42:36.966] [DEBUG] [FluidAudio.CtcKeywordSpotter] CTC raw output shape: [1, 1025, 1, 188]
+[21:42:36.966] [DEBUG] [FluidAudio.CtcKeywordSpotter] Using output: ctc_head_raw_output (raw logits)
+[21:42:37.495] [DEBUG] [FluidAudio.CtcKeywordSpotter] Log-probs: 188 frames (total: 188), vocab size: 1025
+[21:42:37.495] [DEBUG] [FluidAudio.CtcKeywordSpotter]     -> 188 frames, frameDuration=0.0798s
+[21:42:37.496] [DEBUG] [FluidAudio.CtcKeywordSpotter]   Chunk 4/7: samples [624000-864000] = [39.00-54.00s]
+[21:42:37.667] [DEBUG] [FluidAudio.CtcKeywordSpotter]   Audio input: count=240000/240000, abs_max=0.7571, mean=0.000420
+[21:42:37.667] [DEBUG] [FluidAudio.CtcKeywordSpotter]   mid_5=[-0.0166, 0.0081, -0.0054, -0.0027, 0.0078]
+[21:42:37.669] [DEBUG] [FluidAudio.CtcKeywordSpotter] Mel features shape: [1, 1, 1501, 80], mel_length: 1501
+[21:42:37.786] [DEBUG] [FluidAudio.CtcKeywordSpotter] CTC outputs available: ctc_head_raw_output=true, ctc_head_output=true
+[21:42:37.786] [DEBUG] [FluidAudio.CtcKeywordSpotter] CTC raw output shape: [1, 1025, 1, 188]
+[21:42:37.786] [DEBUG] [FluidAudio.CtcKeywordSpotter] Using output: ctc_head_raw_output (raw logits)
+[21:42:38.238] [DEBUG] [FluidAudio.CtcKeywordSpotter] Log-probs: 188 frames (total: 188), vocab size: 1025
+[21:42:38.238] [DEBUG] [FluidAudio.CtcKeywordSpotter]     -> 188 frames, frameDuration=0.0798s
+[21:42:38.238] [DEBUG] [FluidAudio.CtcKeywordSpotter]   Chunk 5/7: samples [832000-1072000] = [52.00-67.00s]
+[21:42:38.377] [DEBUG] [FluidAudio.CtcKeywordSpotter]   Audio input: count=240000/240000, abs_max=0.7349, mean=0.000454
+[21:42:38.377] [DEBUG] [FluidAudio.CtcKeywordSpotter]   mid_5=[-0.3860, -0.4063, -0.4050, -0.3929, -0.3829]
+[21:42:38.379] [DEBUG] [FluidAudio.CtcKeywordSpotter] Mel features shape: [1, 1, 1501, 80], mel_length: 1501
+[21:42:38.466] [DEBUG] [FluidAudio.CtcKeywordSpotter] CTC outputs available: ctc_head_raw_output=true, ctc_head_output=true
+[21:42:38.467] [DEBUG] [FluidAudio.CtcKeywordSpotter] CTC raw output shape: [1, 1025, 1, 188]
+[21:42:38.467] [DEBUG] [FluidAudio.CtcKeywordSpotter] Using output: ctc_head_raw_output (raw logits)
+[21:42:38.816] [DEBUG] [FluidAudio.CtcKeywordSpotter] Log-probs: 188 frames (total: 188), vocab size: 1025
+[21:42:38.817] [DEBUG] [FluidAudio.CtcKeywordSpotter]     -> 188 frames, frameDuration=0.0798s
+[21:42:38.817] [DEBUG] [FluidAudio.CtcKeywordSpotter]   Chunk 6/7: samples [1040000-1280000] = [65.00-80.00s]
+[21:42:39.019] [DEBUG] [FluidAudio.CtcKeywordSpotter]   Audio input: count=240000/240000, abs_max=0.6953, mean=0.000308
+[21:42:39.019] [DEBUG] [FluidAudio.CtcKeywordSpotter]   mid_5=[0.0754, 0.1229, 0.0842, 0.0348, 0.0292]
+[21:42:39.022] [DEBUG] [FluidAudio.CtcKeywordSpotter] Mel features shape: [1, 1, 1501, 80], mel_length: 1501
+[21:42:39.127] [DEBUG] [FluidAudio.CtcKeywordSpotter] CTC outputs available: ctc_head_raw_output=true, ctc_head_output=true
+[21:42:39.127] [DEBUG] [FluidAudio.CtcKeywordSpotter] CTC raw output shape: [1, 1025, 1, 188]
+[21:42:39.127] [DEBUG] [FluidAudio.CtcKeywordSpotter] Using output: ctc_head_raw_output (raw logits)
+[21:42:39.674] [DEBUG] [FluidAudio.CtcKeywordSpotter] Log-probs: 188 frames (total: 188), vocab size: 1025
+[21:42:39.674] [DEBUG] [FluidAudio.CtcKeywordSpotter]     -> 188 frames, frameDuration=0.0798s
+[21:42:39.674] [DEBUG] [FluidAudio.CtcKeywordSpotter]   Chunk 7/7: samples [1248000-1442889] = [78.00-90.18s]
+[21:42:39.810] [DEBUG] [FluidAudio.CtcKeywordSpotter]   Audio input: count=194889/240000, abs_max=0.7353, mean=0.000437
+[21:42:39.810] [DEBUG] [FluidAudio.CtcKeywordSpotter]   mid_5=[0.0228, 0.0221, 0.0212, 0.0202, 0.0192]
+[21:42:39.813] [DEBUG] [FluidAudio.CtcKeywordSpotter] Mel features shape: [1, 1, 1501, 80], mel_length: 1501
+[21:42:39.965] [DEBUG] [FluidAudio.CtcKeywordSpotter] CTC outputs available: ctc_head_raw_output=true, ctc_head_output=true
+[21:42:39.965] [DEBUG] [FluidAudio.CtcKeywordSpotter] CTC raw output shape: [1, 1025, 1, 188]
+[21:42:39.965] [DEBUG] [FluidAudio.CtcKeywordSpotter] Using output: ctc_head_raw_output (raw logits)
+[21:42:40.398] [DEBUG] [FluidAudio.CtcKeywordSpotter] [DEBUG] Trimming CTC frames:
+[21:42:40.398] [DEBUG] [FluidAudio.CtcKeywordSpotter] [DEBUG]   totalFrames=188, sampleCount=194889, maxModelSamples=240000
+[21:42:40.398] [DEBUG] [FluidAudio.CtcKeywordSpotter] [DEBUG]   samplesPerFrame=1276.60, validFrames=153, clampedFrames=153
+[21:42:40.398] [DEBUG] [FluidAudio.CtcKeywordSpotter] Log-probs: 153 frames (total: 188), vocab size: 1025
+[21:42:40.398] [DEBUG] [FluidAudio.CtcKeywordSpotter]     -> 153 frames, frameDuration=0.0796s
+[21:42:40.448] [DEBUG] [FluidAudio.CtcKeywordSpotter] Concatenated: 1131 total frames
+[21:42:40.448] [DEBUG] [FluidAudio.CtcKeywordSpotter] Overlap frames averaged: 25 per boundary
+[21:42:40.448] [DEBUG] [FluidAudio.CtcKeywordSpotter] ==============================
+[21:42:40.454] [DEBUG] [FluidAudio.VocabularyRescorer] === VocabularyRescorer (Constrained CTC - Term-Centric) ===
+[21:42:40.454] [DEBUG] [FluidAudio.VocabularyRescorer] Words: 312, Frames: 1131
+[21:42:40.454] [DEBUG] [FluidAudio.VocabularyRescorer] Frame duration: 0.0798s
+[21:42:40.454] [DEBUG] [FluidAudio.VocabularyRescorer] CBW: 4.5, Margin: 0.5s, MinSimilarity: 0.6
+[21:42:40.562] [DEBUG] [FluidAudio.VocabularyRescorer]   [MULTI] 'Finally, Birdtown Flow' vs 'Birdtown Flow' (sim=0.62, span=3)
+[21:42:40.563] [DEBUG] [FluidAudio.VocabularyRescorer]     TDT span: [57.84-59.68s]
+[21:42:40.563] [DEBUG] [FluidAudio.VocabularyRescorer]     CTC('Finally, Birdtown Flow'): -1.45
+[21:42:40.563] [DEBUG] [FluidAudio.VocabularyRescorer]     CTC('Birdtown Flow' [boundary]): -0.91 + cbw=adaptive=6.15 (base=4.5, tokens=7) = 5.24
+[21:42:40.563] [DEBUG] [FluidAudio.VocabularyRescorer]     -> REPLACE (vocab > original)
+[21:42:40.592] [DEBUG] [FluidAudio.VocabularyRescorer]   [MULTI] 'Birdtown Flow will' vs 'Birdtown Flow' (sim=0.72, span=3)
+[21:42:40.592] [DEBUG] [FluidAudio.VocabularyRescorer]     TDT span: [58.56-59.84s]
+[21:42:40.592] [DEBUG] [FluidAudio.VocabularyRescorer]     CTC('Birdtown Flow will'): -0.80
+[21:42:40.592] [DEBUG] [FluidAudio.VocabularyRescorer]     CTC('Birdtown Flow' [boundary]): -0.91 + cbw=adaptive=6.15 (base=4.5, tokens=7) = 5.24
+[21:42:40.592] [DEBUG] [FluidAudio.VocabularyRescorer]     -> REPLACE (vocab > original)
+[21:42:40.610] [DEBUG] [FluidAudio.VocabularyRescorer] Final: Good morning everyone. Before we get into the numbers, I want to thank the support team for a remarkable quarter. They answered more tickets than ever before, and our satisfaction scores went up at the same time. That is not an accident. It comes from the training sessions we started in the spring, and from the new routing rules. We will keep both and next month we will add a weekly review of the hardest cases, so that everyone learns from them. I also want to welcome the four people who joined us this quarter. Some of you have met them already. If you have not, please find a moment this week to say hello and show them how we work. The second thing I want to cover is the launch plan for the autumn release which moves the beta to the first week of October and the public release to the middle of November, and gives the design team two extra weeks to finish the onboard and flow and the new setting screens. While engineering focuses on performance and the long list of small fixes that customers keep asking about in every survey we send. Finally, Birdtown Flow be part of the release, and we will dictate the release notes with it as a test. If it does well, we will use it for the documentation too. The budget for next year is due at the end of the month. Every team lead should have the template by now. Please keep the estimates honest, and tell me early if something is likely to slip, because surprises in December help nobody. We have a lot to be proud of, and a lot still to do. Please send me your questions before Friday, and I will answer them at the next meeting. Thank you all for listening and have a great week.
+[21:42:40.610] [DEBUG] [FluidAudio.VocabularyRescorer] Replacements: 1
+[21:42:40.610] [DEBUG] [FluidAudio.VocabularyRescorer] ===========================================
+[21:42:42.012] [DEBUG] [FluidAudio.CtcKeywordSpotter]   Audio input: count=200320/240000, abs_max=0.7195, mean=0.000641
+[21:42:42.013] [DEBUG] [FluidAudio.CtcKeywordSpotter]   mid_5=[0.0233, -0.0273, 0.0561, -0.0153, 0.0005]
+[21:42:42.015] [DEBUG] [FluidAudio.CtcKeywordSpotter] Mel features shape: [1, 1, 1501, 80], mel_length: 1501
+[21:42:42.129] [DEBUG] [FluidAudio.CtcKeywordSpotter] CTC outputs available: ctc_head_raw_output=true, ctc_head_output=true
+[21:42:42.129] [DEBUG] [FluidAudio.CtcKeywordSpotter] CTC raw output shape: [1, 1025, 1, 188]
+[21:42:42.129] [DEBUG] [FluidAudio.CtcKeywordSpotter] Using output: ctc_head_raw_output (raw logits)
+[21:42:42.516] [DEBUG] [FluidAudio.CtcKeywordSpotter] [DEBUG] Trimming CTC frames:
+[21:42:42.516] [DEBUG] [FluidAudio.CtcKeywordSpotter] [DEBUG]   totalFrames=188, sampleCount=200320, maxModelSamples=240000
+[21:42:42.516] [DEBUG] [FluidAudio.CtcKeywordSpotter] [DEBUG]   samplesPerFrame=1276.60, validFrames=157, clampedFrames=157
+[21:42:42.516] [DEBUG] [FluidAudio.CtcKeywordSpotter] Log-probs: 157 frames (total: 188), vocab size: 1025
+[21:42:42.516] [DEBUG] [FluidAudio.VocabularyRescorer] === VocabularyRescorer (Constrained CTC - Term-Centric) ===
+[21:42:42.516] [DEBUG] [FluidAudio.VocabularyRescorer] Words: 38, Frames: 157
+[21:42:42.516] [DEBUG] [FluidAudio.VocabularyRescorer] Frame duration: 0.0797s
+[21:42:42.516] [DEBUG] [FluidAudio.VocabularyRescorer] CBW: 4.5, Margin: 0.5s, MinSimilarity: 0.6
+[21:42:42.524] [DEBUG] [FluidAudio.VocabularyRescorer] Replacements: 0
+[21:42:42.524] [DEBUG] [FluidAudio.VocabularyRescorer] Final: Good morning everyone. Before we get into the numbers I want to thank the support team for a remarkable quarter. They answered more tickets than ever before, and our satisfaction scores went up at the same time. That
+[21:42:42.524] [DEBUG] [FluidAudio.VocabularyRescorer] ===========================================
+[21:42:43.125] [DEBUG] [FluidAudio.CtcKeywordSpotter]   Audio input: count=230080/240000, abs_max=0.7236, mean=0.000596
+[21:42:43.125] [DEBUG] [FluidAudio.CtcKeywordSpotter]   mid_5=[0.0452, 0.0533, 0.0501, 0.0457, 0.0418]
+[21:42:43.127] [DEBUG] [FluidAudio.CtcKeywordSpotter] Mel features shape: [1, 1, 1501, 80], mel_length: 1501
+[21:42:43.221] [DEBUG] [FluidAudio.CtcKeywordSpotter] CTC outputs available: ctc_head_raw_output=true, ctc_head_output=true
+[21:42:43.221] [DEBUG] [FluidAudio.CtcKeywordSpotter] CTC raw output shape: [1, 1025, 1, 188]
+[21:42:43.221] [DEBUG] [FluidAudio.CtcKeywordSpotter] Using output: ctc_head_raw_output (raw logits)
+[21:42:43.557] [DEBUG] [FluidAudio.CtcKeywordSpotter] [DEBUG] Trimming CTC frames:
+[21:42:43.557] [DEBUG] [FluidAudio.CtcKeywordSpotter] [DEBUG]   totalFrames=188, sampleCount=230080, maxModelSamples=240000
+[21:42:43.557] [DEBUG] [FluidAudio.CtcKeywordSpotter] [DEBUG]   samplesPerFrame=1276.60, validFrames=181, clampedFrames=181
+[21:42:43.557] [DEBUG] [FluidAudio.CtcKeywordSpotter] Log-probs: 181 frames (total: 188), vocab size: 1025
+[21:42:43.557] [DEBUG] [FluidAudio.VocabularyRescorer] === VocabularyRescorer (Constrained CTC - Term-Centric) ===
+[21:42:43.557] [DEBUG] [FluidAudio.VocabularyRescorer] Words: 39, Frames: 181
+[21:42:43.557] [DEBUG] [FluidAudio.VocabularyRescorer] Frame duration: 0.0794s
+[21:42:43.557] [DEBUG] [FluidAudio.VocabularyRescorer] CBW: 4.5, Margin: 0.5s, MinSimilarity: 0.6
+[21:42:43.564] [DEBUG] [FluidAudio.VocabularyRescorer] Replacements: 0
+[21:42:43.564] [DEBUG] [FluidAudio.VocabularyRescorer] Final: is not an accident. It comes from the training sessions we started in the spring, and from the new routing rules. We will keep both and next month we will add a weekly review of the hardest cases, so
+[21:42:43.564] [DEBUG] [FluidAudio.VocabularyRescorer] ===========================================
+[21:42:44.169] [DEBUG] [FluidAudio.CtcKeywordSpotter]   Audio input: count=160320/240000, abs_max=0.7573, mean=0.000516
+[21:42:44.169] [DEBUG] [FluidAudio.CtcKeywordSpotter]   mid_5=[-0.0186, -0.0126, -0.0135, -0.0157, -0.0183]
+[21:42:44.171] [DEBUG] [FluidAudio.CtcKeywordSpotter] Mel features shape: [1, 1, 1501, 80], mel_length: 1501
+[21:42:44.300] [DEBUG] [FluidAudio.CtcKeywordSpotter] CTC outputs available: ctc_head_raw_output=true, ctc_head_output=true
+[21:42:44.300] [DEBUG] [FluidAudio.CtcKeywordSpotter] CTC raw output shape: [1, 1025, 1, 188]
+[21:42:44.300] [DEBUG] [FluidAudio.CtcKeywordSpotter] Using output: ctc_head_raw_output (raw logits)
+[21:42:44.750] [DEBUG] [FluidAudio.CtcKeywordSpotter] [DEBUG] Trimming CTC frames:
+[21:42:44.750] [DEBUG] [FluidAudio.CtcKeywordSpotter] [DEBUG]   totalFrames=188, sampleCount=160320, maxModelSamples=240000
+[21:42:44.750] [DEBUG] [FluidAudio.CtcKeywordSpotter] Log-probs: 126 frames (total: 188), vocab size: 1025
+[21:42:44.750] [DEBUG] [FluidAudio.CtcKeywordSpotter] [DEBUG]   samplesPerFrame=1276.60, validFrames=126, clampedFrames=126
+[21:42:44.750] [DEBUG] [FluidAudio.VocabularyRescorer] === VocabularyRescorer (Constrained CTC - Term-Centric) ===
+[21:42:44.750] [DEBUG] [FluidAudio.VocabularyRescorer] Words: 26, Frames: 126
+[21:42:44.750] [DEBUG] [FluidAudio.VocabularyRescorer] Frame duration: 0.0795s
+[21:42:44.750] [DEBUG] [FluidAudio.VocabularyRescorer] CBW: 4.5, Margin: 0.5s, MinSimilarity: 0.6
+[21:42:44.755] [DEBUG] [FluidAudio.VocabularyRescorer] Final: that everyone learns from them. I also want to welcome the four people who joined us this quarter. Some of you have met them already. If
+[21:42:44.755] [DEBUG] [FluidAudio.VocabularyRescorer] Replacements: 0
+[21:42:44.755] [DEBUG] [FluidAudio.VocabularyRescorer] ===========================================
+[21:42:45.301] [DEBUG] [FluidAudio.CtcKeywordSpotter]   Audio input: count=227520/240000, abs_max=0.7095, mean=0.000466
+[21:42:45.301] [DEBUG] [FluidAudio.CtcKeywordSpotter]   mid_5=[0.0000, 0.0000, 0.0000, 0.0000, 0.0000]
+[21:42:45.303] [DEBUG] [FluidAudio.CtcKeywordSpotter] Mel features shape: [1, 1, 1501, 80], mel_length: 1501
+[21:42:45.406] [DEBUG] [FluidAudio.CtcKeywordSpotter] CTC outputs available: ctc_head_raw_output=true, ctc_head_output=true
+[21:42:45.406] [DEBUG] [FluidAudio.CtcKeywordSpotter] CTC raw output shape: [1, 1025, 1, 188]
+[21:42:45.406] [DEBUG] [FluidAudio.CtcKeywordSpotter] Using output: ctc_head_raw_output (raw logits)
+[21:42:45.760] [DEBUG] [FluidAudio.CtcKeywordSpotter] [DEBUG] Trimming CTC frames:
+[21:42:45.760] [DEBUG] [FluidAudio.CtcKeywordSpotter] [DEBUG]   totalFrames=188, sampleCount=227520, maxModelSamples=240000
+[21:42:45.760] [DEBUG] [FluidAudio.CtcKeywordSpotter] [DEBUG]   samplesPerFrame=1276.60, validFrames=179, clampedFrames=179
+[21:42:45.760] [DEBUG] [FluidAudio.CtcKeywordSpotter] Log-probs: 179 frames (total: 188), vocab size: 1025
+[21:42:45.760] [DEBUG] [FluidAudio.VocabularyRescorer] === VocabularyRescorer (Constrained CTC - Term-Centric) ===
+[21:42:45.760] [DEBUG] [FluidAudio.VocabularyRescorer] Words: 43, Frames: 179
+[21:42:45.760] [DEBUG] [FluidAudio.VocabularyRescorer] Frame duration: 0.0794s
+[21:42:45.760] [DEBUG] [FluidAudio.VocabularyRescorer] CBW: 4.5, Margin: 0.5s, MinSimilarity: 0.6
+[21:42:45.768] [DEBUG] [FluidAudio.VocabularyRescorer] Final: you have not, please find a moment this week to say hello, and show them how we work. The second thing I want to cover is the launch plan for the autumn release, which moves the beta to the first week of October
+[21:42:45.768] [DEBUG] [FluidAudio.VocabularyRescorer] Replacements: 0
+[21:42:45.768] [DEBUG] [FluidAudio.VocabularyRescorer] ===========================================
+[21:42:46.363] [DEBUG] [FluidAudio.CtcKeywordSpotter]   Audio input: count=180800/240000, abs_max=0.7571, mean=0.000451
+[21:42:46.363] [DEBUG] [FluidAudio.CtcKeywordSpotter]   mid_5=[-0.1095, -0.1335, -0.1556, -0.1775, -0.1970]
+[21:42:46.366] [DEBUG] [FluidAudio.CtcKeywordSpotter] Mel features shape: [1, 1, 1501, 80], mel_length: 1501
+[21:42:46.475] [DEBUG] [FluidAudio.CtcKeywordSpotter] CTC outputs available: ctc_head_raw_output=true, ctc_head_output=true
+[21:42:46.475] [DEBUG] [FluidAudio.CtcKeywordSpotter] CTC raw output shape: [1, 1025, 1, 188]
+[21:42:46.475] [DEBUG] [FluidAudio.CtcKeywordSpotter] Using output: ctc_head_raw_output (raw logits)
+[21:42:46.849] [DEBUG] [FluidAudio.CtcKeywordSpotter] [DEBUG] Trimming CTC frames:
+[21:42:46.849] [DEBUG] [FluidAudio.CtcKeywordSpotter] [DEBUG]   totalFrames=188, sampleCount=180800, maxModelSamples=240000
+[21:42:46.849] [DEBUG] [FluidAudio.CtcKeywordSpotter] [DEBUG]   samplesPerFrame=1276.60, validFrames=142, clampedFrames=142
+[21:42:46.849] [DEBUG] [FluidAudio.CtcKeywordSpotter] Log-probs: 142 frames (total: 188), vocab size: 1025
+[21:42:46.849] [DEBUG] [FluidAudio.VocabularyRescorer] === VocabularyRescorer (Constrained CTC - Term-Centric) ===
+[21:42:46.849] [DEBUG] [FluidAudio.VocabularyRescorer] Words: 29, Frames: 142
+[21:42:46.849] [DEBUG] [FluidAudio.VocabularyRescorer] Frame duration: 0.0796s
+[21:42:46.849] [DEBUG] [FluidAudio.VocabularyRescorer] CBW: 4.5, Margin: 0.5s, MinSimilarity: 0.6
+[21:42:46.856] [DEBUG] [FluidAudio.VocabularyRescorer] Replacements: 0
+[21:42:46.856] [DEBUG] [FluidAudio.VocabularyRescorer] Final: and the public release to the middle of November, and gives the design team two extra weeks to finish the onboard and flow and the new setting screens. While
+[21:42:46.856] [DEBUG] [FluidAudio.VocabularyRescorer] ===========================================
+[21:42:47.645] [DEBUG] [FluidAudio.CtcKeywordSpotter]   Audio input: count=178240/240000, abs_max=0.7571, mean=0.000413
+[21:42:47.645] [DEBUG] [FluidAudio.CtcKeywordSpotter]   mid_5=[-0.0081, -0.0472, 0.0724, -0.0146, -0.0390]
+[21:42:47.649] [DEBUG] [FluidAudio.CtcKeywordSpotter] Mel features shape: [1, 1, 1501, 80], mel_length: 1501
+[21:42:47.814] [DEBUG] [FluidAudio.CtcKeywordSpotter] CTC outputs available: ctc_head_raw_output=true, ctc_head_output=true
+[21:42:47.814] [DEBUG] [FluidAudio.CtcKeywordSpotter] CTC raw output shape: [1, 1025, 1, 188]
+[21:42:47.814] [DEBUG] [FluidAudio.CtcKeywordSpotter] Using output: ctc_head_raw_output (raw logits)
+[21:42:48.286] [DEBUG] [FluidAudio.CtcKeywordSpotter] [DEBUG] Trimming CTC frames:
+[21:42:48.286] [DEBUG] [FluidAudio.CtcKeywordSpotter] [DEBUG]   totalFrames=188, sampleCount=178240, maxModelSamples=240000
+[21:42:48.286] [DEBUG] [FluidAudio.CtcKeywordSpotter] [DEBUG]   samplesPerFrame=1276.60, validFrames=140, clampedFrames=140
+[21:42:48.286] [DEBUG] [FluidAudio.CtcKeywordSpotter] Log-probs: 140 frames (total: 188), vocab size: 1025
+[21:42:48.286] [DEBUG] [FluidAudio.VocabularyRescorer] === VocabularyRescorer (Constrained CTC - Term-Centric) ===
+[21:42:48.286] [DEBUG] [FluidAudio.VocabularyRescorer] Words: 21, Frames: 140
+[21:42:48.286] [DEBUG] [FluidAudio.VocabularyRescorer] Frame duration: 0.0796s
+[21:42:48.286] [DEBUG] [FluidAudio.VocabularyRescorer] CBW: 4.5, Margin: 0.5s, MinSimilarity: 0.6
+[21:42:48.293] [DEBUG] [FluidAudio.VocabularyRescorer] Final: engineering focuses on performance and the long list of small fixes that customers keep asking about in every survey we send.
+[21:42:48.293] [DEBUG] [FluidAudio.VocabularyRescorer] Replacements: 0
+[21:42:48.293] [DEBUG] [FluidAudio.VocabularyRescorer] ===========================================
+[21:42:49.345] [DEBUG] [FluidAudio.CtcKeywordSpotter]   Audio input: count=198080/240000, abs_max=0.7349, mean=0.000464
+[21:42:49.345] [DEBUG] [FluidAudio.CtcKeywordSpotter]   mid_5=[0.1462, 0.0944, 0.0683, 0.0806, 0.0793]
+[21:42:49.347] [DEBUG] [FluidAudio.CtcKeywordSpotter] Mel features shape: [1, 1, 1501, 80], mel_length: 1501
+[21:42:49.610] [DEBUG] [FluidAudio.CtcKeywordSpotter] CTC outputs available: ctc_head_raw_output=true, ctc_head_output=true
+[21:42:49.610] [DEBUG] [FluidAudio.CtcKeywordSpotter] CTC raw output shape: [1, 1025, 1, 188]
+[21:42:49.610] [DEBUG] [FluidAudio.CtcKeywordSpotter] Using output: ctc_head_raw_output (raw logits)
+[21:42:50.057] [DEBUG] [FluidAudio.CtcKeywordSpotter] [DEBUG] Trimming CTC frames:
+[21:42:50.057] [DEBUG] [FluidAudio.CtcKeywordSpotter] [DEBUG]   totalFrames=188, sampleCount=198080, maxModelSamples=240000
+[21:42:50.057] [DEBUG] [FluidAudio.CtcKeywordSpotter] Log-probs: 156 frames (total: 188), vocab size: 1025
+[21:42:50.057] [DEBUG] [FluidAudio.CtcKeywordSpotter] [DEBUG]   samplesPerFrame=1276.60, validFrames=156, clampedFrames=156
+[21:42:50.058] [DEBUG] [FluidAudio.VocabularyRescorer] === VocabularyRescorer (Constrained CTC - Term-Centric) ===
+[21:42:50.058] [DEBUG] [FluidAudio.VocabularyRescorer] Words: 34, Frames: 156
+[21:42:50.058] [DEBUG] [FluidAudio.VocabularyRescorer] Frame duration: 0.0794s
+[21:42:50.058] [DEBUG] [FluidAudio.VocabularyRescorer] CBW: 4.5, Margin: 0.5s, MinSimilarity: 0.6
+[21:42:50.101] [DEBUG] [FluidAudio.VocabularyRescorer]   [MULTI] 'Finally, Birdtown flow' vs 'Birdtown Flow' (sim=0.62, span=3)
+[21:42:50.101] [DEBUG] [FluidAudio.VocabularyRescorer]     TDT span: [2.00-3.76s]
+[21:42:50.101] [DEBUG] [FluidAudio.VocabularyRescorer]     CTC('Finally, Birdtown flow'): -1.53
+[21:42:50.101] [DEBUG] [FluidAudio.VocabularyRescorer]     CTC('Birdtown Flow' [boundary]): -1.18 + cbw=adaptive=6.15 (base=4.5, tokens=7) = 4.97
+[21:42:50.101] [DEBUG] [FluidAudio.VocabularyRescorer]     -> REPLACE (vocab > original)
+[21:42:50.129] [DEBUG] [FluidAudio.VocabularyRescorer]   [MULTI] 'Birdtown flow will' vs 'Birdtown Flow' (sim=0.72, span=3)
+[21:42:50.129] [DEBUG] [FluidAudio.VocabularyRescorer]     TDT span: [2.72-4.00s]
+[21:42:50.129] [DEBUG] [FluidAudio.VocabularyRescorer]     CTC('Birdtown flow will'): -1.04
+[21:42:50.129] [DEBUG] [FluidAudio.VocabularyRescorer]     CTC('Birdtown Flow' [boundary]): -1.18 + cbw=adaptive=6.15 (base=4.5, tokens=7) = 4.97
+[21:42:50.129] [DEBUG] [FluidAudio.VocabularyRescorer]     -> REPLACE (vocab > original)
+[21:42:50.142] [DEBUG] [FluidAudio.VocabularyRescorer] Final: Finally, Birdtown Flow be part of the release, and we will dictate the release notes with it as a test. If it does well we will use it for the documentation too. The
+[21:42:50.142] [DEBUG] [FluidAudio.VocabularyRescorer] Replacements: 1
+[21:42:50.142] [DEBUG] [FluidAudio.VocabularyRescorer] ===========================================
+[21:42:51.740] [DEBUG] [FluidAudio.CtcKeywordSpotter]   Audio input: count=216320/240000, abs_max=0.6953, mean=0.000283
+[21:42:51.740] [DEBUG] [FluidAudio.CtcKeywordSpotter]   mid_5=[0.0006, 0.0216, -0.0247, -0.0039, -0.0187]
+[21:42:51.745] [DEBUG] [FluidAudio.CtcKeywordSpotter] Mel features shape: [1, 1, 1501, 80], mel_length: 1501
+[21:42:52.112] [DEBUG] [FluidAudio.CtcKeywordSpotter] CTC outputs available: ctc_head_raw_output=true, ctc_head_output=true
+[21:42:52.112] [DEBUG] [FluidAudio.CtcKeywordSpotter] CTC raw output shape: [1, 1025, 1, 188]
+[21:42:52.112] [DEBUG] [FluidAudio.CtcKeywordSpotter] Using output: ctc_head_raw_output (raw logits)
+[21:42:52.839] [DEBUG] [FluidAudio.CtcKeywordSpotter] [DEBUG] Trimming CTC frames:
+[21:42:52.839] [DEBUG] [FluidAudio.CtcKeywordSpotter] [DEBUG]   totalFrames=188, sampleCount=216320, maxModelSamples=240000
+[21:42:52.839] [DEBUG] [FluidAudio.CtcKeywordSpotter] [DEBUG]   samplesPerFrame=1276.60, validFrames=170, clampedFrames=170
+[21:42:52.839] [DEBUG] [FluidAudio.CtcKeywordSpotter] Log-probs: 170 frames (total: 188), vocab size: 1025
+[21:42:52.841] [DEBUG] [FluidAudio.VocabularyRescorer] === VocabularyRescorer (Constrained CTC - Term-Centric) ===
+[21:42:52.841] [DEBUG] [FluidAudio.VocabularyRescorer] Words: 37, Frames: 170
+[21:42:52.841] [DEBUG] [FluidAudio.VocabularyRescorer] Frame duration: 0.0795s
+[21:42:52.841] [DEBUG] [FluidAudio.VocabularyRescorer] CBW: 4.5, Margin: 0.5s, MinSimilarity: 0.6
+[21:42:52.855] [DEBUG] [FluidAudio.VocabularyRescorer] Final: budget for next year is due at the end of the month. Every team lead should have the template by now. Please keep the estimates honest, and tell me early if something is likely to slip, because
+[21:42:52.855] [DEBUG] [FluidAudio.VocabularyRescorer] Replacements: 0
+[21:42:52.855] [DEBUG] [FluidAudio.VocabularyRescorer] ===========================================
+[21:42:54.129] [DEBUG] [FluidAudio.CtcKeywordSpotter]   Audio input: count=230089/240000, abs_max=0.7353, mean=0.000434
+[21:42:54.129] [DEBUG] [FluidAudio.CtcKeywordSpotter]   mid_5=[0.0014, 0.0019, 0.0027, 0.0030, 0.0030]
+[21:42:54.133] [DEBUG] [FluidAudio.CtcKeywordSpotter] Mel features shape: [1, 1, 1501, 80], mel_length: 1501
+[21:42:54.399] [DEBUG] [FluidAudio.CtcKeywordSpotter] CTC outputs available: ctc_head_raw_output=true, ctc_head_output=true
+[21:42:54.399] [DEBUG] [FluidAudio.CtcKeywordSpotter] CTC raw output shape: [1, 1025, 1, 188]
+[21:42:54.399] [DEBUG] [FluidAudio.CtcKeywordSpotter] Using output: ctc_head_raw_output (raw logits)
+[21:42:54.968] [DEBUG] [FluidAudio.CtcKeywordSpotter] [DEBUG] Trimming CTC frames:
+[21:42:54.968] [DEBUG] [FluidAudio.CtcKeywordSpotter] [DEBUG]   totalFrames=188, sampleCount=230089, maxModelSamples=240000
+[21:42:54.969] [DEBUG] [FluidAudio.CtcKeywordSpotter] [DEBUG]   samplesPerFrame=1276.60, validFrames=181, clampedFrames=181
+[21:42:54.969] [DEBUG] [FluidAudio.CtcKeywordSpotter] Log-probs: 181 frames (total: 188), vocab size: 1025
+[21:42:54.969] [DEBUG] [FluidAudio.VocabularyRescorer] === VocabularyRescorer (Constrained CTC - Term-Centric) ===
+[21:42:54.969] [DEBUG] [FluidAudio.VocabularyRescorer] Words: 45, Frames: 181
+[21:42:54.969] [DEBUG] [FluidAudio.VocabularyRescorer] Frame duration: 0.0795s
+[21:42:54.969] [DEBUG] [FluidAudio.VocabularyRescorer] CBW: 4.5, Margin: 0.5s, MinSimilarity: 0.6
+[21:42:54.984] [DEBUG] [FluidAudio.VocabularyRescorer] Final: surprises in December help nobody. We have a lot to be proud of, and a lot still to do. Please send me your questions before Friday, and I will answer them at the next meeting. Thank you all for listening and have a great week.
+[21:42:54.984] [DEBUG] [FluidAudio.VocabularyRescorer] Replacements: 0
+[21:42:54.984] [DEBUG] [FluidAudio.VocabularyRescorer] ===========================================
+[smoke] preparing Parakeet v3
+[smoke] model state ready after 11.442315249999998 seconds
+[smoke] 1442889 samples, 90.18 s
+[segmented] boosting Birdtown Flow: ready
+[segmented] whole · 9.794858334 seconds: Good morning everyone. Before we get into the numbers, I want to thank the support team for a remarkable quarter. They answered more tickets than ever before, and our satisfaction scores went up at the same time. That is not an accident. It comes from the training sessions we started in the spring, and from the new routing rules. We will keep both and next month we will add a weekly review of the hardest cases, so that everyone learns from them. I also want to welcome the four people who joined us this quarter. Some of you have met them already. If you have not, please find a moment this week to say hello and show them how we work. The second thing I want to cover is the launch plan for the autumn release which moves the beta to the first week of October and the public release to the middle of November, and gives the design team two extra weeks to finish the onboard and flow and the new setting screens. While engineering focuses on performance and the long list of small fixes that customers keep asking about in every survey we send. Finally, Birdtown Flow will be part of the release, and we will dictate the release notes with it as a test. If it does well, we will use it for the documentation too. The budget for next year is due at the end of the month. Every team lead should have the template by now. Please keep the estimates honest, and tell me early if something is likely to slip, because surprises in December help nobody. We have a lot to be proud of, and a lot still to do. Please send me your questions before Friday, and I will answer them at the next meeting. Thank you all for listening and have a great week.
+[segmented] windows · 14.363259457999998 seconds: Good morning everyone. Before we get into the numbers I want to thank the support team for a remarkable quarter. They answered more tickets than ever before, and our satisfaction scores went up at the same time. That is not an accident. It comes from the training sessions we started in the spring, and from the new routing rules. We will keep both and next month we will add a weekly review of the hardest cases, so that everyone learns from them. I also want to welcome the four people who joined us this quarter. Some of you have met them already. If you have not, please find a moment this week to say hello, and show them how we work. The second thing I want to cover is the launch plan for the autumn release, which moves the beta to the first week of October and the public release to the middle of November, and gives the design team two extra weeks to finish the onboard and flow and the new setting screens. While engineering focuses on performance and the long list of small fixes that customers keep asking about in every survey we send. Finally, Birdtown Flow will be part of the release, and we will dictate the release notes with it as a test. If it does well we will use it for the documentation too. The budget for next year is due at the end of the month. Every team lead should have the template by now. Please keep the estimates honest, and tell me early if something is likely to slip, because surprises in December help nobody. We have a lot to be proud of, and a lot still to do. Please send me your questions before Friday, and I will answer them at the next meeting. Thank you all for listening and have a great week.
+[segmented] transcribe windows=9 forced=1 cut=12232ms tail=2127ms tailBoost=1080ms
+[segmented] part 1: Good morning everyone. Before we get into the numbers I want to thank the support team for a remarkable quarter. They answered more tickets than ever before, and our satisfaction scores went up at the same time. That
+[segmented] part 2: is not an accident. It comes from the training sessions we started in the spring, and from the new routing rules. We will keep both and next month we will add a weekly review of the hardest cases, so
+[segmented] part 3: that everyone learns from them. I also want to welcome the four people who joined us this quarter. Some of you have met them already. If
+[segmented] part 4: you have not, please find a moment this week to say hello, and show them how we work. The second thing I want to cover is the launch plan for the autumn release, which moves the beta to the first week of October
+[segmented] part 5: and the public release to the middle of November, and gives the design team two extra weeks to finish the onboard and flow and the new setting screens. While
+[segmented] part 6: engineering focuses on performance and the long list of small fixes that customers keep asking about in every survey we send.
+[segmented] part 7: Finally, Birdtown Flow will be part of the release, and we will dictate the release notes with it as a test. If it does well we will use it for the documentation too. The
+[segmented] part 8: budget for next year is due at the end of the month. Every team lead should have the template by now. Please keep the estimates honest, and tell me early if something is likely to slip, because
+[segmented] part 9: surprises in December help nobody. We have a lot to be proud of, and a lot still to do. Please send me your questions before Friday, and I will answer them at the next meeting. Thank you all for listening and have a great week.
+[segmented] boosted whole:   none
+[segmented] boosted windows: "Birdtown flow" → "Birdtown Flow" ×1
+[segmented] ok: words changed ≤ 1.0% (0.00%, -0 +0 of 312)
+[segmented] ok: no word doubled at a seam (none)
+[segmented] ok: windows ≤ 1.75× the whole pass (1.47×)
+[segmented] ok: slowest window ≤ 2× the whole pass's pace (2671 ms of 3258 ms, 9 windows)
+[segmented] ok: a cut without a pause (1 forced)
+[segmented] ok: boosting ready (CTC model and terms loaded)
+[segmented] ok: "Birdtown Flow" in both (whole true, windows true)

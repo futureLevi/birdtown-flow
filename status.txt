@@ -1,0 +1,11 @@
+sha=048ad0db2679d90146b36ded54a5d5bf92141e2f
+branch=17/merge
+build=success
+test=success
+snapshots=success
+synth=success
+speech=success
+segmented=success
+signcheck=success
+signing=skipped
+release=skipped
