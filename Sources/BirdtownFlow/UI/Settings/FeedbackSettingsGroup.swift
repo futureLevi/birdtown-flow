@@ -16,7 +16,7 @@ struct FeedbackSettingsGroup: View {
         let feedback = model.feedback
         SettingsGroup(
             title: "Send feedback",
-            footnote: "Press \(settings.feedbackShortcut.displayName) anywhere, say what to fix, and press it again. Nothing is typed: the note, the app you were in and your last few dictations go to the repository below as a GitHub issue."
+            footnote: "Press \(settings.feedbackShortcut.displayName) anywhere, say what to fix, and press it again. Nothing is typed: the note, the app you were in and your last few dictations go to the repository above as a GitHub issue."
         ) {
             SettingsRow(title: "Repository", detail: repositoryDetail(settings.feedbackRepository)) {
                 TextField("owner/name", text: $settings.feedbackRepository)
