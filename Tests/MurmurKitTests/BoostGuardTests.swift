@@ -16,6 +16,10 @@ struct BoostGuardTests {
         (["BTR"], "BTAR"),
         (["B-T-A-R"], "BTAR"),
         (["B", "T", "A", "R"], "BTAR"),
+        // An acronym said with its first letter as a name ("bee-tar" is how Levi says it).
+        (["Beetar"], "BTAR"),
+        (["bee", "tar"], "BTAR"),
+        (["bee-tee-go"], "BTGO"),
     ])
     func accepted(heard: [String], term: String) {
         #expect(BoostGuard.accepts(heard: heard, term: term))

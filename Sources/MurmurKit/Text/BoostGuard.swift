@@ -23,7 +23,8 @@ public enum BoostGuard {
     /// A short term needs at least this similarity to what was heard, however the words line
     /// up. On five letters or fewer, two edits are most of the word: "board" scores 0.6 against
     /// "BTAR", which the rescorer's own 0.6 gate let through, even spelled out as "B-O-A-R-D".
-    /// One edit still passes: "levy" → "Levi", "BTR" → "BTAR" score 0.75.
+    /// One edit still passes: "levy" → "Levi", "BTR" → "BTAR" score 0.75. An acronym is also
+    /// compared with its first letters said by name, so "Beetar" still becomes "BTAR".
     public static let shortTermSimilarity = 0.75
     /// The longest a term can be, in letters and digits, and still count as short.
     public static let shortTermLength = 5
@@ -45,10 +46,11 @@ public enum BoostGuard {
         let written = words(of: term)
         guard !spoken.isEmpty, !written.isEmpty else { return false }
 
-        let term = written.joined()
-        if term.count <= shortTermLength,
-           PolishGuard.similarity(Array(spoken.joined()), Array(term)) < shortTermSimilarity {
-            return false
+        let letters = written.joined()
+        if letters.count <= shortTermLength {
+            let said = Array(spoken.joined())
+            let closest = sayings(of: term, letters: letters).map { PolishGuard.similarity(said, Array($0)) }.max() ?? 0
+            if closest < shortTermSimilarity { return false }
         }
         // One word for one: the rescorer's own similarity gate already judged exactly this.
         if spoken.count == 1, written.count == 1 { return true }
@@ -57,7 +59,7 @@ public enum BoostGuard {
                 PolishGuard.similarity(Array(pair.0), Array(pair.1)) >= wordSimilarity
             }
         }
-        let joined = PolishGuard.similarity(Array(spoken.joined()), Array(term))
+        let joined = PolishGuard.similarity(Array(spoken.joined()), Array(letters))
         return joined >= (spoken.count < written.count ? expandingSimilarity : joinedSimilarity)
     }
 
@@ -91,6 +93,25 @@ public enum BoostGuard {
         }
         return accepts(heard: heard, term: term) ? 0..<heard.count : nil
     }
+
+    /// How a short term can come out of the engine: as spelled ("btar"), and for an acronym,
+    /// with one or more of its first letters said by name ("beetar", "beeteear").
+    private static func sayings(of term: String, letters: String) -> [String] {
+        let capitals = term.filter(\.isLetter)
+        guard capitals.count >= 2, capitals.allSatisfy(\.isUppercase) else { return [letters] }
+        let characters = Array(letters)
+        return (0...characters.count).map { named in
+            characters[..<named].map { letterNames[$0] ?? String($0) }.joined() + String(characters[named...])
+        }
+    }
+
+    /// English letter names as an engine might write them.
+    private static let letterNames: [Character: String] = [
+        "a": "ay", "b": "bee", "c": "see", "d": "dee", "e": "ee", "f": "ef", "g": "gee", "h": "aitch",
+        "i": "eye", "j": "jay", "k": "kay", "l": "el", "m": "em", "n": "en", "o": "oh", "p": "pee",
+        "q": "cue", "r": "ar", "s": "es", "t": "tee", "u": "you", "v": "vee", "w": "doubleyou",
+        "x": "ex", "y": "why", "z": "zee",
+    ]
 
     /// How closely `heard`, run together, spells `written` run together.
     private static func fit(_ heard: ArraySlice<String>, _ written: [String]) -> Double {
