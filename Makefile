@@ -14,10 +14,11 @@ CONFIG   ?= debug
 ## Everything the build writes goes under ~/Library/Caches, never inside the checkout. iCloud
 ## Drive (Desktop and Documents) rewrites files while the compiler is using them, and a bundle
 ## built there can come out with a broken signature.
-OUT      ?= $(HOME)/Library/Caches/BirdtownFlowBuild
-SCRATCH  ?= $(OUT)/scratch
+## CI passes STAGE=dist to collect the finished .app for the nightly zip.
+STAGE    ?= $(HOME)/Library/Caches/BirdtownFlowBuild
+SCRATCH  ?= $(HOME)/Library/Caches/BirdtownFlowBuild/scratch
 BINDIR   := $(SCRATCH)/$(CONFIG)
-APP      := $(OUT)/$(APPNAME)
+APP      := $(STAGE)/$(APPNAME)
 INSTALLED := /Applications/$(APPNAME)
 
 ## macOS remembers the Accessibility grant per signature. Use a Developer ID when the keychain
