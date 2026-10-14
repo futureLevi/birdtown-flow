@@ -238,6 +238,8 @@ final class HUDController {
             Permissions.openAccessibilitySettings()
         case .inputDevice:
             app.showSettings(.audio)
+        case .feedbackSettings:
+            app.showSettings(.about)
         }
     }
 }
@@ -270,6 +272,7 @@ final class HUDModel {
             phase: HUDState.Phase(controller.phase),
             showsIdlePill: settings.showIdlePill,
             isHandsFree: controller.isHandsFree,
+            isFeedbackNote: controller.isFeedbackNote,
             recordingStartedAt: controller.recordingStartedAt,
             hover: hover,
             keyName: settings.pushToTalkKey.displayName,
@@ -298,6 +301,7 @@ final class HUDModel {
         case .microphoneAccess: "Open Microphone settings"
         case .accessibilityAccess: "Open Accessibility settings"
         case .inputDevice: "Choose a microphone"
+        case .feedbackSettings: "Open feedback settings"
         }
     }
 }

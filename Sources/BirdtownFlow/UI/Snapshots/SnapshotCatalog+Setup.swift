@@ -128,7 +128,8 @@ extension SnapshotCatalog {
                 TextSettingsPane()
             },
             shot("privacy", height: Layout.Setup.settingsHeight, model: general, facts: SetupPreview()) { PrivacySettingsPane() },
-            shot("about", height: Layout.Setup.settingsHeight, model: general, facts: SetupPreview()) { AboutSettingsPane() },
+            // Taller than the window, to show Send feedback and the credits below it.
+            shot("about", height: Layout.Setup.settingsHeight + 360, model: general, facts: SetupPreview()) { AboutSettingsPane() },
         ]
     }
 
@@ -203,7 +204,8 @@ extension AppModel {
             settings: settings,
             history: HistoryStore(previewRecords: setupSampleHistory),
             snippets: SnippetStore(preview: []),
-            lab: PolishLabStore(preview: PolishLabState(configurations: PolishConfiguration.starters()))
+            lab: PolishLabStore(preview: PolishLabState(configurations: PolishConfiguration.starters())),
+            feedbackOutbox: FeedbackOutbox(previewNotes: [])
         )
     }
 

@@ -229,6 +229,9 @@ public struct KeyChord: Sendable, CustomStringConvertible {
     /// ⌃⌥V, the paste-last default.
     public static let pasteLastDefault = KeyChord(keyCode: KeyCode.v, modifiers: [.control, .option])
 
+    /// ⌃⌥F, the feedback default: press, say what to fix, press again.
+    public static let feedbackDefault = KeyChord(keyCode: KeyCode.f, modifiers: [.control, .option])
+
     /// Whether a key-down with these values is this chord: same key, exactly these modifiers.
     public func matches(keyCode: UInt16, eventFlags: UInt64) -> Bool {
         keyCode == self.keyCode && ShortcutModifiers(eventFlags: eventFlags) == modifiers

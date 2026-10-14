@@ -43,6 +43,9 @@ app: build
 	@mkdir -p "$(CONTENTS)/MacOS" "$(CONTENTS)/Resources"
 	@cp "$(BUILD)/$(EXEC)" "$(CONTENTS)/MacOS/$(EXEC)"
 	@cp Resources/Info.plist "$(CONTENTS)/Info.plist"
+	@# The commit, for feedback notes and bug reports (AppVersion.commit).
+	@sha=$$(git rev-parse --short HEAD 2>/dev/null); \
+		if [ -n "$$sha" ]; then /usr/libexec/PlistBuddy -c "Add :BirdtownCommit string $$sha" "$(CONTENTS)/Info.plist"; fi
 	@if [ -f Resources/AppIcon.icns ]; then cp Resources/AppIcon.icns "$(CONTENTS)/Resources/"; fi
 	@# SwiftPM resource bundles (ours and dependencies') go in Contents/Resources.
 	@for b in "$(BUILD)"/*.bundle; do [ -e "$$b" ] && cp -R "$$b" "$(CONTENTS)/Resources/" || true; done

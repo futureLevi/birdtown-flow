@@ -229,6 +229,12 @@ enum AppVersion {
         }
         return "Version \(short)"
     }
+
+    /// The commit the build was made from, which `make app` writes into Info.plist, so a
+    /// nightly can be told from the next one. `nil` outside a bundle built that way.
+    static var commit: String? {
+        Bundle.main.infoDictionary?["BirdtownCommit"] as? String
+    }
 }
 
 extension EnvironmentValues {

@@ -80,6 +80,14 @@ struct HUDPreview {
             HUDPreview(name: "handsfree-hover-cancel", state: HUDState(phase: .listening, isHandsFree: true, level: 0.05,
                                                                       levels: levels(peak: 0.06), recordingStartedAt: start,
                                                                       hover: .cancel)),
+            // The feedback shortcut: hands-free, labelled, since nothing will be typed.
+            HUDPreview(name: "feedback-listening", state: HUDState(phase: .listening, isHandsFree: true,
+                                                                   isFeedbackNote: true, level: 0.3,
+                                                                   levels: levels(peak: 0.45), recordingStartedAt: start)),
+            HUDPreview(name: "feedback-sent", state: HUDState(phase: .done, notice: "Feedback sent")),
+            HUDPreview(name: "feedback-needs-setup", state: HUDState(phase: .done,
+                                                                     notice: "Feedback saved · set up sending in Settings",
+                                                                     actionLabel: "Open feedback settings")),
             HUDPreview(name: "transcribing", state: HUDState(phase: .transcribing)),
             // Polishing rises into a taller, flatter plateau than transcribing's low dome.
             HUDPreview(name: "polishing", state: HUDState(phase: .polishing)),
