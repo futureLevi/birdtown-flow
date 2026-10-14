@@ -1,24 +1,13 @@
-# macOS build
+# SwiftPM and Xcode
 .build/
 *.xcuserdatad
 .DS_Store
 
-# Built .app bundles, at the repo root ONLY.
-#
-# Anchored deliberately. An unanchored `*.app/` also matches `windows/src/Murmur.App/`,
-# because macOS filesystems are case-insensitive — which silently kept the entire Avalonia
-# app out of the repo until a CI publish step failed to find the project file.
+# A bundle built at the top of the checkout (make puts its own under ~/Library/Caches).
 /*.app/
 
-# Windows / .NET build
-[Bb]in/
-[Oo]bj/
-*.user
-.vs/
-artifacts/
-
-# Local ASR model weights. Large, redistributed under their own license, and every
-# platform fetches them itself — see docs/PARAKEET-WINDOWS.md.
+# Speech model weights. The app downloads them on first run; they're large and carry
+# their own licences, so they never belong in the repo.
 models/
 *.onnx
 *.nemo

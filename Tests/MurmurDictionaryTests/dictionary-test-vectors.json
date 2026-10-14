@@ -1,442 +1,463 @@
 {
   "$comment": [
-    "Shared behavioural contract for the dictionary correction pass.",
+    "Expected behaviour of DictionaryCorrector, run by VectorTests.swift.",
     "",
-    "The macOS app (Swift) and the Windows app (C#) implement this logic independently.",
-    "Independent implementations drift. This file is the thing that stops them: both must",
-    "run every case below and produce exactly the stated output. A change to correction",
-    "semantics starts here, not in either implementation.",
+    "Each case builds a corrector from \"dictionary\", applies it to \"transcript\", and",
+    "expects \"corrected\" plus exactly the listed \"corrections\", in any order. Strings are",
+    "compared the way Swift compares them, so composed and decomposed accents are equal.",
     "",
-    "Rules under test:",
-    "  1. Whole matches only  - a rule must never bite into a longer word.",
-    "  2. Case-insensitive    - the trigger matches in any case; output is verbatim.",
-    "  3. Longest match first - a longer trigger wins over a shorter overlapping one.",
-    "  4. Glued words match   - parts may be separated by any number of spaces or hyphens,",
-    "                           including none at all.",
-    "  5. Disabled is inert   - a disabled entry changes nothing.",
-    "  6. Only changes count  - a match already written exactly as the rule writes it is",
-    "                           left alone and not reported as a correction.",
-    "  7. One pass            - every rule matches what was heard; a span a longer rule claims",
-    "                           is off limits to shorter ones, so no rule rewrites another's output."
+    "Entry fields: kind (\"term\" or \"correction\"), write, hear (corrections only) and",
+    "isEnabled (defaults to true). \"note\" is for people and is ignored."
   ],
-  "version": 1,
   "cases": [
     {
-      "name": "basic phrase replacement",
-      "entries": [
-        {
-          "kind": "correction",
-          "hear": "cloud code",
-          "write": "Claude Code"
-        }
+      "name": "spaced phrase is rewritten",
+      "dictionary": [
+        { "kind": "correction", "hear": "fluid audio", "write": "FluidAudio" }
       ],
-      "input": "I use cloud code every day.",
-      "expected": "I use Claude Code every day.",
-      "expectedCorrections": [
-        {
-          "to": "Claude Code",
-          "count": 1
-        }
+      "transcript": "Parakeet runs on fluid audio now.",
+      "corrected": "Parakeet runs on FluidAudio now.",
+      "corrections": [
+        { "from": "fluid audio", "to": "FluidAudio", "count": 1 }
       ]
     },
     {
-      "name": "glued together with no separator",
-      "entries": [
-        {
-          "kind": "correction",
-          "hear": "cloud code",
-          "write": "Claude Code"
-        }
+      "name": "words run together still match",
+      "dictionary": [
+        { "kind": "correction", "hear": "get hub", "write": "GitHub" }
       ],
-      "input": "I use CloudCode every day.",
-      "expected": "I use Claude Code every day.",
-      "expectedCorrections": [
-        {
-          "to": "Claude Code",
-          "count": 1
-        }
+      "transcript": "Push the branch to gethub tonight.",
+      "corrected": "Push the branch to GitHub tonight.",
+      "corrections": [
+        { "from": "gethub", "to": "GitHub", "count": 1 }
       ]
     },
     {
-      "name": "joined by a hyphen",
-      "entries": [
-        {
-          "kind": "correction",
-          "hear": "cloud code",
-          "write": "Claude Code"
-        }
+      "name": "hyphen between the words",
+      "dictionary": [
+        { "kind": "correction", "hear": "post gress", "write": "Postgres" }
       ],
-      "input": "I use Cloud-Code every day.",
-      "expected": "I use Claude Code every day.",
-      "expectedCorrections": [
-        {
-          "to": "Claude Code",
-          "count": 1
-        }
+      "transcript": "The post-gress migration ran clean.",
+      "corrected": "The Postgres migration ran clean.",
+      "corrections": [
+        { "from": "post-gress", "to": "Postgres", "count": 1 }
       ]
     },
     {
-      "name": "multiple spaces between parts",
-      "entries": [
-        {
-          "kind": "correction",
-          "hear": "cloud code",
-          "write": "Claude Code"
-        }
+      "name": "runs of spaces and hyphens between the words",
+      "dictionary": [
+        { "kind": "correction", "hear": "swift you eye", "write": "SwiftUI" }
       ],
-      "input": "I use cloud  code every day.",
-      "expected": "I use Claude Code every day.",
-      "expectedCorrections": [
-        {
-          "to": "Claude Code",
-          "count": 1
-        }
+      "transcript": "Rebuilt the HUD in swift  you - eye last week.",
+      "corrected": "Rebuilt the HUD in SwiftUI last week.",
+      "corrections": [
+        { "from": "swift  you - eye", "to": "SwiftUI", "count": 1 }
       ]
     },
     {
-      "name": "trigger matches regardless of case",
-      "entries": [
-        {
-          "kind": "correction",
-          "hear": "cloud code",
-          "write": "Claude Code"
-        }
+      "name": "line break between the words",
+      "dictionary": [
+        { "kind": "correction", "hear": "bird town", "write": "Birdtown" }
       ],
-      "input": "CLOUD CODE is great.",
-      "expected": "Claude Code is great.",
-      "expectedCorrections": [
-        {
-          "to": "Claude Code",
-          "count": 1
-        }
+      "transcript": "Made in bird\ntown.",
+      "corrected": "Made in Birdtown.",
+      "corrections": [
+        { "from": "bird\ntown", "to": "Birdtown", "count": 1 }
       ]
     },
     {
-      "name": "must not corrupt a longer word that starts the same way",
-      "entries": [
-        {
-          "kind": "correction",
-          "hear": "cloud code",
-          "write": "Claude Code"
-        }
+      "name": "hyphen or tab in the trigger is a gap like a space",
+      "dictionary": [
+        { "kind": "correction", "hear": "core-ml", "write": "Core ML" },
+        { "kind": "correction", "hear": "neural\tengine", "write": "Neural Engine" }
       ],
-      "input": "Cloudflare fronts the cloudcodex service.",
-      "expected": "Cloudflare fronts the cloudcodex service.",
-      "expectedCorrections": []
-    },
-    {
-      "name": "must not touch the ordinary word alone",
-      "entries": [
-        {
-          "kind": "correction",
-          "hear": "cloud code",
-          "write": "Claude Code"
-        }
-      ],
-      "input": "The cloud is fine and the code is fine.",
-      "expected": "The cloud is fine and the code is fine.",
-      "expectedCorrections": []
-    },
-    {
-      "name": "longest trigger wins over a shorter overlapping one",
-      "entries": [
-        {
-          "kind": "correction",
-          "hear": "cloud",
-          "write": "Claude"
-        },
-        {
-          "kind": "correction",
-          "hear": "cloud code",
-          "write": "Claude Code"
-        }
-      ],
-      "input": "cloud code",
-      "expected": "Claude Code",
-      "expectedCorrections": [
-        {
-          "to": "Claude Code",
-          "count": 1
-        }
+      "transcript": "Compile with core ml, coreml or core-ml for the neural engine.",
+      "corrected": "Compile with Core ML, Core ML or Core ML for the Neural Engine.",
+      "corrections": [
+        { "from": "core ml", "to": "Core ML", "count": 3 },
+        { "from": "neural engine", "to": "Neural Engine", "count": 1 }
       ]
     },
     {
-      "name": "counts repeated hits",
-      "entries": [
-        {
-          "kind": "correction",
-          "hear": "clawed code",
-          "write": "Claude Code"
-        }
+      "name": "whitespace around the trigger is ignored",
+      "dictionary": [
+        { "kind": "correction", "hear": "  fig ma  ", "write": "Figma" }
       ],
-      "input": "clawed code, then clawed code again, and clawed code.",
-      "expected": "Claude Code, then Claude Code again, and Claude Code.",
-      "expectedCorrections": [
-        {
-          "to": "Claude Code",
-          "count": 3
-        }
+      "transcript": "Open the fig ma file.",
+      "corrected": "Open the Figma file.",
+      "corrections": [
+        { "from": "fig ma", "to": "Figma", "count": 1 }
       ]
     },
     {
-      "name": "punctuation is a boundary",
-      "entries": [
-        {
-          "kind": "correction",
-          "hear": "cloud code",
-          "write": "Claude Code"
-        }
+      "name": "case of the trigger doesn't matter and the output is written as given",
+      "dictionary": [
+        { "kind": "correction", "hear": "Mac oh ess", "write": "macOS" }
       ],
-      "input": "(cloud code), \"cloud code\"; cloud code!",
-      "expected": "(Claude Code), \"Claude Code\"; Claude Code!",
-      "expectedCorrections": [
-        {
-          "to": "Claude Code",
-          "count": 3
-        }
+      "transcript": "MAC OH ESS 26 broke the hotkey, then mac Oh ess fixed it.",
+      "corrected": "macOS 26 broke the hotkey, then macOS fixed it.",
+      "corrections": [
+        { "from": "MAC OH ESS", "to": "macOS", "count": 2 }
       ]
     },
     {
-      "name": "a possessive still matches - the apostrophe is not a letter",
-      "entries": [
-        {
-          "kind": "correction",
-          "hear": "cloud code",
-          "write": "Claude Code"
-        }
+      "name": "never fires inside a longer word",
+      "dictionary": [
+        { "kind": "correction", "hear": "ex code", "write": "Xcode" }
       ],
-      "input": "cloud code's output",
-      "expected": "Claude Code's output",
-      "expectedCorrections": [
-        {
-          "to": "Claude Code",
-          "count": 1
-        }
+      "transcript": "The excodes, a reexcode build and ex codex all stay.",
+      "corrected": "The excodes, a reexcode build and ex codex all stay.",
+      "corrections": []
+    },
+    {
+      "name": "the words apart from each other are not the phrase",
+      "dictionary": [
+        { "kind": "correction", "hear": "bird town", "write": "Birdtown" }
+      ],
+      "transcript": "A bird flew over the town.",
+      "corrected": "A bird flew over the town.",
+      "corrections": []
+    },
+    {
+      "name": "a digit next to the match blocks it",
+      "dictionary": [
+        { "kind": "correction", "hear": "node js", "write": "Node.js" }
+      ],
+      "transcript": "Upgrade node js2 and 2node js.",
+      "corrected": "Upgrade node js2 and 2node js.",
+      "corrections": []
+    },
+    {
+      "name": "accented letters next to the match block it",
+      "dictionary": [
+        { "kind": "correction", "hear": "lena", "write": "Lena" }
+      ],
+      "transcript": "lena, Malena and Élena.",
+      "corrected": "Lena, Malena and Élena.",
+      "corrections": [
+        { "from": "lena", "to": "Lena", "count": 1 }
       ]
     },
     {
-      "name": "a disabled entry changes nothing",
-      "entries": [
-        {
-          "kind": "correction",
-          "hear": "cloud code",
-          "write": "Claude Code",
-          "isEnabled": false
-        }
+      "name": "punctuation and apostrophes are boundaries",
+      "dictionary": [
+        { "kind": "correction", "hear": "parrot keet", "write": "Parakeet" }
       ],
-      "input": "I use cloud code every day.",
-      "expected": "I use cloud code every day.",
-      "expectedCorrections": []
-    },
-    {
-      "name": "a term entry never rewrites text",
-      "entries": [
-        {
-          "kind": "term",
-          "write": "Anthropic"
-        }
-      ],
-      "input": "anthropic makes models.",
-      "expected": "anthropic makes models.",
-      "expectedCorrections": []
-    },
-    {
-      "name": "single word trigger is honoured when asked for",
-      "entries": [
-        {
-          "kind": "correction",
-          "hear": "vercell",
-          "write": "Vercel"
-        }
-      ],
-      "input": "Deployed on Vercell today.",
-      "expected": "Deployed on Vercel today.",
-      "expectedCorrections": [
-        {
-          "to": "Vercel",
-          "count": 1
-        }
+      "transcript": "(parrot keet), \"parrot-keet\"; parrot keet's model!",
+      "corrected": "(Parakeet), \"Parakeet\"; Parakeet's model!",
+      "corrections": [
+        { "from": "parrot keet", "to": "Parakeet", "count": 3 }
       ]
     },
     {
-      "name": "several independent rules in one pass",
-      "entries": [
-        {
-          "kind": "correction",
-          "hear": "clawed code",
-          "write": "Claude Code"
-        },
-        {
-          "kind": "correction",
-          "hear": "whisper flow",
-          "write": "Wispr Flow"
-        }
+      "name": "a hyphen right after the match doesn't stop it",
+      "dictionary": [
+        { "kind": "correction", "hear": "bird town", "write": "Birdtown" }
       ],
-      "input": "clawed code beat whisper flow.",
-      "expected": "Claude Code beat Wispr Flow.",
-      "expectedCorrections": [
-        {
-          "to": "Claude Code",
-          "count": 1
-        },
-        {
-          "to": "Wispr Flow",
-          "count": 1
-        }
+      "transcript": "We're a bird town-based team.",
+      "corrected": "We're a Birdtown-based team.",
+      "corrections": [
+        { "from": "bird town", "to": "Birdtown", "count": 1 }
       ]
     },
     {
-      "name": "empty input is left alone",
-      "entries": [
-        {
-          "kind": "correction",
-          "hear": "cloud code",
-          "write": "Claude Code"
-        }
+      "name": "regex characters in the trigger are literal",
+      "dictionary": [
+        { "kind": "correction", "hear": "node.js", "write": "Node.js" },
+        { "kind": "correction", "hear": "flow (beta)", "write": "Flow Beta" }
       ],
-      "input": "",
-      "expected": "",
-      "expectedCorrections": []
-    },
-    {
-      "name": "replacement containing regex metacharacters is literal",
-      "entries": [
-        {
-          "kind": "correction",
-          "hear": "c plus plus",
-          "write": "C++"
-        }
-      ],
-      "input": "I write c plus plus.",
-      "expected": "I write C++.",
-      "expectedCorrections": [
-        {
-          "to": "C++",
-          "count": 1
-        }
+      "transcript": "nodexjs is not node.js, and flow (beta) is out.",
+      "corrected": "nodexjs is not Node.js, and Flow Beta is out.",
+      "corrections": [
+        { "from": "node.js", "to": "Node.js", "count": 1 },
+        { "from": "flow (beta)", "to": "Flow Beta", "count": 1 }
       ]
     },
     {
-      "name": "trigger containing regex metacharacters is literal",
-      "entries": [
-        {
-          "kind": "correction",
-          "hear": "dot net",
-          "write": ".NET"
-        }
+      "name": "replacement text is written literally",
+      "dictionary": [
+        { "kind": "correction", "hear": "see sharp", "write": "C#" },
+        { "kind": "correction", "hear": "dollar zero", "write": "$0" },
+        { "kind": "correction", "hear": "back slash one", "write": "\\1" }
       ],
-      "input": "Built with dot net.",
-      "expected": "Built with .NET.",
-      "expectedCorrections": [
-        {
-          "to": ".NET",
-          "count": 1
-        }
+      "transcript": "In see sharp, print dollar zero and back slash one.",
+      "corrected": "In C#, print $0 and \\1.",
+      "corrections": [
+        { "from": "see sharp", "to": "C#", "count": 1 },
+        { "from": "dollar zero", "to": "$0", "count": 1 },
+        { "from": "back slash one", "to": "\\1", "count": 1 }
       ]
     },
     {
-      "name": "accented trigger matches decomposed input (NFC normalization)",
-      "$comment": "macOS hands back NFD strings from several APIs. Without normalizing both sides, an accented trigger silently never fires. Input here is deliberately NFD.",
-      "entries": [
-        {
-          "kind": "correction",
-          "hear": "café racer",
-          "write": "Café Racer"
-        }
+      "name": "accented trigger matches decomposed text",
+      "note": "The input spells é as e plus a combining accent.",
+      "dictionary": [
+        { "kind": "correction", "hear": "saint étienne", "write": "Saint-Étienne" }
       ],
-      "input": "a café racer bike",
-      "expected": "a Café Racer bike",
-      "expectedCorrections": [
-        {
-          "to": "Café Racer",
-          "count": 1
-        }
+      "transcript": "Flying to saint e\u0301tienne on Friday.",
+      "corrected": "Flying to Saint-Étienne on Friday.",
+      "corrections": [
+        { "from": "saint étienne", "to": "Saint-Étienne", "count": 1 }
       ]
     },
     {
-      "name": "a match already written the right way is not counted",
-      "entries": [
-        {
-          "kind": "correction",
-          "hear": "bird town",
-          "write": "Birdtown"
-        }
+      "name": "decomposed trigger matches composed text",
+      "note": "The trigger spells é as e plus a combining accent.",
+      "dictionary": [
+        { "kind": "correction", "hear": "poke\u0301 bowl", "write": "Poké Bowl" }
       ],
-      "input": "Birdtown, bird town and BirdTown.",
-      "expected": "Birdtown, Birdtown and Birdtown.",
-      "expectedCorrections": [
-        {
-          "to": "Birdtown",
-          "count": 2
-        }
+      "transcript": "Lunch at the poké bowl place.",
+      "corrected": "Lunch at the Poké Bowl place.",
+      "corrections": [
+        { "from": "poké bowl", "to": "Poké Bowl", "count": 1 }
       ]
     },
     {
-      "name": "nothing to fix reports no correction",
-      "entries": [
-        {
-          "kind": "correction",
-          "hear": "bird town",
-          "write": "Birdtown"
-        }
+      "name": "decomposed accent isn't mistaken for a word edge",
+      "note": "The first Zoë is decomposed. Composed, it isn't a match for \"zoe\", so it isn't counted.",
+      "dictionary": [
+        { "kind": "correction", "hear": "zoe", "write": "Zoë" }
       ],
-      "input": "Birdtown is already right.",
-      "expected": "Birdtown is already right.",
-      "expectedCorrections": []
-    },
-    {
-      "name": "a rule's output is never rewritten by a shorter rule",
-      "entries": [
-        {
-          "kind": "correction",
-          "hear": "bird town",
-          "write": "Birdtown"
-        },
-        {
-          "kind": "correction",
-          "hear": "data at bird town dot com",
-          "write": "data@birdtown.com"
-        }
-      ],
-      "input": "Write to data at bird town dot com about bird town.",
-      "expected": "Write to data@birdtown.com about Birdtown.",
-      "expectedCorrections": [
-        {
-          "to": "data@birdtown.com",
-          "count": 1
-        },
-        {
-          "to": "Birdtown",
-          "count": 1
-        }
+      "transcript": "Zoe\u0308 met zoe and Zoe.",
+      "corrected": "Zoë met Zoë and Zoë.",
+      "corrections": [
+        { "from": "zoe", "to": "Zoë", "count": 2 }
       ]
     },
     {
-      "name": "glued output is safe from a shorter rule too",
-      "entries": [
-        {
-          "kind": "correction",
-          "hear": "side quest",
-          "write": "Side[Quest]"
-        },
-        {
-          "kind": "correction",
-          "hear": "side quest dot video",
-          "write": "sidequest.video"
-        }
+      "name": "already right in a different encoding is not counted",
+      "note": "The rule's spelling and the first café are decomposed, the second is composed. Only the second differs from the rule, and only by case.",
+      "dictionary": [
+        { "kind": "correction", "hear": "café", "write": "Cafe\u0301" }
       ],
-      "input": "Sign up at side quest dot video to try side quest.",
-      "expected": "Sign up at sidequest.video to try Side[Quest].",
-      "expectedCorrections": [
-        {
-          "to": "sidequest.video",
-          "count": 1
-        },
-        {
-          "to": "Side[Quest]",
-          "count": 1
-        }
+      "transcript": "Cafe\u0301 and café.",
+      "corrected": "Café and Café.",
+      "corrections": [
+        { "from": "café", "to": "Cafe\u0301", "count": 1 }
       ]
+    },
+    {
+      "name": "longer trigger wins over a shorter one inside it",
+      "note": "The shorter rule is listed first, and still loses.",
+      "dictionary": [
+        { "kind": "correction", "hear": "bird town", "write": "Birdtown" },
+        { "kind": "correction", "hear": "bird town flow", "write": "Birdtown Flow" }
+      ],
+      "transcript": "I dictate with bird town flow.",
+      "corrected": "I dictate with Birdtown Flow.",
+      "corrections": [
+        { "from": "bird town flow", "to": "Birdtown Flow", "count": 1 }
+      ]
+    },
+    {
+      "name": "shorter rule still fires outside the longer match",
+      "dictionary": [
+        { "kind": "correction", "hear": "bird town", "write": "Birdtown" },
+        { "kind": "correction", "hear": "bird town flow", "write": "Birdtown Flow" }
+      ],
+      "transcript": "bird town flow is made by bird town.",
+      "corrected": "Birdtown Flow is made by Birdtown.",
+      "corrections": [
+        { "from": "bird town flow", "to": "Birdtown Flow", "count": 1 },
+        { "from": "bird town", "to": "Birdtown", "count": 1 }
+      ]
+    },
+    {
+      "name": "partly overlapping triggers: the longer one takes the shared word",
+      "dictionary": [
+        { "kind": "correction", "hear": "data dog", "write": "Datadog" },
+        { "kind": "correction", "hear": "swift data", "write": "SwiftData" }
+      ],
+      "transcript": "swift data dog",
+      "corrected": "SwiftData dog",
+      "corrections": [
+        { "from": "swift data", "to": "SwiftData", "count": 1 }
+      ]
+    },
+    {
+      "name": "equal-length overlapping triggers: the one listed first wins",
+      "dictionary": [
+        { "kind": "correction", "hear": "owl light", "write": "Owl Light" },
+        { "kind": "correction", "hear": "night owl", "write": "Night Owl" }
+      ],
+      "transcript": "Switch to night owl light.",
+      "corrected": "Switch to night Owl Light.",
+      "corrections": [
+        { "from": "owl light", "to": "Owl Light", "count": 1 }
+      ]
+    },
+    {
+      "name": "matches that touch but don't overlap both fire",
+      "dictionary": [
+        { "kind": "correction", "hear": "bird town", "write": "Birdtown" },
+        { "kind": "correction", "hear": "flow lab", "write": "Flow Lab" }
+      ],
+      "transcript": "bird town-flow lab",
+      "corrected": "Birdtown-Flow Lab",
+      "corrections": [
+        { "from": "bird town", "to": "Birdtown", "count": 1 },
+        { "from": "flow lab", "to": "Flow Lab", "count": 1 }
+      ]
+    },
+    {
+      "name": "one rule's output is never rewritten by another",
+      "dictionary": [
+        { "kind": "correction", "hear": "bird town", "write": "Birdtown" },
+        { "kind": "correction", "hear": "support at bird town dot app", "write": "support@birdtown.app" }
+      ],
+      "transcript": "Mail support at bird town dot app about bird town.",
+      "corrected": "Mail support@birdtown.app about Birdtown.",
+      "corrections": [
+        { "from": "support at bird town dot app", "to": "support@birdtown.app", "count": 1 },
+        { "from": "bird town", "to": "Birdtown", "count": 1 }
+      ]
+    },
+    {
+      "name": "a shorter rule's output isn't fed to a longer rule",
+      "dictionary": [
+        { "kind": "correction", "hear": "tweety", "write": "bird town" },
+        { "kind": "correction", "hear": "bird town", "write": "Birdtown" }
+      ],
+      "transcript": "Ask tweety about bird town.",
+      "corrected": "Ask bird town about Birdtown.",
+      "corrections": [
+        { "from": "bird town", "to": "Birdtown", "count": 1 },
+        { "from": "tweety", "to": "bird town", "count": 1 }
+      ]
+    },
+    {
+      "name": "independent rules in one text",
+      "dictionary": [
+        { "kind": "correction", "hear": "a sink let", "write": "async let" },
+        { "kind": "correction", "hear": "see sharp", "write": "C#" },
+        { "kind": "correction", "hear": "cooper netties", "write": "Kubernetes" },
+        { "kind": "term", "write": "Birdtown" }
+      ],
+      "transcript": "Ported a sink let code to see sharp, then shipped it on cooper netties.",
+      "corrected": "Ported async let code to C#, then shipped it on Kubernetes.",
+      "corrections": [
+        { "from": "a sink let", "to": "async let", "count": 1 },
+        { "from": "see sharp", "to": "C#", "count": 1 },
+        { "from": "cooper netties", "to": "Kubernetes", "count": 1 }
+      ]
+    },
+    {
+      "name": "repeats are counted and the first spelling heard is reported",
+      "dictionary": [
+        { "kind": "correction", "hear": "re nay", "write": "Renée" }
+      ],
+      "transcript": "Re nay said renay, and RE-NAY agreed.",
+      "corrected": "Renée said Renée, and Renée agreed.",
+      "corrections": [
+        { "from": "Re nay", "to": "Renée", "count": 3 }
+      ]
+    },
+    {
+      "name": "match already spelled right is neither changed nor counted",
+      "note": "\"from\" is the first changed match, not the first match.",
+      "dictionary": [
+        { "kind": "correction", "hear": "fluid audio", "write": "FluidAudio" }
+      ],
+      "transcript": "FluidAudio, fluid audio and Fluidaudio.",
+      "corrected": "FluidAudio, FluidAudio and FluidAudio.",
+      "corrections": [
+        { "from": "fluid audio", "to": "FluidAudio", "count": 2 }
+      ]
+    },
+    {
+      "name": "text that is already right reports nothing",
+      "dictionary": [
+        { "kind": "correction", "hear": "get hub", "write": "GitHub" }
+      ],
+      "transcript": "GitHub is spelled right.",
+      "corrected": "GitHub is spelled right.",
+      "corrections": []
+    },
+    {
+      "name": "an already-right match still keeps a shorter rule out",
+      "dictionary": [
+        { "kind": "correction", "hear": "bird town", "write": "Bird Town" },
+        { "kind": "correction", "hear": "bird town flow", "write": "Birdtown Flow" }
+      ],
+      "transcript": "Birdtown Flow was built in bird town.",
+      "corrected": "Birdtown Flow was built in Bird Town.",
+      "corrections": [
+        { "from": "bird town", "to": "Bird Town", "count": 1 }
+      ]
+    },
+    {
+      "name": "duplicate entries count once",
+      "dictionary": [
+        { "kind": "correction", "hear": "get hub", "write": "GitHub" },
+        { "kind": "correction", "hear": "get hub", "write": "GitHub" }
+      ],
+      "transcript": "get hub and get hub",
+      "corrected": "GitHub and GitHub",
+      "corrections": [
+        { "from": "get hub", "to": "GitHub", "count": 2 }
+      ]
+    },
+    {
+      "name": "same trigger with two spellings: the one listed first wins",
+      "dictionary": [
+        { "kind": "correction", "hear": "get hub", "write": "GitHub" },
+        { "kind": "correction", "hear": "get hub", "write": "Github" }
+      ],
+      "transcript": "Open get hub.",
+      "corrected": "Open GitHub.",
+      "corrections": [
+        { "from": "get hub", "to": "GitHub", "count": 1 }
+      ]
+    },
+    {
+      "name": "disabled entry changes nothing",
+      "dictionary": [
+        { "kind": "correction", "hear": "parrot keet", "write": "Parakeet", "isEnabled": false }
+      ],
+      "transcript": "parrot keet v3 is loaded.",
+      "corrected": "parrot keet v3 is loaded.",
+      "corrections": []
+    },
+    {
+      "name": "disabled longer rule doesn't shield a shorter one",
+      "dictionary": [
+        { "kind": "correction", "hear": "bird town flow", "write": "Birdtown Flow", "isEnabled": false },
+        { "kind": "correction", "hear": "bird town", "write": "Birdtown" }
+      ],
+      "transcript": "bird town flow",
+      "corrected": "Birdtown flow",
+      "corrections": [
+        { "from": "bird town", "to": "Birdtown", "count": 1 }
+      ]
+    },
+    {
+      "name": "term entry never rewrites text",
+      "dictionary": [
+        { "kind": "term", "write": "Kubernetes" }
+      ],
+      "transcript": "kubernetes on cooper netties",
+      "corrected": "kubernetes on cooper netties",
+      "corrections": []
+    },
+    {
+      "name": "blank trigger is ignored",
+      "note": "\"--\" has no words once the hyphens are taken out, so it can't match.",
+      "dictionary": [
+        { "kind": "correction", "hear": "   ", "write": "Oops" },
+        { "kind": "correction", "hear": "--", "write": "Dashes" }
+      ],
+      "transcript": "a -- b, with   gaps",
+      "corrected": "a -- b, with   gaps",
+      "corrections": []
+    },
+    {
+      "name": "empty input stays empty",
+      "dictionary": [
+        { "kind": "correction", "hear": "bird town", "write": "Birdtown" }
+      ],
+      "transcript": "",
+      "corrected": "",
+      "corrections": []
     }
   ]
 }

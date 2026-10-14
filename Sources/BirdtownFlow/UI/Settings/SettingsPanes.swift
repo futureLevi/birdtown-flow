@@ -1091,7 +1091,6 @@ struct AboutSettingsPane: View {
         Credit(title: "Parakeet", detail: "Speech recognition models by NVIDIA.", link: "https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3"),
         Credit(title: "Parakeet Ultra", detail: "Post-trained for accuracy by moondream.", link: "https://moondream.ai"),
         Credit(title: "FluidAudio", detail: "Runs Parakeet on the Neural Engine with Core ML.", link: "https://github.com/FluidInference/FluidAudio"),
-        Credit(title: "murmur-youtube", detail: "The open-source project Birdtown Flow grew from.", link: "https://github.com/per-simmons/murmur-youtube"),
     ]
 
     var body: some View {

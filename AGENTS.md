@@ -32,9 +32,8 @@ make snapshots      # every screen to ./snapshots, light and dark
   decode during recording; the WAV append and placeholder row come first (see ARCHITECTURE).
 - **Polish can only make things better.** Time limit, `PolishGuard`, and any error all fall
   back to the deterministic text.
-- **The dictionary runs last**, after polish. `shared/dictionary-test-vectors.json` is the
-  spec for correction behaviour (the upstream Windows app runs the same vectors); change the
-  vectors first, then `cp shared/dictionary-test-vectors.json Tests/MurmurDictionaryTests/`.
+- **The dictionary runs last**, after polish. `Tests/MurmurDictionaryTests/dictionary-test-vectors.json`
+  is the spec for correction behaviour: change the vectors first, then the code.
 - **No literal design values in views.** Everything comes from `UI/DesignSystem/Tokens.swift`.
   The spectrum (`SpectrumOrb`, `Spectrum`) means live and nothing else; primary actions are
   navy pills; Signal blue is for selection, focus and links. See `docs/brand.md`.

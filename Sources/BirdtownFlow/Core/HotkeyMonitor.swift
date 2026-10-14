@@ -9,12 +9,13 @@ import MurmurKit
 typealias PushToTalkKey = KeyShortcut
 
 extension ModifierKey {
-    /// Device-*dependent* bit for this specific physical key.
+    /// The flag bit for this one physical key, left and right told apart.
     ///
-    /// `CGEventFlags.maskAlternate` is the union mask — it's set whenever *either* Option
-    /// key is down. Using it means: hold Left ⌥, tap Right ⌥, and the release is invisible
-    /// (the union bit is still set by the left key), so `onRelease` never fires. The mic
-    /// stays open, the HUD stays up, and the next press is swallowed too.
+    /// The familiar masks (`.maskAlternate`, `.maskCommand`…) are shared by both keys of a
+    /// pair and stay set while either is held. Watching Right ⌥ through `.maskAlternate`
+    /// would go wrong as soon as the left one is down too: letting go of Right ⌥ leaves
+    /// the shared bit set, so we'd never see the release and dictation would carry on
+    /// recording. The per-key bit clears exactly when this key comes up.
     var flag: CGEventFlags { CGEventFlags(rawValue: deviceFlag) }
 
     /// The device-independent flag. Only used to confirm a release we may have missed: if
@@ -30,10 +31,11 @@ extension ModifierKey {
 /// Watches the push-to-talk key (or chord), plus the keys that matter while it's held, using a
 /// `CGEventTap`.
 ///
-/// A tap is required rather than `NSEvent.addGlobalMonitor` because `fn` and left/right
-/// modifier discrimination don't surface through the higher-level APIs, and because Space
-/// (hands-free) and Esc (cancel) must be *swallowed* while dictating. This needs
-/// Accessibility permission; without it `CGEvent.tapCreate` returns nil.
+/// Why a tap and not an `NSEvent` global monitor: a monitor only gets a copy of each event
+/// after the fact, and dictation needs to take some keys away from the frontmost app (Space
+/// for hands-free, Esc to cancel, a chord's own key, a right-hand modifier). The tap sees
+/// the raw flags too, `fn` and the per-side modifier bits included. Creating it takes the
+/// Accessibility grant, and fails without it.
 ///
 /// The monitor only reports raw gestures; `DictationController` decides what they mean. The
 /// callback runs for every keystroke on the system, so it does no work beyond a few compares
@@ -70,8 +72,10 @@ final class HotkeyMonitor {
     /// All NX_DEVICE* modifier bits: both shifts, controls, options and commands.
     private static let deviceModifierMask = ModifierKey.deviceMask
 
-    private var tap: CFMachPort?
-    private var runLoopSource: CFRunLoopSource?
+    /// The installed tap and the source that delivers its events on the main run loop; both
+    /// `nil` while stopped.
+    private var eventTap: CFMachPort?
+    private var eventTapSource: CFRunLoopSource?
     private(set) var isPressed = false
     /// Device modifier bits already down when our key went down (or since reported), so only
     /// a *newly* pressed modifier counts as a chord.
@@ -107,68 +111,42 @@ final class HotkeyMonitor {
     var onTapLost: (() -> Void)?
 
     /// Whether the tap exists.
-    var isArmed: Bool { tap != nil }
+    var isArmed: Bool { eventTap != nil }
 
+    /// What the tap subscribes to. macOS sends its tap-disabled notices regardless.
+    private static let watchedEvents: CGEventMask = [CGEventType.flagsChanged, .keyDown, .keyUp]
+        .reduce(CGEventMask(0)) { mask, type in mask | (CGEventMask(1) << type.rawValue) }
+
+    /// Installs the tap on the main run loop, replacing any earlier one.
+    ///
+    /// The tap refers to the monitor without retaining it, so whoever owns the monitor must
+    /// keep it alive while the tap is installed (`DictationController` holds it for good).
+    ///
     /// - Parameter logFailure: `false` when the caller (the rearm loop) logs failures itself.
-    /// - Returns: `false` if the tap couldn't be created — almost always missing Accessibility permission.
+    /// - Returns: `false` when macOS won't create the tap, which nearly always means the
+    ///   Accessibility grant is missing.
     @discardableResult
     func start(logFailure: Bool = true) -> Bool {
         stop()
-
-        let mask = (1 << CGEventType.flagsChanged.rawValue)
-            | (1 << CGEventType.keyDown.rawValue)
-            | (1 << CGEventType.keyUp.rawValue)
-        let refcon = Unmanaged.passUnretained(self).toOpaque()
-
         guard let tap = CGEvent.tapCreate(
             tap: .cgSessionEventTap,
             place: .headInsertEventTap,
             options: .defaultTap,
-            eventsOfInterest: CGEventMask(mask),
-            callback: { _, type, event, refcon in
-                guard let refcon else { return Unmanaged.passUnretained(event) }
-                if event.getIntegerValueField(.eventSourceUserData) == HotkeyMonitor.syntheticEventTag {
-                    return Unmanaged.passUnretained(event)
-                }
-                let monitor = Unmanaged<HotkeyMonitor>.fromOpaque(refcon).takeUnretainedValue()
-
-                // CGEvent isn't Sendable, so pull out the plain values before crossing into
-                // actor-isolated code. The tap was added to the main run loop, so this
-                // callback genuinely does run on the main thread.
-                let keyCode = event.getIntegerValueField(.keyboardEventKeycode)
-                let isRepeat = event.getIntegerValueField(.keyboardEventAutorepeat) != 0
-                let flags = event.flags
-                let consume = MainActor.assumeIsolated {
-                    monitor.handle(type: type, keyCode: keyCode, flags: flags, isRepeat: isRepeat)
-                }
-                return consume ? nil : Unmanaged.passUnretained(event)
-            },
-            userInfo: refcon
+            eventsOfInterest: Self.watchedEvents,
+            callback: { _, type, event, refcon in HotkeyMonitor.route(type, event, refcon) },
+            userInfo: Unmanaged.passUnretained(self).toOpaque()
         ) else {
             if logFailure { Log.hotkey.error("tapCreate failed — Accessibility permission missing?") }
             return false
         }
-
-        self.tap = tap
-        let source = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, tap, 0)
-        runLoopSource = source
-        CFRunLoopAddSource(CFRunLoopGetMain(), source, .commonModes)
-        CGEvent.tapEnable(tap: tap, enable: true)
-
+        install(tap)
         Log.hotkey.info("listening for \(self.key.displayName, privacy: .public)")
         return true
     }
 
+    /// Removes the tap and forgets everything about the current press.
     func stop() {
-        if let tap {
-            CGEvent.tapEnable(tap: tap, enable: false)
-            CFMachPortInvalidate(tap)
-        }
-        if let runLoopSource {
-            CFRunLoopRemoveSource(CFRunLoopGetMain(), runLoopSource, .commonModes)
-        }
-        tap = nil
-        runLoopSource = nil
+        removeTap()
         stopReleaseWatch()
         isPressed = false
         knownModifiers = 0
@@ -176,28 +154,55 @@ final class HotkeyMonitor {
         resetControlOption()
     }
 
-    // MARK: - Tap callback
+    private func install(_ tap: CFMachPort) {
+        let source = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, tap, 0)
+        CFRunLoopAddSource(CFRunLoopGetMain(), source, .commonModes)
+        CGEvent.tapEnable(tap: tap, enable: true)
+        eventTap = tap
+        eventTapSource = source
+    }
 
-    /// - Returns: `true` if the event should be swallowed rather than passed along.
+    private func removeTap() {
+        if let eventTap {
+            CGEvent.tapEnable(tap: eventTap, enable: false)
+            CFMachPortInvalidate(eventTap)
+        }
+        if let eventTapSource {
+            CFRunLoopRemoveSource(CFRunLoopGetMain(), eventTapSource, .commonModes)
+        }
+        eventTap = nil
+        eventTapSource = nil
+    }
+
+    // MARK: - Events
+
+    /// The tap's C callback lands here, on the main thread: the tap's run-loop source was
+    /// added to the main run loop. Keystrokes the app posts itself go straight through.
+    private nonisolated static func route(
+        _ type: CGEventType,
+        _ event: CGEvent,
+        _ refcon: UnsafeMutableRawPointer?
+    ) -> Unmanaged<CGEvent>? {
+        let unchanged = Unmanaged.passUnretained(event)
+        guard let refcon, event.getIntegerValueField(.eventSourceUserData) != syntheticEventTag else {
+            return unchanged
+        }
+        let monitor = Unmanaged<HotkeyMonitor>.fromOpaque(refcon).takeUnretainedValue()
+        // The main actor gets plain values; a CGEvent isn't Sendable.
+        let keyCode = event.getIntegerValueField(.keyboardEventKeycode)
+        let isRepeat = event.getIntegerValueField(.keyboardEventAutorepeat) != 0
+        let flags = event.flags
+        let swallow = MainActor.assumeIsolated {
+            monitor.handle(type: type, keyCode: keyCode, flags: flags, isRepeat: isRepeat)
+        }
+        return swallow ? nil : unchanged
+    }
+
+    /// Whether to swallow the event: `true` keeps it from every app behind the tap.
     private func handle(type: CGEventType, keyCode: Int64, flags: CGEventFlags, isRepeat: Bool) -> Bool {
         switch type {
         case .tapDisabledByTimeout, .tapDisabledByUserInput:
-            // The system disables a tap that runs too slowly or is interrupted; re-arm it,
-            // and assume we may have missed a release while it was off.
-            guard let tap else { return false }
-            CGEvent.tapEnable(tap: tap, enable: true)
-            resyncAfterGap()
-            if CGEvent.tapIsEnabled(tap: tap) {
-                Log.hotkey.notice("event tap re-enabled")
-            } else {
-                Log.hotkey.error("event tap couldn't be re-enabled — Accessibility revoked?")
-                // Not from inside the tap's own callback: tear down on the next turn.
-                Task { @MainActor [weak self] in
-                    guard let self, self.tap === tap else { return }
-                    self.stop()
-                    self.onTapLost?()
-                }
-            }
+            reviveTap()
             return false
         case .flagsChanged:
             return modifiersChanged(keyCode: keyCode, flags: flags)
@@ -213,6 +218,28 @@ final class HotkeyMonitor {
             return swallowed.remove(keyCode) != nil
         default:
             return false
+        }
+    }
+
+    /// macOS switches a tap off when its callback runs too long, and sometimes in response to
+    /// what the user is doing. Turn it straight back on, and since any key could have gone up
+    /// unseen in the meantime, check the real key state. If it won't come back on, the
+    /// Accessibility grant has most likely been taken away: tell the owner.
+    private func reviveTap() {
+        guard let tap = eventTap else { return }
+        CGEvent.tapEnable(tap: tap, enable: true)
+        resyncAfterGap()
+        guard !CGEvent.tapIsEnabled(tap: tap) else {
+            Log.hotkey.notice("event tap re-enabled")
+            return
+        }
+        Log.hotkey.error("event tap couldn't be re-enabled — Accessibility revoked?")
+        // This is the tap's own callback, so leave the teardown to the next turn, and skip it
+        // if a restart has installed a different tap by then.
+        Task { @MainActor [weak self] in
+            guard let self, self.eventTap === tap else { return }
+            self.stop()
+            self.onTapLost?()
         }
     }
 

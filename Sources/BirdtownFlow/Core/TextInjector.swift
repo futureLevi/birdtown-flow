@@ -3,23 +3,20 @@ import ApplicationServices
 import Carbon
 import Foundation
 
-/// Puts text into whatever field currently has keyboard focus.
+/// Types dictated text into the app the user is in, at the caret.
 ///
-/// Two strategies:
-/// 1. **Accessibility** — set `kAXSelectedTextAttribute` on the focused element. Clean and
-///    instant, and it leaves the pasteboard untouched.
-/// 2. **Pasteboard + ⌘V** — works in Electron apps and anything else with a half-hearted
-///    AX implementation. The previous pasteboard contents are restored afterwards.
+/// There are two ways to get it there. The Accessibility API can replace the focused
+/// element's selection directly, which is instant and leaves the clipboard alone. Failing
+/// that, the text goes on the clipboard and the app gets a ⌘V, with the user's own
+/// clipboard put back afterwards.
 ///
-/// The catch that makes this non-obvious: **many apps return `.success` from the AX write
-/// and then do nothing.** Electron (Cursor, VS Code, Slack, Discord), Chrome, and most
-/// terminal emulators all report `kAXSelectedTextAttribute` as settable, accept the write,
-/// and silently drop it. So the return value is not evidence of anything — strategy 1 is
-/// only trusted when the insertion point can be *observed* to have moved, and apps known to
-/// fake it go straight to strategy 2.
+/// The Accessibility route can't be taken at its word. Plenty of apps (Chromium and
+/// Electron ones, most terminals) say the selection is writable, report success, and then
+/// ignore what they were given. So a write only counts when the caret can be seen to move,
+/// and apps known to behave this way go straight to pasting.
 ///
-/// This all works because the HUD is a non-activating panel: focus never leaves the user's
-/// target app, so "the focused element" is still their text field.
+/// "The focused element" is still the user's text field because the HUD never takes focus:
+/// it's a non-activating panel, so their app stays frontmost throughout.
 @MainActor
 enum TextInjector {
     enum Outcome: Equatable, Sendable {
@@ -111,9 +108,8 @@ enum TextInjector {
     /// Puts `text` on the clipboard as an ordinary copy (clipboard managers keep it).
     static func copy(_ text: String) {
         cancelPendingRestore()
-        let pasteboard = NSPasteboard.general
-        pasteboard.clearContents()
-        pasteboard.setString(text, forType: .string)
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(text, forType: .string)
     }
 
     // MARK: - Smart spacing
@@ -178,20 +174,33 @@ enum TextInjector {
         }
 
         if !pasteFirst, let focused, insertViaAccessibility(text, into: focused, before: range) {
-            Log.inject.info("inserted via AX (\(text.count) chars)")
+            Log.inject.info("AX insert landed, \(text.count) chars")
             return .inserted
         }
         return .needsPaste(text)
     }
 
+    /// One attribute of `element`, or `nil` when the app has no value for it (or doesn't
+    /// answer in time).
+    private nonisolated static func attribute(_ name: String, of element: AXUIElement) -> CFTypeRef? {
+        var value: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(element, name as CFString, &value) == .success else { return nil }
+        return value
+    }
+
+    /// Whether the app says `name` can be written. Plenty of apps say so and then ignore the
+    /// write; see `insertViaAccessibility`.
+    private nonisolated static func canSet(_ name: String, on element: AXUIElement) -> Bool {
+        var settable: DarwinBoolean = false
+        return AXUIElementIsAttributeSettable(element, name as CFString, &settable) == .success
+            && settable.boolValue
+    }
+
     private nonisolated static func focusedElement() -> AXUIElement? {
-        var focused: CFTypeRef?
-        guard AXUIElementCopyAttributeValue(
-            AXUIElementCreateSystemWide(),
-            kAXFocusedUIElementAttribute as CFString,
-            &focused
-        ) == .success, let focused, CFGetTypeID(focused) == AXUIElementGetTypeID() else { return nil }
-        return unsafeDowncast(focused as AnyObject, to: AXUIElement.self)
+        guard let value = attribute(kAXFocusedUIElementAttribute, of: AXUIElementCreateSystemWide()),
+              CFGetTypeID(value) == AXUIElementGetTypeID()
+        else { return nil }
+        return unsafeDowncast(value as AnyObject, to: AXUIElement.self)
     }
 
     private nonisolated static let textRoles: Set<String> = [
@@ -200,15 +209,21 @@ enum TextInjector {
 
     /// Something you can type into: a text role, or anything exposing a caret.
     private nonisolated static func isTextInput(_ element: AXUIElement) -> Bool {
-        var role: CFTypeRef?
-        if AXUIElementCopyAttributeValue(element, kAXRoleAttribute as CFString, &role) == .success,
-           let role = role as? String, textRoles.contains(role) {
+        if let role = attribute(kAXRoleAttribute, of: element) as? String, textRoles.contains(role) {
             return true
         }
-        if selectedRange(of: element) != nil { return true }
-        var settable: DarwinBoolean = false
-        return AXUIElementIsAttributeSettable(element, kAXSelectedTextAttribute as CFString, &settable) == .success
-            && settable.boolValue
+        return selectedRange(of: element) != nil || canSet(kAXSelectedTextAttribute, on: element)
+    }
+
+    /// The selection (or, at zero length, the caret) as a UTF-16 range, when the app reports one.
+    private nonisolated static func selectedRange(of element: AXUIElement) -> CFRange? {
+        guard let value = attribute(kAXSelectedTextRangeAttribute, of: element),
+              CFGetTypeID(value) == AXValueGetTypeID()
+        else { return nil }
+        let wrapped = unsafeDowncast(value as AnyObject, to: AXValue.self)
+        var range = CFRange()
+        guard AXValueGetType(wrapped) == .cfRange, AXValueGetValue(wrapped, .cfRange, &range) else { return nil }
+        return range
     }
 
     /// `range` is the element's current selected range, already read by the caller.
@@ -227,41 +242,26 @@ enum TextInjector {
 
         // Fallback for fields without the parameterized attribute — only when the value is
         // small enough that reading it whole is cheap.
-        var count: CFTypeRef?
-        guard AXUIElementCopyAttributeValue(element, kAXNumberOfCharactersAttribute as CFString, &count) == .success,
-              let length = (count as? NSNumber)?.intValue, length <= 20_000
-        else { return nil }
-        var value: CFTypeRef?
-        guard AXUIElementCopyAttributeValue(element, kAXValueAttribute as CFString, &value) == .success,
-              let string = value as? String
+        guard let length = (attribute(kAXNumberOfCharactersAttribute, of: element) as? NSNumber)?.intValue,
+              length <= 20_000,
+              let string = attribute(kAXValueAttribute, of: element) as? String
         else { return nil }
         let units = string.utf16
         guard range.location <= units.count else { return nil }
         return String(decoding: Array(units.prefix(range.location)), as: UTF16.self).last
     }
 
-    /// `before` is the selected range read just before this call (nil when unreadable).
+    /// Writes `text` over the selection and reports whether it really landed. `before` is the
+    /// selected range the caller read just beforehand; without it there'd be nothing to
+    /// compare against, so the paste route is safer.
     private nonisolated static func insertViaAccessibility(
         _ text: String,
         into element: AXUIElement,
         before: CFRange?
     ) -> Bool {
-        var settable: DarwinBoolean = false
-        guard AXUIElementIsAttributeSettable(
-            element,
-            kAXSelectedTextAttribute as CFString,
-            &settable
-        ) == .success, settable.boolValue else { return false }
-
-        // Without a readable insertion point there's no way to tell a real insert from a
-        // silently-dropped one, so don't gamble — go straight to the fallback.
-        guard let before else { return false }
-
-        guard AXUIElementSetAttributeValue(
-            element,
-            kAXSelectedTextAttribute as CFString,
-            text as CFString
-        ) == .success else { return false }
+        guard let before, canSet(kAXSelectedTextAttribute, on: element) else { return false }
+        let status = AXUIElementSetAttributeValue(element, kAXSelectedTextAttribute as CFString, text as CFString)
+        guard status == .success else { return false }
 
         guard let after = selectedRange(of: element) else {
             // The write was accepted but can't be checked. Pasting now risks typing it twice,
@@ -270,30 +270,13 @@ enum TextInjector {
             return true
         }
 
-        // Deliberately a *movement* check, not an exact-length check. Falling back after a
-        // write that actually landed would paste the text a second time, and a duplicated
-        // paragraph is far worse than a missing one. Some apps normalize newlines or run
-        // autocorrect, so the caret can legitimately advance by something other than the
-        // UTF-16 count — only a completely unmoved selection proves nothing happened.
-        let unchanged = after.location == before.location && after.length == before.length
-        if unchanged { Log.inject.info("AX write didn't move the caret — pasting instead") }
-        return !unchanged
-    }
-
-    private nonisolated static func selectedRange(of element: AXUIElement) -> CFRange? {
-        var value: CFTypeRef?
-        guard AXUIElementCopyAttributeValue(
-            element,
-            kAXSelectedTextRangeAttribute as CFString,
-            &value
-        ) == .success, let value, CFGetTypeID(value) == AXValueGetTypeID() else { return nil }
-
-        let axValue = unsafeDowncast(value as AnyObject, to: AXValue.self)
-        guard AXValueGetType(axValue) == .cfRange else { return nil }
-
-        var range = CFRange()
-        guard AXValueGetValue(axValue, .cfRange, &range) else { return nil }
-        return range
+        // An app that ignored the write leaves the selection exactly where it was, so that's
+        // the only result treated as failure. Don't expect the caret to move by the text's
+        // length: some apps rewrite what they're given (line endings, autocorrect), and
+        // calling that a failure would paste the same text again on top of it.
+        let moved = after.location != before.location || after.length != before.length
+        if !moved { Log.inject.info("AX write didn't move the caret — pasting instead") }
+        return moved
     }
 
     // MARK: - Which apps fake AX success
@@ -337,56 +320,95 @@ enum TextInjector {
 
     // MARK: - Pasteboard + ⌘V
 
-    private typealias Snapshot = [[NSPasteboard.PasteboardType: Data]]
+    /// Everything that was on a pasteboard, every item in every type, so it can be put back.
+    @MainActor
+    private struct ClipboardContents {
+        let items: [[NSPasteboard.PasteboardType: Data]]
+
+        init(of pasteboard: NSPasteboard) {
+            items = (pasteboard.pasteboardItems ?? []).map { item in
+                item.types.reduce(into: [NSPasteboard.PasteboardType: Data]()) { saved, type in
+                    saved[type] = item.data(forType: type)
+                }
+            }
+        }
+
+        var isEmpty: Bool { items.isEmpty }
+
+        func write(to pasteboard: NSPasteboard) {
+            let restored = items.map { saved -> NSPasteboardItem in
+                let item = NSPasteboardItem()
+                for entry in saved { item.setData(entry.value, forType: entry.key) }
+                return item
+            }
+            pasteboard.clearContents()
+            pasteboard.writeObjects(restored)
+        }
+    }
 
     /// nspasteboard.org markers: clipboard managers skip items carrying these, so a dictation
     /// passing through the clipboard doesn't pollute the user's clipboard history.
     private static let transientType = NSPasteboard.PasteboardType("org.nspasteboard.TransientType")
     private static let autoGeneratedType = NSPasteboard.PasteboardType("org.nspasteboard.AutoGeneratedType")
 
+    /// Between putting the text on the clipboard and sending ⌘V. An app that reacts quickly
+    /// can otherwise paste before it has noticed the clipboard changed, and get the old one.
+    private static let pasteSettleDelay: Duration = .milliseconds(40)
+
+    /// Between ⌘V and putting the user's clipboard back. The app reads the clipboard in its
+    /// own time; restoring sooner could hand it the old contents instead of the dictation.
+    private static let restoreDelay: Duration = .milliseconds(550)
+
     /// The user's own clipboard, waiting to be put back after a paste.
-    private static var pendingRestore: (snapshot: Snapshot, task: Task<Void, Never>)?
+    private static var pendingRestore: (contents: ClipboardContents, task: Task<Void, Never>)?
 
     private static func paste(_ text: String, restoreClipboard: Bool) async {
         let pasteboard = NSPasteboard.general
 
         // A restore still pending from a dictation a moment ago holds the *user's* clipboard;
         // the pasteboard right now holds that dictation. Carry the user's forward.
-        var saved: Snapshot?
-        if restoreClipboard {
-            saved = pendingRestore?.snapshot ?? snapshot(of: pasteboard)
-        }
+        let saved: ClipboardContents? = restoreClipboard
+            ? pendingRestore?.contents ?? ClipboardContents(of: pasteboard)
+            : nil
         cancelPendingRestore()
 
+        pasteboard.clearContents()
+        pasteboard.writeObjects([pasteItem(for: text, transient: restoreClipboard)])
+        let ourChange = pasteboard.changeCount
+
+        try? await Task.sleep(for: pasteSettleDelay)
+        postCommandV()
+        Log.inject.info("sent ⌘V for \(text.count) chars")
+
+        guard let saved, !saved.isEmpty else { return }
+        scheduleRestore(saved, unlessChangedSince: ourChange)
+    }
+
+    /// The dictation as a pasteboard item, marked transient when the user's clipboard is
+    /// coming back afterwards.
+    private static func pasteItem(for text: String, transient: Bool) -> NSPasteboardItem {
         let item = NSPasteboardItem()
         item.setString(text, forType: .string)
-        if restoreClipboard {
+        if transient {
             item.setData(Data(), forType: transientType)
             item.setData(Data(), forType: autoGeneratedType)
         }
-        pasteboard.clearContents()
-        pasteboard.writeObjects([item])
-        let ours = pasteboard.changeCount
+        return item
+    }
 
-        // Give the target app a moment to observe the new pasteboard generation before
-        // ⌘V arrives, or a fast paste can grab the *previous* contents.
-        try? await Task.sleep(for: .milliseconds(40))
-        postCommandV()
-        Log.inject.info("pasted (\(text.count) chars)")
-
-        guard let saved, !saved.isEmpty else { return }
-        // The paste is asynchronous in the target app; restore only once it's had time to read.
-        // The task reads the snapshot back from `pendingRestore` rather than capturing it, so
-        // a newer paste can take it over by cancelling this one.
+    /// Puts `contents` back after `restoreDelay`, unless the clipboard has changed since
+    /// `changeCount` (the user copied something else, and theirs wins). The task looks the
+    /// contents up in `pendingRestore` when it fires instead of keeping its own copy, so a
+    /// paste arriving first can cancel it and carry them forward.
+    private static func scheduleRestore(_ contents: ClipboardContents, unlessChangedSince changeCount: Int) {
         let task = Task { @MainActor in
-            try? await Task.sleep(for: .milliseconds(550))
+            try? await Task.sleep(for: restoreDelay)
             guard !Task.isCancelled, let pending = pendingRestore else { return }
             pendingRestore = nil
-            // Someone copied something since: theirs wins.
-            guard NSPasteboard.general.changeCount == ours else { return }
-            restore(pending.snapshot, to: .general)
+            guard NSPasteboard.general.changeCount == changeCount else { return }
+            pending.contents.write(to: .general)
         }
-        pendingRestore = (saved, task)
+        pendingRestore = (contents, task)
     }
 
     private static func cancelPendingRestore() {
@@ -394,44 +416,23 @@ enum TextInjector {
         pendingRestore = nil
     }
 
-    private static func snapshot(of pasteboard: NSPasteboard) -> Snapshot {
-        (pasteboard.pasteboardItems ?? []).map { item in
-            var copy: [NSPasteboard.PasteboardType: Data] = [:]
-            for type in item.types {
-                if let data = item.data(forType: type) { copy[type] = data }
-            }
-            return copy
-        }
-    }
-
-    private static func restore(_ saved: Snapshot, to pasteboard: NSPasteboard) {
-        pasteboard.clearContents()
-        let items = saved.map { entry -> NSPasteboardItem in
-            let item = NSPasteboardItem()
-            for (type, data) in entry { item.setData(data, forType: type) }
-            return item
-        }
-        pasteboard.writeObjects(items)
-    }
-
+    /// Sends ⌘V to whatever app is frontmost.
     private static func postCommandV() {
         guard let source = CGEventSource(stateID: .privateState) else { return }
-        let vKey = keyCodeForCommandV()
-
-        guard let down = CGEvent(keyboardEventSource: source, virtualKey: vKey, keyDown: true),
-              let up = CGEvent(keyboardEventSource: source, virtualKey: vKey, keyDown: false)
-        else { return }
-
-        // Set explicitly rather than inheriting live hardware modifier state — the user may
-        // still be resting a finger on something.
-        down.flags = .maskCommand
-        up.flags = .maskCommand
-        // So our own hotkey tap doesn't read this ⌘V as a chord during the next dictation.
-        down.setIntegerValueField(.eventSourceUserData, value: HotkeyMonitor.syntheticEventTag)
-        up.setIntegerValueField(.eventSourceUserData, value: HotkeyMonitor.syntheticEventTag)
-
-        down.post(tap: .cghidEventTap)
-        up.post(tap: .cghidEventTap)
+        let key = keyCodeForCommandV()
+        let strokes = [true, false].compactMap { isDown in
+            CGEvent(keyboardEventSource: source, virtualKey: key, keyDown: isDown)
+        }
+        // Both halves or nothing: a key-down with no key-up would leave V held.
+        guard strokes.count == 2 else { return }
+        for stroke in strokes {
+            // Only ⌘, whatever the user still has a finger on: with ⇧ or ⌥ added, many apps
+            // read it as a different command (Paste and Match Style, and so on).
+            stroke.flags = .maskCommand
+            // So our own hotkey tap doesn't read this ⌘V as a chord during the next dictation.
+            stroke.setIntegerValueField(.eventSourceUserData, value: HotkeyMonitor.syntheticEventTag)
+        }
+        strokes.forEach { $0.post(tap: .cghidEventTap) }
     }
 
     /// The key that types "v" with ⌘ held in the current layout. Shortcuts follow the layout,

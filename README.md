@@ -16,8 +16,7 @@ Mail, Cursor, Terminal, a browser, anything. Recognition runs on the Neural Engi
 **Parakeet Ultra**, so a 30-second thought is ready a few hundred milliseconds after you
 release the key, and nothing you say leaves the machine unless you turn on cloud polish.
 
-Birdtown Flow is a fork of [per-simmons/murmur-youtube](https://github.com/per-simmons/murmur-youtube),
-rebuilt into a product meant to stand next to Wispr Flow.
+Birdtown Flow is built to stand next to Wispr Flow.
 
 ## What it does
 
@@ -39,7 +38,7 @@ turned off.
 
 ## Install
 
-**Download:** grab `BirdtownFlow.zip` from the [nightly release](https://github.com/futureLevi/murmur-youtube/releases/tag/nightly),
+**Download:** grab `BirdtownFlow.zip` from the [nightly release](https://github.com/futureLevi/birdtown-flow/releases/tag/nightly),
 unzip, and move `Birdtown Flow.app` to Applications. It isn't notarized, so macOS blocks the first
 launch: open **System Settings → Privacy & Security** and click **Open Anyway** (or run
 `xattr -dr com.apple.quarantine /Applications/Birdtown Flow.app`). Once the repository has a
@@ -50,7 +49,7 @@ signed, and after each update macOS asks for Accessibility again.
 **Build from source** (macOS 26, Xcode 26):
 
 ```bash
-git clone https://github.com/futureLevi/murmur-youtube.git birdtown-flow
+git clone https://github.com/futureLevi/birdtown-flow.git
 cd birdtown-flow
 make install      # builds, signs, installs to /Applications, launches
 ```
@@ -84,7 +83,7 @@ Swift 6 with strict concurrency, SwiftUI and AppKit, SwiftPM, macOS 26. The libr
 modules keep the codebase's original codename, Murmur.
 
 ```
-Sources/MurmurDictionary   correction rules (shared contract with windows/)
+Sources/MurmurDictionary   correction rules (Foundation only)
 Sources/MurmurKit          pure logic, tested on Linux too: pipeline, styles, snippets,
                            history, stats, polish prompt, guard and HTTP clients
 Sources/BirdtownFlow       the app: hotkeys, audio, engines, injection, HUD, UI
@@ -106,15 +105,9 @@ release.
 
 ## Credits
 
-- [per-simmons/murmur-youtube](https://github.com/per-simmons/murmur-youtube), the original
-  app this fork grew from, and its dictionary contract.
 - [NVIDIA Parakeet TDT](https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3) and
   [moondream's Parakeet Ultra](https://huggingface.co/moondream/parakeet-ultra).
 - [FluidAudio](https://github.com/FluidInference/FluidAudio) for CoreML models on the Neural
   Engine and CTC vocabulary boosting.
 
-The `windows/` folder is the upstream Windows app and isn't maintained in this fork.
-
-**License:** the upstream repository doesn't include a license, so its code is all rights
-reserved by its author. Ask the original author before redistributing or selling builds of
-this fork.
+**License:** © 2026 Levi Matkins. All rights reserved.
