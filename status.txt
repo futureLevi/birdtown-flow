@@ -1,0 +1,11 @@
+sha=aef79c9ee0a7c0bcf22e3f7f91d48ce62e420d44
+branch=fix/nightly-stage
+build=success
+test=success
+snapshots=success
+synth=success
+speech=success
+segmented=success
+signcheck=success
+signing=skipped
+release=skipped
