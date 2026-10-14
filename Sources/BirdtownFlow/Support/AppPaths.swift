@@ -6,6 +6,7 @@ import Foundation
 ///         dictionary.txt     the dictionary, plain text, hand-editable
 ///         snippets.json
 ///         lab.json           the Lab's polish configurations
+///         feedback/<id>.json feedback notes, sent or waiting (with <id>.wav)
 ///         history/history.json
 ///         history/recordings/<id>.wav
 enum AppPaths {
@@ -20,4 +21,6 @@ enum AppPaths {
     static var snippets: URL { support.appendingPathComponent("snippets.json") }
     /// The Lab's saved polish configurations and which styles use them.
     static var lab: URL { support.appendingPathComponent("lab.json") }
+    /// Feedback notes and their recordings (`FeedbackOutbox`).
+    static var feedback: URL { support.appendingPathComponent("feedback", isDirectory: true) }
 }

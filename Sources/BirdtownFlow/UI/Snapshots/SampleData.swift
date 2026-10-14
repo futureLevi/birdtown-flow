@@ -248,7 +248,8 @@ extension AppModel {
             history: HistoryStore(previewRecords: records),
             snippets: SnippetStore(preview: snippets),
             dictionary: DictionaryStore(preview: dictionary),
-            lab: PolishLabStore(preview: lab)
+            lab: PolishLabStore(preview: lab),
+            feedbackOutbox: FeedbackOutbox(previewNotes: [])
         )
     }
 }

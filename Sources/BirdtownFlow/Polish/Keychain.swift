@@ -14,12 +14,15 @@ enum Keychain {
     enum Account: String {
         case anthropic = "anthropic-api-key"
         case openAICompatible = "openai-compatible-api-key"
+        /// Files feedback notes as GitHub issues (`FeedbackCenter`).
+        case githubFeedback = "github-feedback-token"
 
         /// What Keychain Access shows for the item.
         fileprivate var label: String {
             switch self {
             case .anthropic: "Birdtown Flow: Anthropic API key"
             case .openAICompatible: "Birdtown Flow: OpenAI-compatible API key"
+            case .githubFeedback: "Birdtown Flow: GitHub token for feedback"
             }
         }
     }

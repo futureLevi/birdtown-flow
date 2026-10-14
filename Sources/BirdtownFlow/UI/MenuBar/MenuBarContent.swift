@@ -350,6 +350,14 @@ struct MenuBarContent: View {
                 model.controller.pasteLast()
             }
             .disabled(model.history.latestWithText == nil)
+            // Starts a feedback note: say what to fix, then press the shortcut (or Stop).
+            MenuRow(
+                title: "Send Feedback…",
+                shortcut: model.settings.feedbackShortcutEnabled ? model.settings.feedbackShortcut.displayName : nil
+            ) {
+                guard preview == nil else { return }
+                model.controller.toggleFeedbackNote()
+            }
             MenuRow(title: "Open Birdtown Flow", shortcut: "⌘O") {
                 guard preview == nil else { return }
                 openWindow(id: "main")

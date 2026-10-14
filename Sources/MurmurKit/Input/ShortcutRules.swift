@@ -5,6 +5,7 @@ public enum ShortcutRole: String, CaseIterable, Sendable {
     case pushToTalk
     case handsFree
     case pasteLast
+    case feedback
 
     /// Ends "… is already used for": "push to talk".
     public var usedFor: String {
@@ -12,6 +13,7 @@ public enum ShortcutRole: String, CaseIterable, Sendable {
         case .pushToTalk: "push to talk"
         case .handsFree: "hands-free"
         case .pasteLast: "pasting your last dictation"
+        case .feedback: "sending feedback"
         }
     }
 

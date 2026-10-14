@@ -12,6 +12,7 @@ extension Log {
     static let ui = Logger(subsystem: "com.birdtownlabs.flow", category: "ui")
     static let polish = Logger(subsystem: "com.birdtownlabs.flow", category: "polish")
     static let history = Logger(subsystem: "com.birdtownlabs.flow", category: "history")
+    static let feedback = Logger(subsystem: "com.birdtownlabs.flow", category: "feedback")
     /// One summary line per dictation and per Retry (`TimingLine`), at `.notice` so it persists.
     static let timing = Logger(subsystem: "com.birdtownlabs.flow", category: "timing")
 }

@@ -45,6 +45,8 @@ final class DictationController {
         case accessibilityAccess
         /// Birdtown Flow's microphone picker (Settings › Audio & Speech).
         case inputDevice
+        /// Where feedback notes are sent from (Settings › About).
+        case feedbackSettings
     }
 
     /// Gesture and display timings. The HUD and UI read these rather than guessing.
@@ -114,6 +116,9 @@ final class DictationController {
     /// Where clicking the HUD's message goes: set with `.failed` and notice-bearing `.done`,
     /// cleared at idle.
     private(set) var followUp: FollowUp?
+    /// The recording is a feedback note for the developer (the feedback shortcut), not a
+    /// dictation: nothing will be typed. Set from its start until its result shows.
+    private(set) var isFeedbackNote = false
 
     let settings: Settings
     let history: HistoryStore
@@ -121,8 +126,17 @@ final class DictationController {
     let dictionary: DictionaryStore
     let lab: PolishLabStore
     let models: ModelManager
+    let feedback: FeedbackCenter
 
     // MARK: - Private state
+
+    /// What a recording becomes.
+    private enum SessionKind {
+        /// Text typed into the app in front.
+        case dictation
+        /// A note about Birdtown Flow, filed for the developer (`FeedbackCenter`).
+        case feedbackNote
+    }
 
     /// One press-to-release (or hands-free) recording.
     private struct Session {
@@ -130,6 +144,7 @@ final class DictationController {
         /// The History record this recording becomes, from key-down on.
         let id: UUID
         let startedAt: Date
+        var kind = SessionKind.dictation
         /// Whether the user has been told we're listening (phase, sound). False during the chord grace.
         var isVisible = false
         /// A short tap just ended; a second press within the window locks hands-free.
@@ -158,6 +173,7 @@ final class DictationController {
     @ObservationIgnored private let recorder = AudioRecorder()
     @ObservationIgnored private let hotkey = HotkeyMonitor()
     @ObservationIgnored private let pasteLastShortcut = GlobalShortcut()
+    @ObservationIgnored private let feedbackShortcut = GlobalShortcut()
     @ObservationIgnored private var session: Session?
     @ObservationIgnored private var generation = 0
     @ObservationIgnored private var pressRole = PressRole.ignored
@@ -182,7 +198,8 @@ final class DictationController {
         snippets: SnippetStore,
         dictionary: DictionaryStore,
         lab: PolishLabStore,
-        models: ModelManager
+        models: ModelManager,
+        feedback: FeedbackCenter
     ) {
         self.settings = settings
         self.history = history
@@ -190,6 +207,7 @@ final class DictationController {
         self.dictionary = dictionary
         self.lab = lab
         self.models = models
+        self.feedback = feedback
 
         recorder.setEventHandler { [weak self] event in
             Task { @MainActor in self?.handleAudio(event) }
@@ -227,6 +245,7 @@ final class DictationController {
             scheduleRearm()
         }
         registerPasteLastShortcut()
+        registerFeedbackShortcut()
         observeAccessibilityGrant()
         if Permissions.hasMicrophone {
             recorder.prewarm(deviceUID: settings.inputDeviceUID)
@@ -250,6 +269,7 @@ final class DictationController {
         hotkey.stop()
         isHotkeyActive = false
         pasteLastShortcut.unregister()
+        feedbackShortcut.unregister()
     }
 
     /// Re-reads shortcut settings (push-to-talk key, hands-free, paste-last) and re-arms.
@@ -262,6 +282,7 @@ final class DictationController {
             if !isHotkeyActive { scheduleRearm() }
         }
         registerPasteLastShortcut()
+        registerFeedbackShortcut()
         if Permissions.hasMicrophone, session == nil {
             recorder.prewarm(deviceUID: settings.inputDeviceUID)
         }
@@ -342,7 +363,31 @@ final class DictationController {
         }
     }
 
+    private func registerFeedbackShortcut() {
+        guard settings.feedbackShortcutEnabled else {
+            feedbackShortcut.unregister()
+            return
+        }
+        let chord = settings.feedbackShortcut
+        guard feedbackShortcut.registeredChord != chord else { return }
+        feedbackShortcut.register(chord) { [weak self] in
+            self?.toggleFeedbackNote()
+        }
+    }
+
     // MARK: - Recording
+
+    /// The feedback shortcut: start a feedback note (hands-free, nothing typed), or finish the
+    /// one being said. Pressed during a dictation it does nothing, so a slip can't cut it short.
+    func toggleFeedbackNote() {
+        if let session {
+            if session.kind == .feedbackNote, session.isVisible { stopRecording() }
+            return
+        }
+        guard !phase.isBusy, !isStopping else { return }
+        pressRole = .ignored
+        beginSession(visible: true, handsFree: true, kind: .feedbackNote)
+    }
 
     /// Start (hands-free) from a button, or stop if already recording.
     func toggleRecording() {
@@ -414,13 +459,14 @@ final class DictationController {
         }
     }
 
-    private func beginSession(visible: Bool, handsFree: Bool) {
+    private func beginSession(visible: Bool, handsFree: Bool, kind: SessionKind = .dictation) {
         phaseResetTask?.cancel()
         phaseResetTask = nil
         if phase != .idle { phase = .idle }
         notice = nil
         followUp = nil
         isFeedbackHeld = false
+        isFeedbackNote = kind == .feedbackNote
 
         generation += 1
         let generation = generation
@@ -442,8 +488,10 @@ final class DictationController {
         // and Apple Intelligence sessions only serve the instructions they started with. A
         // browser's category comes from its window title, not read yet, so its polish waits
         // for that (`preparePolishOnceTitleIsRead`).
-        let titleDecidesCategory = AppCategoryResolver.categoryDependsOnTitle(bundleID: quick.bundleID)
-        if !titleDecidesCategory {
+        // A feedback note is never polished, so nothing gets ready for it.
+        let titleDecidesCategory = kind == .dictation
+            && AppCategoryResolver.categoryDependsOnTitle(bundleID: quick.bundleID)
+        if kind == .dictation, !titleDecidesCategory {
             // Claude Code takes a second or two to start; do it while the person is talking.
             prewarmPolish(for: quick)
             // The other providers warm up too: Apple's model loads, a cloud connection opens.
@@ -460,12 +508,14 @@ final class DictationController {
         let id = UUID()
         let startedAt = Date()
         session = Session(
-            generation: generation, id: id, startedAt: startedAt, blocked: blocked, contextTask: contextTask
+            generation: generation, id: id, startedAt: startedAt, kind: kind, blocked: blocked,
+            contextTask: contextTask
         )
         if titleDecidesCategory {
             preparePolishOnceTitleIsRead(contextTask, id: id)
         }
-        if blocked == nil, settings.liveTranscription {
+        // A note is short, and the outbox (not History) keeps its audio: transcribed whole.
+        if blocked == nil, kind == .dictation, settings.liveTranscription {
             startLive(generation: generation, id: id, contextTask: contextTask, startedAt: startedAt)
         }
 
@@ -840,6 +890,10 @@ final class DictationController {
             return
         }
         self.context = context
+        if session.kind == .feedbackNote {
+            await processFeedbackNote(audio, context: context, startedAt: session.startedAt, id: id)
+            return
+        }
         // Stop cutting windows; one already being decoded keeps going for `process` to use.
         if let live = session.live {
             let liveStopStart = clock.now
@@ -1000,6 +1054,75 @@ final class DictationController {
             processing = nil
             // The audio is saved; History is where Retry lives.
             fail(failure, followUp: .record(id))
+        }
+    }
+
+    /// A feedback note: saved, transcribed (never polished: the words are the point) and
+    /// filed through `FeedbackCenter`. Nothing is typed and History doesn't get a row; the
+    /// outbox keeps the note and its audio instead, the audio before transcription (rule 2).
+    private func processFeedbackNote(_ audio: CapturedAudio, context: AppContext, startedAt: Date, id: UUID) async {
+        // The dictations it's probably about. History is read now, before anything newer lands.
+        let recent = history.records.filter { !history.inProgress.contains($0.id) }
+        let url = feedback.outbox.audioURL(for: id)
+        let samples = audio.samples
+        var audioFileName: String?
+        do {
+            try await Task.detached(priority: .userInitiated) {
+                try AudioRecorder.writeWAV(samples, to: url)
+            }.value
+            audioFileName = url.lastPathComponent
+        } catch {
+            Log.feedback.error("couldn't save the note's recording: \(error.localizedDescription, privacy: .public)")
+        }
+        var note = feedback.makeNote(
+            id: id, createdAt: startedAt, context: context, audioFileName: audioFileName,
+            audioDuration: audio.duration, recentDictations: recent
+        )
+
+        do {
+            guard isCurrent(id) else { throw CancellationError() }
+            let engine = try await readyEngine()
+            let vocabulary = settings.vocabularyBoosting ? dictionary.biasPhrases : []
+            let (transcript, _) = try await transcribeStage(
+                samples, engine: engine, vocabulary: vocabulary, live: nil, purpose: .dictation
+            )
+            guard isCurrent(id) else { throw CancellationError() }
+            note.rawText = transcript.text
+            note.text = TextPipeline.prepare(transcript.text, options: currentPipelineOptions)
+            guard note.hasWords else {
+                feedback.discard(id: id)
+                processing = nil
+                fail("No words heard, so no feedback was sent")
+                return
+            }
+
+            let delivery = await feedback.submit(note)
+            // Esc while it was being sent: it's filed (or waiting) all the same, but the HUD
+            // now belongs to whatever came next.
+            guard isCurrent(id) else { return }
+            processing = nil
+            notice = delivery.message
+            Sounds.play(.done)
+            switch delivery {
+            case .sent:
+                showTransient(.done, for: Timing.copiedDisplay)
+            case .needsSetup, .refused:
+                showTransient(.done, for: Timing.failedDisplay, followUp: .feedbackSettings)
+            case .willRetry:
+                showTransient(.done, for: Timing.copiedDisplay)
+            }
+        } catch is CancellationError {
+            // Esc: the note goes, recording and all.
+            feedback.discard(id: id)
+        } catch {
+            // The recording stays in the outbox with what went wrong, so nothing said is lost.
+            let failure = self.message(for: error)
+            Log.feedback.error("feedback note not transcribed: \(String(describing: error), privacy: .public)")
+            note.delivery.lastError = "Not transcribed: \(failure)"
+            feedback.outbox.save(note)
+            guard isCurrent(id) else { return }
+            processing = nil
+            fail("\(failure) · the feedback recording is saved", followUp: .feedbackSettings)
         }
     }
 
@@ -1380,6 +1503,7 @@ final class DictationController {
         self.phase = phase
         self.followUp = followUp
         isFeedbackHeld = false
+        isFeedbackNote = false
         isHandsFree = false
         level = 0
         levels = Self.silentLevels
@@ -1408,6 +1532,7 @@ final class DictationController {
         notice = nil
         followUp = nil
         isFeedbackHeld = false
+        isFeedbackNote = false
     }
 
     // MARK: - Message pill

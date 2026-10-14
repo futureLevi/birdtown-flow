@@ -20,6 +20,17 @@ public enum BoostGuard {
     /// "BirdTown Flow" out of "BirdTown Flow will" scores 1, "cloud code" out of "cloud code
     /// is" 0.8.
     public static let narrowedSimilarity = 0.8
+    /// A short term needs at least this similarity to what was heard, however the words line
+    /// up. On five letters or fewer, two edits are most of the word: "board" scores 0.6 against
+    /// "BTAR", which the rescorer's own 0.6 gate let through, even spelled out as "B-O-A-R-D".
+    /// One edit still passes: "levy" → "Levi" scores 0.75.
+    ///
+    /// An acronym is said as letters, so an ordinary word is never one, however close its
+    /// spelling ("bar" → "BTAR" also scores 0.75). It only replaces words the engine wrote as
+    /// letters ("BTR", "B-T-A-R") or that say its first letters by name ("Beetar", "bee tar").
+    public static let shortTermSimilarity = 0.75
+    /// The longest a term can be, in letters and digits, and still count as short.
+    public static let shortTermLength = 5
 
     /// Punctuation that ends a clause. A term never spans one.
     private static let clauseEnders: Set<Character> = [".", ",", ";", ":", "!", "?", "…"]
@@ -38,6 +49,13 @@ public enum BoostGuard {
         let written = words(of: term)
         guard !spoken.isEmpty, !written.isEmpty else { return false }
 
+        let letters = written.joined()
+        if letters.count <= shortTermLength {
+            let said = Array(spoken.joined())
+            let closest = sayings(of: term, letters: letters, heard: heard)
+                .map { PolishGuard.similarity(said, Array($0)) }.max() ?? 0
+            if String(said) != letters, closest < shortTermSimilarity { return false }
+        }
         // One word for one: the rescorer's own similarity gate already judged exactly this.
         if spoken.count == 1, written.count == 1 { return true }
         if spoken.count == written.count {
@@ -45,7 +63,7 @@ public enum BoostGuard {
                 PolishGuard.similarity(Array(pair.0), Array(pair.1)) >= wordSimilarity
             }
         }
-        let joined = PolishGuard.similarity(Array(spoken.joined()), Array(written.joined()))
+        let joined = PolishGuard.similarity(Array(spoken.joined()), Array(letters))
         return joined >= (spoken.count < written.count ? expandingSimilarity : joinedSimilarity)
     }
 
@@ -79,6 +97,37 @@ public enum BoostGuard {
         }
         return accepts(heard: heard, term: term) ? 0..<heard.count : nil
     }
+
+    /// What `heard` may be compared with for a short term: its spelling, and for an acronym,
+    /// its first letters said by name ("beetar", "beeteear"), plus its spelling only when the
+    /// engine wrote `heard` as letters.
+    private static func sayings(of term: String, letters: String, heard: [String]) -> [String] {
+        let capitals = term.filter(\.isLetter)
+        guard capitals.count >= 2, capitals.allSatisfy(\.isUppercase) else { return [letters] }
+        let characters = Array(letters)
+        let named = (1...characters.count).map { count in
+            characters[..<count].map { letterNames[$0] ?? String($0) }.joined() + String(characters[count...])
+        }
+        return writtenAsLetters(heard) ? [letters] + named : named
+    }
+
+    /// Whether every word is in capitals ("BTR") or has a letter on its own ("B-T-A-R", "B-tar").
+    private static func writtenAsLetters(_ heard: [String]) -> Bool {
+        heard.allSatisfy { word in
+            let letters = word.filter(\.isLetter)
+            guard !letters.isEmpty else { return true }
+            return letters.allSatisfy(\.isUppercase)
+                || word.split(whereSeparator: { !$0.isLetter && !$0.isNumber }).contains { $0.count == 1 }
+        }
+    }
+
+    /// English letter names as an engine might write them.
+    private static let letterNames: [Character: String] = [
+        "a": "ay", "b": "bee", "c": "see", "d": "dee", "e": "ee", "f": "ef", "g": "gee", "h": "aitch",
+        "i": "eye", "j": "jay", "k": "kay", "l": "el", "m": "em", "n": "en", "o": "oh", "p": "pee",
+        "q": "cue", "r": "ar", "s": "es", "t": "tee", "u": "you", "v": "vee", "w": "doubleyou",
+        "x": "ex", "y": "why", "z": "zee",
+    ]
 
     /// How closely `heard`, run together, spells `written` run together.
     private static func fit(_ heard: ArraySlice<String>, _ written: [String]) -> Double {

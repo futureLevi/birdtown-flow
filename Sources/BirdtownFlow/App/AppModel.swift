@@ -59,6 +59,8 @@ final class AppModel {
     let models: ModelManager
     let permissions: PermissionsMonitor
     let controller: DictationController
+    /// Feedback notes said with the feedback shortcut, and where they're sent.
+    let feedback: FeedbackCenter
     /// History deletes waiting out their undo window. Shared by Home and History, so a
     /// delete survives switching pages and either page's Undo (⌘Z) brings it back.
     let historyDeletion: HistoryDeletion
@@ -83,7 +85,8 @@ final class AppModel {
         history: HistoryStore = HistoryStore(directory: AppPaths.history),
         snippets: SnippetStore = SnippetStore(fileURL: AppPaths.snippets),
         dictionary: DictionaryStore = .shared,
-        lab: PolishLabStore = PolishLabStore(fileURL: AppPaths.lab)
+        lab: PolishLabStore = PolishLabStore(fileURL: AppPaths.lab),
+        feedbackOutbox: FeedbackOutbox? = nil
     ) {
         self.settings = settings
         self.history = history
@@ -95,13 +98,18 @@ final class AppModel {
         self.models = models
         self.permissions = PermissionsMonitor()
         self.historyDeletion = HistoryDeletion(store: history, undoWindow: Motion.undoWindow)
+        let feedback = FeedbackCenter(
+            settings: settings, outbox: feedbackOutbox ?? FeedbackOutbox(directory: AppPaths.feedback)
+        )
+        self.feedback = feedback
         self.controller = DictationController(
             settings: settings,
             history: history,
             snippets: snippets,
             dictionary: dictionary,
             lab: lab,
-            models: models
+            models: models,
+            feedback: feedback
         )
     }
 
@@ -112,6 +120,8 @@ final class AppModel {
         controller.activate()
         controller.polishSettingsChanged()
         Task { await models.prepare() }
+        // Notes said while offline, or before sending was set up.
+        Task { await feedback.sendPending() }
         // A delete still inside its undo window is meant: finish it before quitting, or the
         // dictation would come back on the next launch.
         terminationObserver = NotificationCenter.default.addObserver(

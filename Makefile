@@ -50,6 +50,9 @@ app: build
 	@install -d "$(APP)/Contents/MacOS" "$(APP)/Contents/Resources"
 	@install -m 755 "$(BINDIR)/$(EXEC)" "$(APP)/Contents/MacOS/"
 	@install -m 644 Resources/Info.plist "$(APP)/Contents/"
+	@# The commit, for feedback notes and bug reports (AppVersion.commit).
+	@sha=$$(git rev-parse --short HEAD 2>/dev/null); \
+		if [ -n "$$sha" ]; then /usr/libexec/PlistBuddy -c "Add :BirdtownCommit string $$sha" "$(APP)/Contents/Info.plist"; fi
 	@test ! -f Resources/AppIcon.icns || cp Resources/AppIcon.icns "$(APP)/Contents/Resources/"
 	@# Resource bundles from our targets and from packages.
 	@find "$(BINDIR)" -maxdepth 1 -name '*.bundle' -exec cp -R {} "$(APP)/Contents/Resources/" \;

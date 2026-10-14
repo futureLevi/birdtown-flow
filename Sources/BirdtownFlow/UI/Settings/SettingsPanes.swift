@@ -82,6 +82,25 @@ struct GeneralSettingsPane: View {
                     }
                 }
                 notice(for: .pasteLast)
+                SettingsDivider()
+                SettingsRow(title: "Send feedback", detail: "Say what to fix in Birdtown Flow; it goes to the developer instead of being typed. Set it up under About.") {
+                    HStack(spacing: Spacing.m) {
+                        if settings.feedbackShortcut != .feedbackDefault {
+                            IconButton(symbol: "arrow.uturn.backward", label: "Use \(KeyChord.feedbackDefault.displayName) again") {
+                                model.settings.feedbackShortcut = .feedbackDefault
+                                shortcutNotices[.feedback] = nil
+                            }
+                        }
+                        recorder(.feedback, look: .field, current: .keys(settings.feedbackShortcut)) { shortcut in
+                            guard let chord = shortcut.chord else { return }
+                            model.settings.feedbackShortcut = chord
+                            model.settings.feedbackShortcutEnabled = true
+                        }
+                        .opacity(settings.feedbackShortcutEnabled ? 1 : Layout.Setup.disabledOpacity)
+                        SettingsSwitch(label: "Send feedback", isOn: $settings.feedbackShortcutEnabled)
+                    }
+                }
+                notice(for: .feedback)
             }
 
             SettingsGroup(title: "Feedback") {
@@ -140,6 +159,8 @@ struct GeneralSettingsPane: View {
         .onChange(of: settings.handsFreeChord) { reloadShortcuts() }
         .onChange(of: settings.pasteLastShortcutEnabled) { reloadShortcuts() }
         .onChange(of: settings.pasteLastShortcut) { reloadShortcuts() }
+        .onChange(of: settings.feedbackShortcutEnabled) { reloadShortcuts() }
+        .onChange(of: settings.feedbackShortcut) { reloadShortcuts() }
     }
 
     // MARK: Shortcuts
@@ -1091,6 +1112,8 @@ struct AboutSettingsPane: View {
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, Spacing.s)
+
+            FeedbackSettingsGroup()
 
             SettingsGroup(title: "Built with") {
                 ForEach(credits) { credit in
