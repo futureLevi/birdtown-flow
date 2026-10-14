@@ -1,0 +1,11 @@
+sha=0ea6b045643bda9c41f285603ae21d9af5a072ca
+branch=chore/standalone
+build=success
+test=success
+snapshots=success
+synth=success
+speech=success
+segmented=success
+signcheck=success
+signing=skipped
+release=skipped
