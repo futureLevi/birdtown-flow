@@ -418,6 +418,34 @@ struct PolishClientTests {
         #expect(PolishPrompt.user(for: light).hasPrefix("<transcript>"))
     }
 
+    @Test("Filler-words-only polish spells the dictionary's terms, and only when there are some")
+    func fillerWordsVocabulary() {
+        var light = request()
+        light.level = .fillerWords
+        let system = PolishPrompt.system(for: light)
+        #expect(system.contains("Claude Code, Anthropic"))
+        #expect(system.contains("never add a term the speaker didn't say"))
+        #expect(system.contains("Change nothing else"))
+
+        // The dictionary is known before anyone speaks, so a session started ahead of time
+        // with the same terms still matches.
+        var later = light
+        later.text = "something else entirely"
+        #expect(PolishPrompt.system(for: later) == system)
+
+        light.vocabulary = []
+        let bare = PolishPrompt.system(for: light)
+        #expect(!bare.contains("names and terms"))
+        #expect(bare.contains("Remove only"))
+
+        // The Lab's template fills to the same prompt.
+        var lab = request(vocabulary: ["Birdtown"])
+        lab.level = .fillerWords
+        let builtIn = PolishPrompt.system(for: lab)
+        lab.instructions = PolishPrompt.fillerWordsTemplate
+        #expect(PolishPrompt.system(for: lab) == builtIn)
+    }
+
     @Test("Providers: which need a key and which send text away")
     func providerFlags() {
         #expect(PolishProvider.claudeCode.sendsText)

@@ -1144,9 +1144,14 @@ final class DictationController {
     /// What the speech engine and the text pipeline made of one recording.
     private struct PipelineOutput {
         var engineName: String
+        /// The transcript the text came from: as heard when polish was used, with boosting's
+        /// rewrites when it wasn't.
         var raw: String
-        /// Words the engine's vocabulary boosting rewrote before `raw` came back.
+        /// Words vocabulary boosting rewrote in `raw`. Empty when polish was used: it starts
+        /// from the words as heard and fixes dictionary terms itself.
         var boosted: [AppliedCorrection]
+        /// Dictionary terms the polish wrote in (`Replacements.polish`).
+        var polished: [AppliedCorrection]
         var result: PipelineResult
         var polishedBy: PolishProvider?
         var polishNote: String?
@@ -1187,19 +1192,9 @@ final class DictationController {
             record.engine = engineName
             record.rawText = raw
             record.finalText = result.text
-            // Boosting first: it ran first, on the audio, before any text step. The same pair
-            // from both steps is one row (History lists them by value), with the counts added.
-            var corrections: [AppliedCorrection] = []
-            for correction in boosted + result.corrections {
-                if let index = corrections.firstIndex(where: { $0.from == correction.from && $0.to == correction.to }) {
-                    let merged = corrections[index]
-                    corrections[index] = AppliedCorrection(from: merged.from, to: merged.to,
-                                                           count: merged.count + correction.count)
-                } else {
-                    corrections.append(correction)
-                }
-            }
-            record.corrections = corrections
+            // Each labelled with its step, in the order they ran, so a misfire points at its cause.
+            record.corrections = Replacements.combined(
+                boost: boosted, polish: polished, dictionary: result.corrections)
             record.snippets = result.snippets
             record.polishedBy = polishedBy
             record.polishConfiguration = polishConfiguration
@@ -1241,10 +1236,17 @@ final class DictationController {
         let (transcript, transcriptionReport) = try await transcribeStage(
             samples, engine: engine, vocabulary: vocabulary, live: live, purpose: purpose
         )
-        let raw = transcript.text
         let transcribeMs = Self.milliseconds(transcribeStart.duration(to: clock.now))
         try Task.checkCancellation()
 
+        // Polish fixes dictionary terms itself, judging them in the whole sentence, so it gets
+        // the words as heard. Boosting judges a few words at a time; its rewrites are only
+        // used when polish isn't (off, failed, timed out or turned down).
+        let polishes = settings.polishProvider != .off
+        let setsBoostAside = polishes && transcript.unboosted != nil
+        var raw = setsBoostAside ? transcript.plainText : transcript.text
+        var boosted: [AppliedCorrection] = setsBoostAside ? [] : transcript.boosted
+        var polished: [AppliedCorrection] = []
         let prepareStart = clock.now
         var text = TextPipeline.prepare(raw, options: currentPipelineOptions)
         let prepareMs = Self.milliseconds(prepareStart.duration(to: clock.now))
@@ -1255,13 +1257,24 @@ final class DictationController {
         var polishReport: PolishReport?
         var polishMs = 0
 
-        if settings.polishProvider != .off, !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+        if polishes, !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             willPolish()
             let polishStart = clock.now
             let (outcome, report, configurationName) = await polishStage(
                 text, style: style, context: context, progressive: progressive
             )
-            text = outcome.text
+            if outcome.provider != nil {
+                polished = Replacements.polish(
+                    original: text, polished: outcome.text, vocabulary: dictionary.biasPhrases)
+                text = outcome.text
+            } else if setsBoostAside {
+                // Polish wasn't used, so boosting's rewrites stand after all.
+                raw = transcript.text
+                boosted = transcript.boosted
+                text = TextPipeline.prepare(raw, options: currentPipelineOptions)
+            } else {
+                text = outcome.text
+            }
             polishedBy = outcome.provider
             polishNote = outcome.note
             polishConfiguration = configurationName
@@ -1286,7 +1299,8 @@ final class DictationController {
         return PipelineOutput(
             engineName: engine.displayName,
             raw: raw,
-            boosted: transcript.boosted,
+            boosted: boosted,
+            polished: polished,
             result: result,
             polishedBy: polishedBy,
             polishNote: polishNote,

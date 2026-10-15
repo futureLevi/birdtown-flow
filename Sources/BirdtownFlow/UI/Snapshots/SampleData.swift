@@ -205,7 +205,7 @@ enum SampleData {
                 rawText: spec.raw,
                 finalText: spec.text,
                 polishedBy: spec.polish,
-                corrections: spec.raw.isEmpty ? [] : corrector.apply(to: spec.raw).applied,
+                corrections: spec.raw.isEmpty ? [] : corrector.apply(to: spec.raw).applied.map { $0.labeled(.dictionary) },
                 snippets: spec.snippets,
                 audioFileName: "\(id.uuidString).wav",
                 audioDuration: duration,

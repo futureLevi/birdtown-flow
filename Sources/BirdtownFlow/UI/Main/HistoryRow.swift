@@ -665,9 +665,15 @@ struct OriginalPanel: View {
                                     .font(Typography.caption)
                                     .foregroundStyle(Palette.inkTertiary)
                             }
+                            // Which step made it, so a misfire points straight at its cause.
+                            if let source = correction.source {
+                                Text(source.title)
+                                    .font(Typography.caption)
+                                    .foregroundStyle(Palette.inkTertiary)
+                            }
                         }
                         .accessibilityElement(children: .ignore)
-                        .accessibilityLabel("Heard \(correction.from), wrote \(correction.to)")
+                        .accessibilityLabel(Self.spoken(correction))
                     }
                 }
             }
@@ -685,6 +691,13 @@ struct OriginalPanel: View {
         .padding(Spacing.m)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(RoundedRectangle(cornerRadius: Radius.m, style: .continuous).fill(Palette.sunken))
+    }
+
+    /// "Heard cloud code, wrote Claude Code, by polish".
+    private static func spoken(_ correction: AppliedCorrection) -> String {
+        let change = "Heard \(correction.from), wrote \(correction.to)"
+        guard let source = correction.source else { return change }
+        return "\(change), by \(source.title.lowercased())"
     }
 
     @ViewBuilder

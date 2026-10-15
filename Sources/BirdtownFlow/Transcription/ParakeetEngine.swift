@@ -107,6 +107,7 @@ actor ParakeetEngine: TranscriptionEngine {
 
         let terms = Self.boostTerms(from: vocabulary)
         var boosted: [AppliedCorrection] = []
+        var unboosted: String?
         var rescoredText = false
         var boostMs: Int?
         if !text.isEmpty, !terms.isEmpty, let timings = result.tokenTimings, !timings.isEmpty,
@@ -115,6 +116,7 @@ actor ParakeetEngine: TranscriptionEngine {
             let rescored = await boost(text: text, timings: timings, audio: audio, terms: terms)
             boostMs = Self.milliseconds(clock.now - boostStarted)
             if let rescored {
+                unboosted = text
                 text = rescored.text
                 boosted = rescored.replacements
                 rescoredText = true
@@ -132,7 +134,8 @@ actor ParakeetEngine: TranscriptionEngine {
             \(boostNote, privacy: .public))
             """)
         return Transcript(
-            text: text, boosted: boosted, recognitionMs: Self.milliseconds(recognized - started), boostMs: boostMs)
+            text: text, boosted: boosted, unboosted: unboosted,
+            recognitionMs: Self.milliseconds(recognized - started), boostMs: boostMs)
     }
 
     // MARK: - Boosting
