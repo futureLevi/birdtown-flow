@@ -1,8 +1,8 @@
 import SwiftUI
 
-/// A keyboard key drawn like the physical thing: a pale face, a hairline edge, a darker lip
-/// along the bottom and a sliver of highlight on top. `isPressed` sinks it onto its lip,
-/// which onboarding and Home use to act out "hold".
+/// A keyboard key drawn like the physical thing: a surface-coloured face, a control-coloured
+/// edge and a heavier lip along the bottom. `isPressed` sinks it onto its lip, which
+/// onboarding and Home use to act out "hold".
 struct KeyCap: View {
     enum Size { case regular, large }
 
@@ -17,9 +17,9 @@ struct KeyCap: View {
         let lip = size == .large ? Layout.Main.keyCapLipLarge : Layout.Main.keyCapLip
 
         Text(label)
-            .font(size == .large ? Typography.title : Typography.keycap)
+            .font(size == .large ? Typography.keycapLarge : Typography.keycap)
             .foregroundStyle(Palette.ink)
-            .padding(.horizontal, size == .large ? Spacing.l : Spacing.s)
+            .padding(.horizontal, size == .large ? Spacing.l : Spacing.xs + Spacing.xxs)
             .frame(
                 minWidth: size == .large ? Layout.Main.keyCapMinWidthLarge : Layout.Main.keyCapMinWidth,
                 minHeight: size == .large ? Layout.Main.keyCapHeightLarge : Layout.Main.keyCapHeight
@@ -29,11 +29,6 @@ struct KeyCap: View {
                     shape.fill(Palette.keyLip)
                     shape.fill(Palette.keyFace)
                         .padding(.bottom, isPressed ? 0 : lip)
-                    Capsule()
-                        .fill(Palette.keyHighlight)
-                        .frame(height: Layout.Main.hairline)
-                        .padding(.horizontal, Radius.s)
-                        .padding(.top, Layout.Main.hairline)
                 }
             }
             .overlay(shape.strokeBorder(Palette.hairlineStrong, lineWidth: Layout.Main.hairline))

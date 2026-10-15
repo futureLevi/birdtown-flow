@@ -19,10 +19,12 @@ make snapshots      # every screen to ./snapshots, light and dark
   changes there; the renderer is `UI/Snapshots/SnapshotRenderer.swift` and each area
   registers screens in its own `SnapshotCatalog+*.swift`.
 - The runner has Reduce Motion on, so moving things render at rest unless a shot pins a
-  phase (`MainPreview.heroSweepPhase`, `orbPhase`). Not a bug in the app.
+  phase (`MainPreview.fieldPhase`, `orbPhase`). Not a bug in the app.
 - The main window's sidebar is laid out by hand (`MainSidebar`), not a `NavigationSplitView`:
-  macOS 26 would float it as a glass panel, and Mono v2's sidebar is flat and flush. That also
-  means View › Toggle Sidebar is ours (`AppModel.sidebarHidden`, ⌃⌘S).
+  macOS 26 would float it as a glass panel, and the design's sidebar is flat and flush. That
+  also means View › Toggle Sidebar is ours (`AppModel.sidebarHidden`, ⌃⌘S). The 66 pt toolbar
+  (`MainToolbar`) floats over the detail column: pages are inset below it, except Home, which
+  starts at the top and insets its own content.
 
 ## Rules
 
@@ -36,7 +38,10 @@ make snapshots      # every screen to ./snapshots, light and dark
   is the spec for correction behaviour: change the vectors first, then the code.
 - **No literal design values in views.** Everything comes from `UI/DesignSystem/Tokens.swift`.
   The spectrum (`SpectrumOrb`, `Spectrum`) means live and nothing else; primary actions are
-  navy pills; Signal blue is for selection, focus and links. See `docs/brand.md`.
+  navy capsules; Signal blue is for selection, focus and links; violet and teal are small
+  accents (tuning, vocabulary). Type is big: 19 pt for dictated words, 16-17 for the
+  interface, nothing under 15. Onboarding and the menu bar use `Typography.Compact`. See
+  `docs/brand.md`.
 - **Every animation goes through `Motion`** so Reduce Motion is honoured.
 - **Settings live in `Support/Settings.swift`.** Our `Settings` class shadows SwiftUI's
   scene of the same name. The app doesn't use that scene: the Settings screen is a modal in

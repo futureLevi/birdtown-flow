@@ -3,11 +3,15 @@ import Combine
 import MurmurKit
 import SwiftUI
 
-/// The main window: a flush grey sidebar of sections and a quiet detail column.
+/// The main window: a flush 234 pt sidebar, a 66 pt toolbar and a quiet detail column.
 ///
 /// Laid out by hand rather than with `NavigationSplitView`, whose macOS 26 sidebar is a
-/// floating glass panel: Mono v2's sidebar is a flat step off the canvas, running from the top
-/// of the window (under the traffic lights) to the bottom.
+/// floating glass panel: the sidebar here is flat, a gentle wash off the canvas, and runs from
+/// the top of the window (under the traffic lights) to the bottom.
+///
+/// The toolbar floats over the top of the detail column. Every page except Home is inset
+/// below it (`Layout.Toolbar.height`). Home starts at the window's top, so its open-canvas art
+/// can sit behind the toolbar, and insets its own content.
 struct MainView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.mainPreview) private var preview
@@ -17,20 +21,24 @@ struct MainView: View {
         let status = preview.status ?? SystemStatus.live(model)
         let settingsOpen = model.settingsTab != nil
         let sidebarHidden = model.sidebarHidden
+        let opensOnCanvas = model.section == .home
         HStack(spacing: 0) {
             if !sidebarHidden {
                 MainSidebar()
                     .frame(width: Layout.Sidebar.width)
                     .transition(.move(edge: .leading).combined(with: .opacity))
             }
-            ZStack {
-                page(status: status)
-                    .id(model.section)
-                    .transition(.opacity)
+            ZStack(alignment: .top) {
+                ZStack {
+                    page(status: status)
+                        .id(model.section)
+                        .transition(.opacity)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .padding(.top, opensOnCanvas ? 0 : Layout.Toolbar.height)
+                MainToolbar(status: status, isOverCanvas: opensOnCanvas)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            // With the sidebar away, the page starts below the traffic lights.
-            .padding(.top, sidebarHidden ? Layout.Sidebar.collapsedTopInset : 0)
             .background(Palette.canvas)
             .overlay(alignment: .topLeading) {
                 if sidebarHidden {
@@ -87,25 +95,6 @@ struct MainView: View {
     }
 }
 
-/// The app icon and name, at the top of the sidebar above Home.
-struct SidebarWordmark: View {
-    var body: some View {
-        HStack(spacing: Layout.Sidebar.rowSpacing) {
-            // The artwork keeps the standard icon margin; its tile fills the 28 pt slot.
-            AppIconArtwork(size: Layout.Main.sidebarLogo, showsShadow: false)
-                .frame(width: Layout.Sidebar.wordmarkHeight, height: Layout.Sidebar.wordmarkHeight)
-            Text("Birdtown Flow")
-                .font(Typography.wordmark)
-                .foregroundStyle(Palette.ink)
-                .lineLimit(1)
-                .fixedSize()
-        }
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Birdtown Flow")
-        .accessibilityAddTraits(.isHeader)
-    }
-}
-
 /// ⌘1–⌘6 switch sections, in sidebar order.
 private struct SectionShortcuts: View {
     @Environment(AppModel.self) private var model
@@ -123,27 +112,153 @@ private struct SectionShortcuts: View {
     }
 }
 
-// MARK: - Sidebar
+// MARK: - Toolbar
 
-extension SidebarSection {
-    /// The section's icon colour: the sidebar walks the logo's colour wheel from the top.
-    var tint: Color {
+/// How the toolbar's status dot is coloured. The label always says the same thing in words.
+enum ToolbarStatusTone {
+    case ready, warning, danger
+
+    var color: Color {
         switch self {
-        case .home: Palette.Wheel.orange
-        case .history: Palette.Wheel.gold
-        case .dictionary: Palette.Wheel.green
-        case .snippets: Palette.Wheel.cyan
-        case .style: Palette.Wheel.blue
-        case .lab: Palette.Wheel.violet
+        case .ready: Palette.success
+        case .warning: Palette.warning
+        case .danger: Palette.danger
         }
     }
 }
 
-/// The wordmark, the sections, then Settings at the foot. Nothing under Settings: whether the
-/// shortcut and the model are ready is in Settings, and anything that needs fixing is a banner
-/// on Home.
+extension SystemStatus {
+    /// The toolbar's one-line answer to "will dictation work right now?".
+    var toolbarSummary: (label: String, tone: ToolbarStatusTone) {
+        if !microphone { return ("Microphone off", .danger) }
+        if !accessibility { return ("Accessibility off", .warning) }
+        if !hotkeyActive { return ("Shortcut paused", .warning) }
+        switch model {
+        case .ready: return ("Ready to dictate", .ready)
+        case .loading: return ("Loading speech model", .warning)
+        case .downloading: return ("Downloading speech model", .warning)
+        case .notDownloaded: return ("Speech model needed", .warning)
+        case .failed: return ("Speech model failed", .danger)
+        }
+    }
+}
+
+/// The 66 pt toolbar: the page's name on the left; Search history and whether dictation is
+/// ready on the right. Over Home it's transparent, so the hero art shows through.
+struct MainToolbar: View {
+    let status: SystemStatus
+    var isOverCanvas = false
+
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        let summary = status.toolbarSummary
+        HStack(spacing: Layout.Toolbar.gap) {
+            Text(model.section.title)
+                .font(Typography.toolbarTitle)
+                .foregroundStyle(Palette.inkSecondary)
+                .lineLimit(1)
+            Spacer(minLength: Spacing.l)
+            ToolbarSearchButton { model.showHistorySearch() }
+            HStack(spacing: Layout.Toolbar.itemSpacing) {
+                StatusDot(color: summary.tone.color)
+                Text(summary.label)
+                    .font(Typography.toolbarItem)
+                    .foregroundStyle(Palette.inkSecondary)
+                    .lineLimit(1)
+            }
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("Status")
+            .accessibilityValue(summary.label)
+        }
+        .padding(.leading, model.sidebarHidden ? Layout.Toolbar.hiddenLeading : Layout.Toolbar.inset)
+        .padding(.trailing, Layout.Toolbar.inset)
+        .frame(height: Layout.Toolbar.height)
+        .frame(maxWidth: .infinity)
+        .background {
+            ZStack {
+                if !isOverCanvas { Palette.toolbar }
+                // Empty toolbar space moves the window, as a title bar would.
+                Color.clear
+                    .contentShape(Rectangle())
+                    .gesture(WindowDragGesture())
+                    .allowsWindowActivationEvents(true)
+            }
+        }
+        .overlay(alignment: .bottom) {
+            if !isOverCanvas {
+                Rectangle()
+                    .fill(Palette.hairline)
+                    .frame(height: Layout.Main.hairline)
+            }
+        }
+        .accessibilityElement(children: .contain)
+    }
+}
+
+/// "Search history" in the toolbar: magnifier and label, quiet until hovered.
+private struct ToolbarSearchButton: View {
+    let action: () -> Void
+
+    @State private var isHovered = false
+    @FocusState private var isFocused: Bool
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        let shape = RoundedRectangle(cornerRadius: Radius.control, style: .continuous)
+        Button(action: action) {
+            HStack(spacing: Layout.Toolbar.itemSpacing) {
+                Image(systemName: "magnifyingglass")
+                    .font(Typography.toolbarItem)
+                    .accessibilityHidden(true)
+                Text("Search history")
+                    .font(Typography.toolbarItem)
+                    .lineLimit(1)
+            }
+            .foregroundStyle(isHovered ? Palette.ink : Palette.inkSecondary)
+            .padding(.horizontal, Spacing.s)
+            .frame(minHeight: Layout.Main.buttonHeightSmall)
+            .contentShape(shape)
+            .flowFocusRing(shape, drawn: isFocused)
+        }
+        .buttonStyle(.plain)
+        // The ring above is the focus indicator; the system's would double it.
+        .focusEffectDisabled()
+        .focused($isFocused)
+        .onHover { isHovered = $0 }
+        .animation(Motion.resolve(Motion.fadeFast, reduceMotion: reduceMotion), value: isHovered)
+        .help("Search history")
+    }
+}
+
+// MARK: - Sidebar
+
+/// The app icon and name, at the top of the sidebar above Home.
+struct SidebarWordmark: View {
+    var body: some View {
+        HStack(spacing: Layout.Sidebar.wordmarkSpacing) {
+            // The real app icon: the artwork keeps the standard icon margin around its tile.
+            AppIconArtwork(size: Layout.Sidebar.logo, showsShadow: false)
+                .frame(width: Layout.Sidebar.logo, height: Layout.Sidebar.logo)
+            Text("Birdtown Flow")
+                .font(Typography.wordmark)
+                .tracking(Tracking.title)
+                .foregroundStyle(Palette.ink)
+                .lineLimit(1)
+                .fixedSize()
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Birdtown Flow")
+        .accessibilityAddTraits(.isHeader)
+    }
+}
+
+/// The wordmark, Home to Style, a divider and "Workspace" with the Lab, then Settings and the
+/// shortcut hint at the foot. Whether the shortcut and the model are ready is the toolbar's
+/// status, and anything that needs fixing is a banner on Home.
 struct MainSidebar: View {
     @Environment(AppModel.self) private var model
+    @Environment(\.mainPreview) private var preview
 
     var body: some View {
         // Cached in the store; a failed record waiting out a delete's undo window doesn't
@@ -152,37 +267,65 @@ struct MainSidebar: View {
         let failed = model.history.failedCount - (pending.isEmpty ? 0 : pending.reduce(0) { count, id in
             count + (model.history.record(id: id)?.outcome == .failed ? 1 : 0)
         })
+        let shortcut = preview.status?.pushToTalkKey ?? model.settings.pushToTalkKey.displayName
         VStack(alignment: .leading, spacing: 0) {
-            SidebarWordmark()
-                .frame(height: Layout.Sidebar.wordmarkHeight)
-                .padding(.horizontal, Layout.Sidebar.rowPadding)
-                .padding(.bottom, Layout.Sidebar.wordmarkBottom)
+            // The traffic lights' row. Its drag strip and the Hide sidebar button are overlays.
+            Color.clear.frame(height: Layout.Sidebar.topInset)
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
-                    ForEach(SidebarSection.everyday) { section in
-                        row(section, count: section == .history ? failed : 0)
+                    SidebarWordmark()
+                        .padding(.leading, Layout.Sidebar.wordmarkInset)
+                        .padding(.bottom, Layout.Sidebar.wordmarkBottom)
+                    VStack(alignment: .leading, spacing: Layout.Sidebar.rowGap) {
+                        ForEach(SidebarSection.everyday) { section in
+                            row(section, count: section == .history ? failed : 0)
+                        }
                     }
-                    Text("Admin")
+                    Rectangle()
+                        .fill(Palette.hairline)
+                        .frame(height: Layout.Main.hairline)
+                        .padding(.horizontal, Layout.Sidebar.dividerInset)
+                        .padding(.vertical, Layout.Sidebar.dividerVertical)
+                        .accessibilityHidden(true)
+                    Text("Workspace")
                         .font(Typography.sidebarLabel)
                         .foregroundStyle(Palette.inkSecondary)
                         .padding(.horizontal, Layout.Sidebar.rowPadding)
-                        .padding(.top, Layout.Sidebar.labelTop)
                         .padding(.bottom, Layout.Sidebar.labelBottom)
                         .accessibilityAddTraits(.isHeader)
-                    ForEach(SidebarSection.admin) { section in
-                        row(section)
+                    VStack(alignment: .leading, spacing: Layout.Sidebar.rowGap) {
+                        ForEach(SidebarSection.admin) { section in
+                            row(section)
+                        }
                     }
                 }
+                .padding(.horizontal, Layout.Sidebar.horizontalPadding)
+                // Room for the focus ring above the first row.
+                .padding(.top, Spacing.s)
             }
             .scrollBounceBehavior(.basedOnSize)
             .scrollIndicators(.never)
-            SidebarSettingsButton()
+            VStack(alignment: .leading, spacing: 0) {
+                SidebarSettingsButton()
+                SidebarShortcutHint(key: shortcut)
+            }
+            .padding(.horizontal, Layout.Sidebar.horizontalPadding)
+            .padding(.bottom, Layout.Sidebar.bottomPadding)
         }
-        .padding(.top, Layout.Sidebar.topInset)
-        .padding(.horizontal, Layout.Sidebar.horizontalPadding)
-        .padding(.bottom, Layout.Sidebar.bottomPadding)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        .background(Palette.sidebar)
+        .background(
+            LinearGradient(
+                stops: Palette.sidebarGradient,
+                startPoint: Palette.sidebarGradientStart,
+                endPoint: Palette.sidebarGradientEnd
+            )
+        )
+        // The hairline between the sidebar and the page.
+        .overlay(alignment: .trailing) {
+            Rectangle()
+                .fill(Palette.hairline)
+                .frame(width: Layout.Main.hairline)
+        }
         // The strip under the traffic lights moves the window, as a title bar would.
         .overlay(alignment: .top) {
             Color.clear
@@ -204,7 +347,6 @@ struct MainSidebar: View {
         SidebarRow(
             title: section.title,
             symbol: section.symbol,
-            tint: section.tint,
             count: count,
             countLabel: count == 1 ? "1 failed" : "\(count) failed",
             isSelected: model.section == section
@@ -215,18 +357,19 @@ struct MainSidebar: View {
     }
 }
 
-/// One row of the sidebar: a coloured icon, the name, and a count when there is one. The
-/// chosen row takes a grey fill; colour stays on the icons.
+/// One row of the sidebar: a monochrome icon, the name, and a count when there is one. The
+/// chosen row takes Signal blue's tint, blue text, a heavier weight and a marker bar in the
+/// margin, so it never rests on hue alone.
 struct SidebarRow: View {
     let title: String
     let symbol: String
-    let tint: Color
     var count = 0
     var countLabel = ""
     var isSelected = false
     let action: () -> Void
 
     @State private var isHovered = false
+    @FocusState private var isFocused: Bool
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
@@ -234,13 +377,11 @@ struct SidebarRow: View {
         Button(action: action) {
             HStack(spacing: Layout.Sidebar.rowSpacing) {
                 Image(systemName: symbol)
-                    .font(Typography.sidebarIcon)
-                    .foregroundStyle(tint)
+                    .font(isSelected ? Typography.sidebarIconSelected : Typography.sidebarIcon)
                     .frame(width: Layout.Sidebar.iconColumn)
                     .accessibilityHidden(true)
                 Text(title)
                     .font(isSelected ? Typography.sidebarRowSelected : Typography.sidebarRow)
-                    .foregroundStyle(Palette.ink)
                     .lineLimit(1)
                 Spacer(minLength: 0)
                 if count > 0 {
@@ -249,12 +390,27 @@ struct SidebarRow: View {
                         .foregroundStyle(Palette.inkSecondary)
                 }
             }
+            .foregroundStyle(isSelected ? Palette.accentInk : (isHovered ? Palette.ink : Palette.inkSecondary))
             .padding(.horizontal, Layout.Sidebar.rowPadding)
             .frame(maxWidth: .infinity, minHeight: Layout.Sidebar.rowHeight)
             .background(shape.fill(isSelected ? Palette.selection : (isHovered ? Palette.sidebarHover : .clear)))
+            .overlay(shape.strokeBorder(isSelected ? Palette.accentEdge : .clear, lineWidth: Layout.Main.hairline))
+            .overlay(alignment: .leading) {
+                if isSelected {
+                    Capsule()
+                        .fill(Palette.accent)
+                        .frame(width: Layout.Sidebar.markerWidth)
+                        .padding(.vertical, Layout.Sidebar.markerInset)
+                        .offset(x: -Layout.Sidebar.markerOffset)
+                }
+            }
             .contentShape(shape)
+            .flowFocusRing(shape, drawn: isFocused)
         }
         .buttonStyle(.plain)
+        // The ring above is the focus indicator; the system's would double it.
+        .focusEffectDisabled()
+        .focused($isFocused)
         .onHover { isHovered = $0 }
         .animation(Motion.resolve(Motion.fadeFast, reduceMotion: reduceMotion), value: isHovered)
         .accessibilityLabel(title)
@@ -269,11 +425,30 @@ struct SidebarSettingsButton: View {
     @Environment(\.mainPreview) private var preview
 
     var body: some View {
-        SidebarRow(title: "Settings", symbol: "gearshape", tint: Palette.Wheel.purple) {
+        SidebarRow(title: "Settings", symbol: "gearshape") {
             guard preview.status == nil else { return }
             model.showSettings()
         }
         .help("Settings (⌘,)")
+    }
+}
+
+/// "fn  Hold to dictate": the push-to-talk key as the user has set it, under Settings.
+private struct SidebarShortcutHint: View {
+    let key: String
+
+    var body: some View {
+        HStack(spacing: Layout.Sidebar.hintSpacing) {
+            KeyCap(label: key)
+            Text("Hold to dictate")
+                .font(Typography.callout)
+                .foregroundStyle(Palette.inkSecondary)
+                .lineLimit(1)
+        }
+        .padding(.horizontal, Layout.Sidebar.hintInset)
+        .padding(.top, Layout.Sidebar.hintTop)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Hold \(key) to dictate")
     }
 }
 
@@ -282,6 +457,7 @@ struct SidebarSettingsButton: View {
 struct SidebarToggleButton: View {
     @Environment(AppModel.self) private var model
     @State private var isHovered = false
+    @FocusState private var isFocused: Bool
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
@@ -293,12 +469,15 @@ struct SidebarToggleButton: View {
         } label: {
             Image(systemName: "sidebar.left")
                 .font(Typography.sidebarIcon)
-                .foregroundStyle(isHovered ? Palette.inkSecondary : Palette.icon)
+                .foregroundStyle(isHovered ? Palette.accentInk : Palette.icon)
                 .frame(width: Layout.Sidebar.hideButton, height: Layout.Sidebar.hideButton)
-                .background(shape.fill(isHovered ? Palette.sidebarHover : .clear))
+                .background(shape.fill(isHovered ? Palette.accentSoft : .clear))
                 .contentShape(shape)
+                .flowFocusRing(shape, drawn: isFocused)
         }
         .buttonStyle(.plain)
+        .focusEffectDisabled()
+        .focused($isFocused)
         .onHover { isHovered = $0 }
         .animation(Motion.resolve(Motion.fadeFast, reduceMotion: reduceMotion), value: isHovered)
         .help("\(label) (⌃⌘S)")

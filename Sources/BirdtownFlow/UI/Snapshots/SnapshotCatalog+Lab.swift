@@ -13,7 +13,43 @@ extension SnapshotCatalog {
             SnapshotRenderer.Shot("lab-results-grouped", size: size) {
                 labGrouped(records: records, preview: sample)
             },
+            // A retry that failed: the text and the earlier result stay, the error sits beside
+            // Retry, and the editor says it's saved.
+            SnapshotRenderer.Shot("lab-test-failed", size: CGSize(width: 1040, height: 1_500)) {
+                labFailed(records: records, preview: sample)
+            },
         ]
+    }
+
+    private static func labFailed(records: [HistoryRecord], preview: MainPreview) -> some View {
+        let model = AppModel.preview(records: records, lab: SampleData.labState)
+        model.section = .lab
+        model.settings.polishProvider = .claudeCode
+        let config = SampleData.labConfigurations[0]
+        let polished = "So I was thinking we could move the Birdtown review to Friday, no wait, Thursday, and then "
+            + "send the deck to Sarah before then. Does that work for you?"
+        func run(minutesAgo: Double, result: PolishService.LabResult, output: String) -> LabBench.Run {
+            LabBench.Run(
+                configuration: config, wasEdited: false, input: LabBench.defaultSample, style: .casual,
+                category: .work, appName: "Slack", ranAt: Date().addingTimeInterval(-minutesAgo * 60),
+                result: result, output: output)
+        }
+        model.bench.preview(
+            selected: config.id, draft: nil,
+            runs: [
+                run(minutesAgo: 0,
+                    result: .init(verdict: .failed("Claude Code didn't answer within 10 s. Check that it is signed in, then retry."),
+                                  totalMilliseconds: 0),
+                    output: ""),
+                run(minutesAgo: 3,
+                    result: .init(verdict: .accepted(polished), totalMilliseconds: 1_046, modelMilliseconds: 842,
+                                  sessionMilliseconds: 1_003),
+                    output: polished),
+            ])
+        return MainView()
+            .environment(model)
+            .environment(\.mainPreview, preview)
+            .transaction { $0.disablesAnimations = true }
     }
 
     private static func labGrouped(records: [HistoryRecord], preview: MainPreview) -> some View {

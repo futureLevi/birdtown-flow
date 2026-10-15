@@ -56,8 +56,9 @@ struct MainPreview: Sendable {
     var historySelection: [UUID] = []
     /// Seconds into the live orb's turn, so recording states render the same frame every time.
     var orbPhase: Double?
-    /// Seconds into a Shimmer sweep for Home's hero to draw, so its moving light can be shown.
-    var heroSweepPhase: Double?
+    /// Seconds into the voice field's drift for Home's artwork to draw, so a moving frame can be
+    /// shown.
+    var fieldPhase: Double?
 }
 
 extension EnvironmentValues {

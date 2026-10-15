@@ -1,6 +1,7 @@
 import SwiftUI
 
-/// A toggleable filter capsule. Selected chips wear Signal blue, the app's colour for "chosen".
+/// A toggleable filter capsule. Selected chips wear Signal blue and a check, so "chosen" is
+/// never colour alone.
 struct FilterChip: View {
     let title: String
     var symbol: String?
@@ -13,15 +14,22 @@ struct FilterChip: View {
     var body: some View {
         Button(action: action) {
             HStack(spacing: Spacing.xs) {
+                if isSelected {
+                    Image(systemName: "checkmark")
+                        .imageScale(.small)
+                        .fontWeight(.semibold)
+                        .accessibilityHidden(true)
+                }
                 if let symbol {
                     Image(systemName: symbol)
                         .imageScale(.small)
                 }
                 Text(title)
                 if let count {
+                    // Lighter weight sets the number apart; fading it would drop below 4.5:1.
                     Text(count, format: .number)
                         .monospacedDigit()
-                        .opacity(Interaction.dimmedOpacity)
+                        .fontWeight(.regular)
                 }
             }
         }
@@ -59,7 +67,7 @@ private struct FilterChipBody: View {
             .padding(.horizontal, Spacing.m)
             .frame(height: Layout.Main.chipHeight)
             .background(Capsule().fill(fill))
-            .overlay(Capsule().strokeBorder(isSelected ? Palette.accent : Palette.hairline,
+            .overlay(Capsule().strokeBorder(isSelected ? Palette.accent : Palette.hairlineStrong,
                                                               lineWidth: Layout.Main.hairline))
             .contentShape(Capsule())
             .flowFocusRing(Capsule(), drawn: isFocused)

@@ -166,7 +166,7 @@ struct HUDPreviewSheet: View {
                 HUDPreviewScene(preview: previews[index])
                     .overlay(alignment: .topTrailing) {
                         Text(previews[index].name)
-                            .font(Typography.caption)
+                            .font(Typography.Compact.caption)
                             .foregroundStyle(Palette.inkTertiary)
                             .padding(Spacing.s)
                     }
@@ -237,7 +237,7 @@ struct HUDBackdrop: View {
                 ForEach(lines.indices, id: \.self) { row in
                     HStack(spacing: Spacing.s) {
                         Text("\(row + 12)")
-                            .font(Typography.mono)
+                            .font(Typography.Compact.mono)
                             .foregroundStyle(Palette.inkTertiary.opacity(0.6))
                             .frame(width: 22, alignment: .trailing)
                         HStack(spacing: 5) {
@@ -290,7 +290,7 @@ struct BrandPreviewSheet: View {
                     VStack(spacing: Spacing.s) {
                         AppIconArtwork(size: side)
                         Text("\(Int(side))")
-                            .font(Typography.caption)
+                            .font(Typography.Compact.caption)
                             .foregroundStyle(Palette.inkTertiary)
                     }
                 }

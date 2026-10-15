@@ -410,8 +410,8 @@ private struct StepScaffold<Controls: View>: View {
                     .padding(.bottom, Spacing.xl)
             }
             Text(title)
-                .font(Typography.display)
-                .tracking(Tracking.display)
+                .font(Typography.Compact.display)
+                .tracking(Tracking.Compact.display)
                 .foregroundStyle(Palette.ink)
                 .multilineTextAlignment(.center)
                 .contentTransition(.opacity)
@@ -478,10 +478,10 @@ private struct WelcomeStep: View {
             VStack(spacing: Spacing.xs) {
                 Text("Birdtown Flow")
                     .font(Typography.hero)
-                    .tracking(Tracking.display)
+                    .tracking(Tracking.Compact.display)
                     .foregroundStyle(Palette.ink)
                 Text("Speak anywhere. It types for you.")
-                    .font(Typography.title)
+                    .font(Typography.Compact.title)
                     .fontWeight(.regular)
                     .foregroundStyle(Palette.inkSecondary)
             }
@@ -494,7 +494,7 @@ private struct WelcomeStep: View {
                     .buttonStyle(SetupKit.PrimaryButtonStyle(large: true))
                     .keyboardShortcut(.defaultAction)
                 Text("Two permissions and a one-time download. You can dictate while it finishes.")
-                    .font(Typography.caption)
+                    .font(Typography.Compact.caption)
                     .foregroundStyle(Palette.inkTertiary)
             }
             .padding(.top, Spacing.huge)
@@ -588,12 +588,12 @@ private struct PermissionRow: View {
     var body: some View {
         HStack(spacing: Spacing.m) {
             Image(systemName: symbol)
-                .font(Typography.bodyEmphasis)
+                .font(Typography.Compact.bodyEmphasis)
                 .foregroundStyle(Palette.inkSecondary)
                 .frame(width: Layout.iconMedium)
                 .accessibilityHidden(true)
             Text(title)
-                .font(Typography.bodyEmphasis)
+                .font(Typography.Compact.bodyEmphasis)
                 .foregroundStyle(Palette.ink)
             Spacer(minLength: Spacing.m)
             badge
@@ -608,23 +608,23 @@ private struct PermissionRow: View {
         switch state {
         case .waiting(let text):
             Text(text)
-                .font(Typography.callout)
+                .font(Typography.Compact.callout)
                 .foregroundStyle(Palette.inkTertiary)
         case .checking(let text):
             HStack(spacing: Spacing.s) {
                 ProgressView().controlSize(.small)
                 Text(text)
-                    .font(Typography.callout)
+                    .font(Typography.Compact.callout)
                     .foregroundStyle(Palette.inkSecondary)
             }
         case .granted:
             Label("Allowed", systemImage: "checkmark.circle.fill")
-                .font(Typography.callout.weight(.medium))
+                .font(Typography.Compact.callout.weight(.medium))
                 .foregroundStyle(Palette.success)
                 .transition(.scale.combined(with: .opacity))
         case .off:
             Label("Turned off", systemImage: "xmark.circle.fill")
-                .font(Typography.callout.weight(.medium))
+                .font(Typography.Compact.callout.weight(.medium))
                 .foregroundStyle(Palette.warning)
         }
     }
@@ -687,7 +687,7 @@ private struct AccessibilityStep: View {
                 WaitingForAccess()
             } else {
                 Text("Not allowed yet")
-                    .font(Typography.callout)
+                    .font(Typography.Compact.callout)
                     .foregroundStyle(Palette.inkTertiary)
             }
         }
@@ -702,7 +702,7 @@ private struct WaitingForAccess: View {
         HStack(spacing: Spacing.s) {
             ProgressView().controlSize(.small)
             Text("Waiting for access…")
-                .font(Typography.callout)
+                .font(Typography.Compact.callout)
                 .foregroundStyle(Palette.inkSecondary)
         }
     }
@@ -715,13 +715,13 @@ private struct InstructionLine: View {
     var body: some View {
         HStack(spacing: Spacing.m) {
             Text("\(number)")
-                .font(Typography.caption)
+                .font(Typography.Compact.caption)
                 .monospacedDigit()
                 .foregroundStyle(Palette.inkSecondary)
                 .frame(width: Layout.iconMedium, height: Layout.iconMedium)
                 .background(Circle().fill(Palette.sunken))
             Text(text)
-                .font(Typography.body)
+                .font(Typography.Compact.body)
                 .foregroundStyle(Palette.ink)
         }
     }
@@ -746,7 +746,7 @@ private struct ModelStep: View {
                 card
                 if let note = carryOnNote {
                     Text(note)
-                        .font(Typography.callout)
+                        .font(Typography.Compact.callout)
                         .foregroundStyle(Palette.inkTertiary)
                         .multilineTextAlignment(.center)
                         .fixedSize(horizontal: false, vertical: true)
@@ -778,16 +778,16 @@ private struct ModelStep: View {
         VStack(alignment: .leading, spacing: Spacing.m) {
             HStack(spacing: Spacing.m) {
                 Image(systemName: "waveform")
-                    .font(Typography.bodyEmphasis)
+                    .font(Typography.Compact.bodyEmphasis)
                     .foregroundStyle(Palette.inkSecondary)
                     .frame(width: Layout.iconMedium)
                     .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: Spacing.xxs) {
                     Text(engine.displayName)
-                        .font(Typography.bodyEmphasis)
+                        .font(Typography.Compact.bodyEmphasis)
                         .foregroundStyle(Palette.ink)
                     Text("\(engine.downloadSize) · runs entirely on this Mac")
-                        .font(Typography.callout)
+                        .font(Typography.Compact.callout)
                         .foregroundStyle(Palette.inkSecondary)
                 }
                 Spacer(minLength: Spacing.m)
@@ -804,7 +804,7 @@ private struct ModelStep: View {
                     text: "The download stopped. Check your connection and try again."
                 ) {
                     Text(message)
-                        .font(Typography.caption)
+                        .font(Typography.Compact.caption)
                         .foregroundStyle(Palette.inkSecondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -817,11 +817,11 @@ private struct ModelStep: View {
     private var status: some View {
         if state == .ready {
             Label("Ready", systemImage: "checkmark.circle.fill")
-                .font(Typography.callout.weight(.medium))
+                .font(Typography.Compact.callout.weight(.medium))
                 .foregroundStyle(Palette.success)
         } else if let progress = SetupKit.progress(of: state) {
             Text(SetupKit.percent(progress))
-                .font(Typography.callout.weight(.medium))
+                .font(Typography.Compact.callout.weight(.medium))
                 .monospacedDigit()
                 .foregroundStyle(Palette.ink)
                 .contentTransition(.numericText())
@@ -829,12 +829,12 @@ private struct ModelStep: View {
             HStack(spacing: Spacing.s) {
                 ProgressView().controlSize(.small)
                 Text(SetupKit.describe(state))
-                    .font(Typography.callout)
+                    .font(Typography.Compact.callout)
                     .foregroundStyle(Palette.inkSecondary)
             }
         } else if !SetupKit.isFailed(state) {
             Text(SetupKit.describe(state))
-                .font(Typography.callout)
+                .font(Typography.Compact.callout)
                 .foregroundStyle(Palette.inkTertiary)
         }
     }
@@ -933,7 +933,7 @@ private struct ShortcutStep: View {
         } else {
             HStack(spacing: Spacing.s) {
                 Text("Your shortcut")
-                    .font(Typography.callout.weight(.medium))
+                    .font(Typography.Compact.callout.weight(.medium))
                     .foregroundStyle(Palette.ink)
                 SetupKit.KeyCombo(keys: keys)
                 recorder
@@ -980,11 +980,11 @@ private struct ShortcutStep: View {
             }
             if settings.handsFreeShortcut == .controlOption {
                 Text("Press \(SetupKit.handsFreeName(settings)) again to finish.")
-                    .font(Typography.caption)
+                    .font(Typography.Compact.caption)
                     .foregroundStyle(Palette.inkTertiary)
             } else if settings.handsFreeShortcut == .doubleTap && !crowded {
                 Text("Or hold \(SetupKit.name(for: key)) and press Space. Tap it again to finish.")
-                    .font(Typography.caption)
+                    .font(Typography.Compact.caption)
                     .foregroundStyle(Palette.inkTertiary)
             }
         }
@@ -1001,7 +1001,7 @@ private struct ShortcutStep: View {
             VStack(spacing: Spacing.s) {
                 SetupKit.KeyCombo(keys: keys)
                 Text(caption)
-                    .font(Typography.callout)
+                    .font(Typography.Compact.callout)
                     .foregroundStyle(Palette.inkSecondary)
             }
             .frame(maxWidth: .infinity)
@@ -1022,7 +1022,7 @@ private struct KeyOption: View {
             VStack(spacing: Spacing.s) {
                 SetupKit.KeyCap(label: SetupKit.glyph(for: key), large: true)
                 Text(SetupKit.name(for: key))
-                    .font(Typography.callout.weight(.medium))
+                    .font(Typography.Compact.callout.weight(.medium))
                     .foregroundStyle(selected ? Palette.ink : Palette.inkSecondary)
             }
             .padding(.vertical, Spacing.s + Spacing.xxs)
@@ -1091,7 +1091,7 @@ private struct PracticeStep: View {
             VStack(spacing: Spacing.m) {
                 if !succeeded {
                     Text("“Birdtown Flow is my new favourite way to write.”")
-                        .font(Typography.transcriptLarge)
+                        .font(Typography.Compact.transcriptLarge)
                         .foregroundStyle(Palette.ink)
                         .multilineTextAlignment(.center)
                         .padding(.bottom, Spacing.xs)
@@ -1101,15 +1101,15 @@ private struct PracticeStep: View {
                 // something had already been typed.
                 TextField("Practice", text: $text, prompt: Text(""), axis: .vertical)
                     .textFieldStyle(.plain)
-                    .font(Typography.transcript)
+                    .font(Typography.Compact.transcript)
                     .foregroundStyle(Palette.ink)
-                    .lineSpacing(Spacing.transcriptLine)
+                    .lineSpacing(Spacing.xs)
                     .lineLimit(3, reservesSpace: true)
                     .focused($focused)
                     .overlay(alignment: .topLeading) {
                         if text.isEmpty {
                             Text("Your words will appear here.")
-                                .font(Typography.transcript)
+                                .font(Typography.Compact.transcript)
                                 .foregroundStyle(Palette.inkTertiary)
                                 .allowsHitTesting(false)
                                 .accessibilityHidden(true)
@@ -1144,7 +1144,7 @@ private struct PracticeStep: View {
                 Button("Fix Accessibility", action: onFixAccessibility)
                     .buttonStyle(SetupKit.InlineLinkStyle())
             }
-            .font(Typography.callout)
+            .font(Typography.Compact.callout)
         } else if !microphoneGranted {
             HStack(spacing: Spacing.s) {
                 Image(systemName: "exclamationmark.triangle.fill")
@@ -1154,25 +1154,25 @@ private struct PracticeStep: View {
                 Button("Fix Microphone", action: onFixMicrophone)
                     .buttonStyle(SetupKit.InlineLinkStyle())
             }
-            .font(Typography.callout)
+            .font(Typography.Compact.callout)
         } else if phase.isRecording {
             HStack(spacing: Spacing.s) {
                 SpectrumOrb(mode: .live, diameter: Layout.Orb.small, phase: orbPhase)
                 Text("Listening… let go when you're done.")
                     .foregroundStyle(Palette.ink)
             }
-            .font(Typography.callout)
+            .font(Typography.Compact.callout)
         } else if phase.isBusy {
             HStack(spacing: Spacing.s) {
                 SpectrumOrb(mode: .thinking, diameter: Layout.Orb.small, phase: orbPhase)
                 Text("Writing it down…")
                     .foregroundStyle(Palette.inkSecondary)
             }
-            .font(Typography.callout)
+            .font(Typography.Compact.callout)
         } else if succeeded {
             VStack(spacing: Spacing.xs) {
                 Label("Typed by Birdtown Flow", systemImage: "checkmark.circle.fill")
-                    .font(Typography.callout.weight(.medium))
+                    .font(Typography.Compact.callout.weight(.medium))
                     .foregroundStyle(Palette.success)
                 if let typedWith {
                     engineCaption(typedWithText(typedWith))
@@ -1187,7 +1187,7 @@ private struct PracticeStep: View {
                     .foregroundStyle(Palette.inkSecondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
-            .font(Typography.callout)
+            .font(Typography.Compact.callout)
         } else if standIn == nil, modelState == .loading || SetupKit.progress(of: modelState) != nil
                     || modelState == .downloading(progress: nil) {
             // Nothing can stand in (Apple Speech itself is getting ready): the try has to wait.
@@ -1196,7 +1196,7 @@ private struct PracticeStep: View {
                     SetupKit.ProgressBar(fraction: progress)
                 }
                 Text(modelWaitingText)
-                    .font(Typography.callout)
+                    .font(Typography.Compact.callout)
                     .foregroundStyle(Palette.inkSecondary)
                     .multilineTextAlignment(.center)
                     .fixedSize(horizontal: false, vertical: true)
@@ -1204,7 +1204,7 @@ private struct PracticeStep: View {
         } else {
             VStack(spacing: Spacing.xs) {
                 Text("Waiting for you to hold \(keyName)…")
-                    .font(Typography.callout)
+                    .font(Typography.Compact.callout)
                     .foregroundStyle(Palette.inkTertiary)
                 // The download doesn't hold the try up; just say which engine will hear it.
                 if SetupKit.isFailed(modelState), let standIn {
@@ -1220,7 +1220,7 @@ private struct PracticeStep: View {
     /// A quiet line naming the engine: present, never the headline.
     private func engineCaption(_ text: String) -> some View {
         Text(text)
-            .font(Typography.caption)
+            .font(Typography.Compact.caption)
             .foregroundStyle(Palette.inkTertiary)
             .multilineTextAlignment(.center)
             .fixedSize(horizontal: false, vertical: true)

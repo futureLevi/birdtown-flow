@@ -6,6 +6,9 @@ import SwiftUI
 /// same text and compared under one header per text, then handed the writing styles they
 /// should polish. Styles without one keep following Settings, so nothing changes for everyday
 /// dictation until you say so.
+///
+/// Three regions: the configuration list, the editor panel (edits save themselves) and the
+/// test panel, with every result so far under them. Violet marks the tuning.
 struct LabView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.mainPreview) private var preview
@@ -19,8 +22,9 @@ struct LabView: View {
                 VStack(alignment: .leading, spacing: Spacing.xxl) {
                     PageHeader(
                         title: "Lab",
-                        subtitle: "Tune polish configurations on real dictations, then pick the styles each one polishes. "
-                            + "Styles without one follow Settings."
+                        subtitle: "Make your dictation sound more like you.",
+                        symbol: SidebarSection.lab.symbol,
+                        tone: .violet
                     ) {
                         Button {
                             bench.addNew()
@@ -45,28 +49,27 @@ struct LabView: View {
                         }
                     }
 
-                    VStack(alignment: .leading, spacing: Spacing.m) {
-                        SectionHeader("Configurations", detail: "\(model.lab.configurations.count)")
-                        if model.lab.configurations.isEmpty {
-                            // No list to pick from, so no empty column beside the message.
-                            EmptyState(
-                                symbol: "flask",
-                                title: "No configurations yet",
-                                message: "Start one to try polish settings on real dictations."
-                            ) {
-                                Button("New Configuration") { bench.addNew() }
-                                    .buttonStyle(.flowPrimary)
-                            }
-                            .cardSurface()
-                        } else {
-                            HStack(alignment: .top, spacing: Spacing.m) {
-                                LabConfigurationList(onDelete: { deleting = $0 }) { id in
-                                    // No anchor: scroll only as far as it takes to bring the row into view.
-                                    withAnimation(Motion.resolve(Motion.snappy, reduceMotion: reduceMotion)) {
-                                        proxy.scrollTo(LabRowAnchor(id: id))
-                                    }
+                    if model.lab.configurations.isEmpty {
+                        // No list to pick from, so no empty column beside the message.
+                        EmptyState(
+                            symbol: "flask",
+                            title: "No configurations yet",
+                            message: "Start one to try polish settings on real dictations."
+                        ) {
+                            Button("New Configuration") { bench.addNew() }
+                                .buttonStyle(.flowPrimary)
+                        }
+                        .cardSurface()
+                    } else {
+                        HStack(alignment: .top, spacing: Layout.Lab.columnGap) {
+                            LabConfigurationList(onDelete: { deleting = $0 }) { id in
+                                // No anchor: scroll only as far as it takes to bring the row into view.
+                                withAnimation(Motion.resolve(Motion.snappy, reduceMotion: reduceMotion)) {
+                                    proxy.scrollTo(LabRowAnchor(id: id))
                                 }
-                                .frame(width: Layout.Lab.listWidth)
+                            }
+                            .frame(width: Layout.Lab.listWidth)
+                            VStack(alignment: .leading, spacing: Spacing.xxl) {
                                 if let selected = bench.selected {
                                     LabEditor(configuration: selected, onDelete: { deleting = $0 }, onApplied: { applied() })
                                         // A fresh editor per configuration: no focus or scroll carried over.
@@ -79,31 +82,30 @@ struct LabView: View {
                                     )
                                     .cardSurface()
                                 }
+                                LabTestPanel()
                             }
+                            .frame(maxWidth: .infinity, alignment: .leading)
                         }
                     }
-
-                    LabTestCard()
 
                     LabResults()
                 }
                 .pageLayout()
             }
         }
+        // A system dialog: focus stays inside it and Esc cancels.
         .confirmationDialog(
             "Delete “\(deleting?.displayName ?? "")”?",
             isPresented: Binding(get: { deleting != nil }, set: { if !$0 { deleting = nil } }),
             presenting: deleting
         ) { configuration in
-            Button("Delete", role: .destructive) {
+            Button("Delete Configuration", role: .destructive) {
                 bench.delete(configuration.id)
                 applied()
             }
             Button("Cancel", role: .cancel) {}
         } message: { configuration in
-            Text(model.lab.styles(for: configuration.id).isEmpty
-                 ? "This can't be undone."
-                 : "The styles it polishes go back to following Settings. This can't be undone.")
+            Text(deletionMessage(for: configuration))
         }
         .onAppear { if isLive { bench.schedulePrewarm() } }
         .onChange(of: bench.selectedID) { if isLive { bench.schedulePrewarm() } }
@@ -116,12 +118,26 @@ struct LabView: View {
     /// Snapshots render with a fixed status and must not start anything.
     private var isLive: Bool { preview.status == nil }
 
-    /// After a save, an assignment or a deletion, keep a session ready for the next test.
-    /// Dictation needs nothing here: it starts its own session as you begin talking, and
-    /// leaving the Lab hands the waiting session back to it.
+    /// After an assignment or a deletion, keep a session ready for the next test. Dictation
+    /// needs nothing here: it starts its own session as you begin talking, and leaving the Lab
+    /// hands the waiting session back to it.
     private func applied() {
         guard isLive else { return }
         model.bench.schedulePrewarm()
+    }
+
+    /// Names the styles that lose this configuration and what they follow instead, since
+    /// the delete can't be undone.
+    private func deletionMessage(for configuration: PolishConfiguration) -> String {
+        let assigned = model.lab.styles(for: configuration.id)
+        let names = WritingStyle.allCases.filter(assigned.contains).map(\.title)
+        guard !names.isEmpty else { return "This can't be undone." }
+        let provider = model.settings.polishProvider
+        let fallback = provider == .off
+            ? "where AI polish is off, so they'll be typed without it"
+            : "which polishes with \(provider.title)"
+        return "\(ListFormatter.localizedString(byJoining: names)) will go back to following Settings, "
+            + "\(fallback). This can't be undone."
     }
 }
 
@@ -147,7 +163,7 @@ private struct LabConfigurationList: View {
                     styles: model.lab.styles(for: saved.id),
                     isSelected: bench.selectedID == saved.id,
                     hasFocusRing: listFocused && bench.selectedID == saved.id,
-                    hasUnsavedChanges: bench.hasUnsavedChanges(saved.id)
+                    hasSaveProblem: isFailure(bench.saveState(of: saved.id))
                 ) {
                     bench.selectedID = saved.id
                     // So ↑/↓ and Delete work straight after a click, as in any Mac list.
@@ -175,6 +191,11 @@ private struct LabConfigurationList: View {
         .accessibilityLabel("Configurations")
     }
 
+    private func isFailure(_ state: LabBench.SaveState?) -> Bool {
+        if case .failed? = state { return true }
+        return false
+    }
+
     private func move(_ step: Int, order: [UUID]) -> KeyPress.Result {
         let bench = model.bench
         guard let target = PolishLabNavigation.neighbor(of: bench.selectedID, step: step, in: order) else {
@@ -197,7 +218,8 @@ private struct LabConfigurationRow: View {
     let isSelected: Bool
     /// The list has keyboard focus and this is the open row.
     let hasFocusRing: Bool
-    let hasUnsavedChanges: Bool
+    /// The last write to disk failed.
+    let hasSaveProblem: Bool
     let action: () -> Void
 
     @State private var isHovered = false
@@ -211,35 +233,40 @@ private struct LabConfigurationRow: View {
                         .foregroundStyle(Palette.ink)
                         .lineLimit(1)
                     Spacer(minLength: Spacing.xs)
-                    if hasUnsavedChanges {
+                    if hasSaveProblem {
                         StatusDot(color: Palette.warning)
-                            .help("Unsaved changes")
+                            .help("Couldn't save changes")
                     }
                 }
-                VStack(alignment: .leading, spacing: Spacing.xxs) {
-                    if configuration.usesModel, !configuration.model.isEmpty {
-                        Text(configuration.model)
-                            .foregroundStyle(Palette.inkSecondary)
-                            .lineLimit(1)
-                            .truncationMode(.middle)
-                    }
-                    Text(configuration.providerAndEffort)
+                Text(configuration.listSubtitle)
+                    .font(Typography.callout)
+                    .foregroundStyle(Palette.inkSecondary)
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
+                if styles.isEmpty {
+                    Text("Not in use")
+                        .font(Typography.callout)
                         .foregroundStyle(Palette.inkTertiary)
-                        .lineLimit(1)
+                        .padding(.top, Spacing.xs)
+                } else {
+                    Badge(text: usedBy, symbol: "checkmark", tone: .success)
+                        .padding(.top, Spacing.xs)
+                        .help(usedFor)
                 }
-                .font(Typography.caption)
-                HStack(alignment: .firstTextBaseline, spacing: Spacing.xs) {
-                    Image(systemName: styles.isEmpty ? "circle.dashed" : "checkmark.circle.fill")
-                        .foregroundStyle(styles.isEmpty ? Palette.inkTertiary : Palette.success)
-                    Text(usedFor)
-                        .foregroundStyle(styles.isEmpty ? Palette.inkTertiary : Palette.inkSecondary)
-                        .lineLimit(2)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                .font(Typography.caption)
             }
-            .padding(Spacing.m)
+            .padding(Spacing.l)
             .frame(maxWidth: .infinity, alignment: .leading)
+            // A marker bar as well as the tint and the ring: the open row is never hue alone.
+            .overlay(alignment: .leading) {
+                if isSelected {
+                    Capsule()
+                        .fill(Palette.accent)
+                        .frame(width: Layout.Lab.markerWidth)
+                        .padding(.vertical, Layout.Lab.markerInset)
+                        .padding(.leading, Spacing.xs)
+                        .accessibilityHidden(true)
+                }
+            }
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -249,19 +276,56 @@ private struct LabConfigurationRow: View {
         .flowFocusRing(RoundedRectangle(cornerRadius: Radius.m, style: .continuous), drawn: hasFocusRing)
         .onHover { isHovered = $0 }
         .accessibilityAddTraits(isSelected ? .isSelected : [])
-        .accessibilityHint(hasUnsavedChanges ? "Has unsaved changes" : "")
+        .accessibilityHint(hasSaveProblem ? "Couldn't save changes" : "")
+    }
+
+    private var usedBy: String {
+        styles.count == 1 ? "Used by 1 style" : "Used by \(styles.count) styles"
     }
 
     private var usedFor: String {
         let names = WritingStyle.allCases.filter(styles.contains).map(\.title)
-        return names.isEmpty ? "Not used yet" : "Used for " + ListFormatter.localizedString(byJoining: names)
+        return "Used for " + ListFormatter.localizedString(byJoining: names)
+    }
+}
+
+// MARK: - Panel
+
+/// A raised panel with its title and a trailing accessory in a header over a hairline, like
+/// the handoff's editor and test panels.
+private struct LabPanel<Accessory: View, Content: View>: View {
+    let title: String
+    @ViewBuilder var accessory: Accessory
+    @ViewBuilder var content: Content
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(alignment: .center, spacing: Spacing.m) {
+                Text(title)
+                    .font(Typography.title)
+                    .tracking(Tracking.title)
+                    .foregroundStyle(Palette.ink)
+                    .lineLimit(1)
+                    .accessibilityAddTraits(.isHeader)
+                Spacer(minLength: Spacing.s)
+                accessory
+            }
+            .frame(minHeight: Layout.Main.iconButton)
+            .padding(.horizontal, Spacing.xxl)
+            .padding(.vertical, Layout.Lab.panelHeaderVertical)
+            RowDivider()
+            content
+                .padding(Spacing.xxl)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .cardSurface()
     }
 }
 
 // MARK: - Editor
 
 private struct LabEditor: View {
-    /// The version on screen: unsaved edits included.
+    /// The version on screen: edits not yet written included.
     let configuration: PolishConfiguration
     let onDelete: (PolishConfiguration) -> Void
     let onApplied: () -> Void
@@ -273,25 +337,31 @@ private struct LabEditor: View {
         let bench = model.bench
         let id = configuration.id
         let saved = model.lab.configuration(id: id)
-        let isDirty = bench.hasUnsavedChanges(id)
-        Card(padding: Spacing.l) {
-            VStack(alignment: .leading, spacing: Spacing.l) {
-                HStack(alignment: .bottom, spacing: Spacing.m) {
+        let state = bench.saveState(of: id)
+        LabPanel(title: configuration.displayName) {
+            HStack(spacing: Spacing.xxs) {
+                saveStatus(state)
+                    .padding(.trailing, Spacing.s)
+                IconButton(symbol: "plus.square.on.square", label: "Duplicate") { bench.duplicate(id) }
+                    .keyboardShortcut("d", modifiers: .command)
+                IconButton(symbol: "trash", label: "Delete…") { onDelete(saved ?? configuration) }
+            }
+        } content: {
+            VStack(alignment: .leading, spacing: Layout.Lab.formGap) {
+                if let reason = failureReason(state) {
+                    saveFailure(reason)
+                }
+
+                HStack(alignment: .top, spacing: Layout.Lab.formGap) {
                     LabField(label: "Name") {
                         LabTextInput("Name", text: binding(\.name), prompt: "Filler words v2")
                     }
-                    HStack(spacing: Spacing.xxs) {
-                        IconButton(symbol: "plus.square.on.square", label: "Duplicate") { bench.duplicate(id) }
-                            .keyboardShortcut("d", modifiers: .command)
-                        IconButton(symbol: "trash", label: "Delete…") { onDelete(saved ?? configuration) }
+                    LabField(label: "Notes") {
+                        LabTextInput("Notes", text: binding(\.notes), prompt: "What this version tries")
                     }
-                    .padding(.bottom, Spacing.xxs)
-                }
-                LabField(label: "Notes") {
-                    LabTextInput("Notes", text: binding(\.notes), prompt: "What this version tries")
                 }
 
-                HStack(alignment: .top, spacing: Spacing.l) {
+                HStack(alignment: .top, spacing: Layout.Lab.formGap) {
                     LabField(label: "Provider") {
                         LabPicker(
                             label: "Provider",
@@ -299,41 +369,107 @@ private struct LabEditor: View {
                             title: PolishConfiguration.providerTitle,
                             selection: Binding(get: { configuration.provider }, set: { switchProvider($0) })
                         )
-                        .frame(width: Layout.Lab.providerWidth)
                     }
                     if configuration.usesModel {
                         LabField(label: "Model") { modelField }
+                    } else {
+                        Color.clear.frame(maxWidth: .infinity, maxHeight: 0)
                     }
                 }
+
                 if configuration.usesEffort {
                     LabField(label: "Effort") {
-                        Picker("Effort", selection: binding(\.effort)) {
-                            ForEach(configuration.effortOptions) { effort in
-                                Text(effort.shortTitle).tag(effort)
-                            }
-                        }
-                        .pickerStyle(.segmented)
-                        .labelsHidden()
-                        .fixedSize()
+                        LabSegmented(
+                            label: "Effort",
+                            options: configuration.effortOptions,
+                            title: \.shortTitle,
+                            selection: binding(\.effort)
+                        )
                     }
                 }
 
                 instructions
 
-                footer(saved: saved, isDirty: isDirty)
-
                 // Outside the draft: a chip applies as soon as it's clicked, so it sits apart
-                // from the fields that wait for Save.
-                Divider()
+                // from the fields that autosave.
+                RowDivider()
+                    .padding(.top, Spacing.xs)
 
-                usedFor(isDirty: isDirty)
+                usedFor
             }
         }
     }
 
+    // MARK: Save state
+
+    private func failureReason(_ state: LabBench.SaveState?) -> String? {
+        if case .failed(let reason)? = state { return reason }
+        return nil
+    }
+
+    /// "Saved" appears only once the write has worked, so it can be trusted.
+    @ViewBuilder
+    private func saveStatus(_ state: LabBench.SaveState?) -> some View {
+        switch state {
+        case .some(.saving):
+            statusLabel(symbol: nil, text: "Saving…", tint: Palette.inkTertiary)
+        case .some(.saved(let date)):
+            statusLabel(
+                symbol: "checkmark", text: "Saved \(date.formatted(.relative(presentation: .named)))",
+                tint: Palette.inkSecondary)
+        case .some(.failed):
+            statusLabel(symbol: "exclamationmark.triangle.fill", text: "Not saved", tint: Palette.danger)
+        case nil:
+            EmptyView()
+        }
+    }
+
+    private func statusLabel(symbol: String?, text: String, tint: Color) -> some View {
+        HStack(spacing: Spacing.xs) {
+            if let symbol {
+                Image(systemName: symbol)
+                    .imageScale(.small)
+                    .accessibilityHidden(true)
+            }
+            Text(text)
+        }
+        .font(Typography.callout)
+        .foregroundStyle(tint)
+        .lineLimit(1)
+    }
+
+    /// The write failed, so the edits are on screen and in use but not on disk yet.
+    private func saveFailure(_ reason: String) -> some View {
+        HStack(alignment: .top, spacing: Spacing.m) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .foregroundStyle(Palette.danger)
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: Spacing.xxs) {
+                Text("Your changes aren't saved to disk")
+                    .font(Typography.headline)
+                    .foregroundStyle(Palette.ink)
+                Text(reason)
+                    .font(Typography.callout)
+                    .foregroundStyle(Palette.inkSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .textSelection(.enabled)
+            }
+            Spacer(minLength: Spacing.m)
+            Button("Try Again") { model.bench.retrySave(configuration.id) }
+                .buttonStyle(.flowSecondary)
+                .controlSize(.small)
+                .keyboardShortcut("s", modifiers: .command)
+                .help("Save again (⌘S)")
+        }
+        .padding(Spacing.m)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(RoundedRectangle(cornerRadius: Radius.control, style: .continuous).fill(Palette.dangerSoft))
+        .accessibilityElement(children: .contain)
+    }
+
     // MARK: Fields
 
-    /// Edits go to the bench as a draft; nothing is saved until Save.
+    /// Edits go to the bench as a draft, which saves itself once typing pauses.
     private func binding<Value>(_ keyPath: WritableKeyPath<PolishConfiguration, Value>) -> Binding<Value> {
         let bench = model.bench
         let fallback = configuration
@@ -394,38 +530,44 @@ private struct LabEditor: View {
 
     // MARK: Styles
 
-    private func usedFor(isDirty: Bool) -> some View {
+    private var usedFor: some View {
         let lab = model.lab
         let id = configuration.id
         let assigned = lab.styles(for: id)
-        return VStack(alignment: .leading, spacing: Spacing.s) {
-            Text("Use for · applies right away")
-                .font(Typography.caption)
-                .foregroundStyle(Palette.inkSecondary)
-            HStack(spacing: Spacing.s) {
-                ForEach(WritingStyle.allCases) { style in
-                    let isOn = assigned.contains(style)
-                    FilterChip(title: style.title, symbol: isOn ? "checkmark" : nil, isSelected: isOn) {
-                        var styles = assigned
-                        if isOn { styles.remove(style) } else { styles.insert(style) }
-                        lab.setStyles(styles, for: id)
-                        onApplied()
-                    }
-                    .help(chipHelp(for: style, isOn: isOn))
-                }
+        return VStack(alignment: .leading, spacing: Spacing.m) {
+            VStack(alignment: .leading, spacing: Spacing.xs) {
+                Text("Use for these styles")
+                    .font(Typography.headline)
+                    .foregroundStyle(Palette.ink)
+                // Which configuration owns a style is on each chip's tooltip, so this stays short.
+                Text("Changes apply to future dictations. Unassigned styles follow Settings.")
+                    .font(Typography.callout)
+                    .foregroundStyle(Palette.inkSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
-            Text(styleExplanation(assigned: assigned, isDirty: isDirty))
-                .font(Typography.caption)
-                .foregroundStyle(Palette.inkTertiary)
-                .fixedSize(horizontal: false, vertical: true)
+            // One row when the panel is wide enough, a column when it isn't.
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: Spacing.s) { styleChips(assigned: assigned) }
+                VStack(alignment: .leading, spacing: Spacing.s) { styleChips(assigned: assigned) }
+            }
         }
     }
 
-    /// Which configuration owns a style is on each chip's tooltip, so this stays one line.
-    private func styleExplanation(assigned: Set<WritingStyle>, isDirty: Bool) -> String {
-        var parts = ["Styles without a configuration follow Settings."]
-        if isDirty, !assigned.isEmpty { parts.append("Until you save, they use the saved version.") }
-        return parts.joined(separator: " ")
+    /// A check when chosen, a plus when not: the choice never rests on colour alone.
+    @ViewBuilder
+    private func styleChips(assigned: Set<WritingStyle>) -> some View {
+        let lab = model.lab
+        let id = configuration.id
+        ForEach(WritingStyle.allCases) { style in
+            let isOn = assigned.contains(style)
+            FilterChip(title: style.title, symbol: isOn ? nil : "plus", isSelected: isOn) {
+                var styles = assigned
+                if isOn { styles.remove(style) } else { styles.insert(style) }
+                lab.setStyles(styles, for: id)
+                onApplied()
+            }
+            .help(chipHelp(for: style, isOn: isOn))
+        }
     }
 
     private func chipHelp(for style: WritingStyle, isOn: Bool) -> String {
@@ -442,171 +584,166 @@ private struct LabEditor: View {
         let text = binding(\.instructions)
         let characters = configuration.instructions.count
         return VStack(alignment: .leading, spacing: Spacing.s) {
-            HStack(alignment: .firstTextBaseline, spacing: Spacing.s) {
+            HStack(alignment: .firstTextBaseline, spacing: Spacing.m) {
                 Text("Instructions")
                     .font(Typography.caption)
-                    .foregroundStyle(Palette.inkSecondary)
+                    .foregroundStyle(Palette.ink)
                 Text("\(characters.formatted()) characters, about \((characters / 4).formatted()) tokens")
-                    .font(Typography.caption)
+                    .font(Typography.callout)
                     .monospacedDigit()
                     .foregroundStyle(Palette.inkTertiary)
+                    .lineLimit(1)
                     .help("Every token of instructions is time the speaker waits.")
                 Spacer(minLength: Spacing.s)
-                Menu("Start from") {
+                Menu {
                     Button("Built-in: filler words only") { text.wrappedValue = PolishPrompt.fillerWordsTemplate }
                     Button("Built-in: full polish") { text.wrappedValue = PolishPrompt.fullTemplate }
+                } label: {
+                    Text("Use starter prompt")
+                        .font(Typography.link)
+                        .foregroundStyle(Palette.accentInk)
+                        .contentShape(Rectangle())
                 }
-                .menuStyle(.borderlessButton)
-                .font(Typography.caption)
+                .menuStyle(.button)
+                .buttonStyle(.plain)
+                .menuIndicator(.hidden)
                 .fixedSize()
                 .help("Replace the instructions with one of the app's own prompts")
             }
             TextEditor(text: text)
-                .font(Typography.body)
+                .font(Typography.bodyLarge)
+                .lineSpacing(Layout.Lab.instructionsLineSpacing)
                 .foregroundStyle(Palette.ink)
                 .scrollContentBackground(.hidden)
-                .padding(Spacing.s)
+                .padding(Spacing.m)
                 .frame(height: Layout.Lab.instructionsHeight)
                 .focused($instructionsFocused)
-                .labWell(isFocused: instructionsFocused)
+                .labWell(isFocused: instructionsFocused, fill: Palette.editor)
                 .accessibilityLabel("Instructions")
-            HStack(spacing: Spacing.xs) {
-                ForEach(PolishPlaceholder.allCases) { placeholder in
-                    Text(placeholder.token)
-                        .font(Typography.caption.monospaced())
-                        .foregroundStyle(Palette.inkSecondary)
-                        .padding(.horizontal, Spacing.s)
-                        .padding(.vertical, Spacing.xxs)
-                        .background(Capsule().fill(Palette.sunken))
-                        .help(placeholder.detail)
-                        .textSelection(.enabled)
-                }
-                Text("are filled in for each dictation.")
-                    .font(Typography.caption)
-                    .foregroundStyle(Palette.inkTertiary)
+            // Violet: these are the parts of the prompt that change with each dictation.
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: Spacing.s) { variableChips }
+                VStack(alignment: .leading, spacing: Spacing.s) { variableChips }
             }
+            Text("Filled in automatically for each dictation.")
+                .font(Typography.callout)
+                .foregroundStyle(Palette.inkSecondary)
         }
     }
 
-    // MARK: Footer
-
-    private func footer(saved: PolishConfiguration?, isDirty: Bool) -> some View {
-        let bench = model.bench
-        let id = configuration.id
-        return HStack(spacing: Spacing.s) {
-            if isDirty {
-                HStack(spacing: Spacing.xs) {
-                    StatusDot(color: Palette.warning)
-                    Text("Unsaved changes")
-                }
-                .font(Typography.caption)
-                .foregroundStyle(Palette.inkSecondary)
-            } else if let saved {
-                Text("Saved \(saved.updatedAt.formatted(.relative(presentation: .named)))")
-                    .font(Typography.caption)
-                    .foregroundStyle(Palette.inkTertiary)
-            }
-            Spacer(minLength: Spacing.s)
-            if isDirty {
-                Button("Revert") { bench.revert(id) }
-                    .buttonStyle(.flowGhost)
-                    .help("Go back to the saved version")
-                Button("Save as Copy") {
-                    bench.saveAsCopy(id)
-                    onApplied()
-                }
-                .buttonStyle(.flowSecondary)
-                .help("Keep the saved version as it is and save these changes under a new name")
-                // Only while there's something to save; clean, the footer just says when it was.
-                Button("Save") {
-                    bench.save(id)
-                    onApplied()
-                }
-                .buttonStyle(.flowPrimary)
-                .keyboardShortcut("s", modifiers: .command)
-                .help("Save (⌘S)")
-            }
+    @ViewBuilder
+    private var variableChips: some View {
+        ForEach(PolishPlaceholder.allCases) { placeholder in
+            Text(placeholder.token)
+                .font(Typography.mono)
+                .foregroundStyle(Palette.violet)
+                .lineLimit(1)
+                .fixedSize()
+                .padding(.horizontal, Spacing.s)
+                .padding(.vertical, Spacing.xxs)
+                .background(RoundedRectangle(cornerRadius: Radius.xs, style: .continuous).fill(Palette.violetSoft))
+                .help(placeholder.detail)
+                .textSelection(.enabled)
         }
     }
 }
 
 // MARK: - Test
 
-private struct LabTestCard: View {
+/// The prepared comparison: what the speech engine heard beside what the open configuration
+/// made of it. A failed run keeps the text on the left, shows its error with Retry, and leaves
+/// the last good result where it was.
+private struct LabTestPanel: View {
     @Environment(AppModel.self) private var model
     @FocusState private var sampleFocused: Bool
 
     var body: some View {
         @Bindable var bench = model.bench
-        VStack(alignment: .leading, spacing: Spacing.m) {
-            SectionHeader("Test")
-            Card(padding: Spacing.l) {
-                VStack(alignment: .leading, spacing: Spacing.m) {
-                    HStack(alignment: .firstTextBaseline, spacing: Spacing.s) {
-                        Text("Text, as the speech engine heard it")
-                            .font(Typography.caption)
-                            .foregroundStyle(Palette.inkSecondary)
-                        Spacer(minLength: Spacing.s)
-                        LabRecentMenu()
+        let runs = LabSelectedRuns(bench)
+        LabPanel(title: "Try it on a dictation") {
+            LabRecentMenu()
+        } content: {
+            VStack(alignment: .leading, spacing: Layout.Lab.formGap) {
+                HStack(alignment: .top, spacing: Layout.Lab.formGap) {
+                    LabField(label: "What the speech engine heard") {
+                        TextEditor(text: $bench.sample)
+                            .font(Typography.transcript)
+                            .lineSpacing(Spacing.transcriptLine)
+                            .foregroundStyle(Palette.ink)
+                            .scrollContentBackground(.hidden)
+                            .padding(Spacing.m)
+                            .frame(height: Layout.Lab.sampleHeight)
+                            .focused($sampleFocused)
+                            .labWell(isFocused: sampleFocused)
+                            .accessibilityLabel("Text to polish")
                     }
-                    TextEditor(text: $bench.sample)
-                        .font(Typography.transcript)
-                        .foregroundStyle(Palette.ink)
-                        .scrollContentBackground(.hidden)
-                        .padding(Spacing.s)
-                        .frame(height: Layout.Lab.sampleHeight)
-                        .focused($sampleFocused)
-                        .labWell(isFocused: sampleFocused)
-                        .accessibilityLabel("Text to polish")
-                    HStack(spacing: Spacing.s) {
-                        Text("Dictated as")
-                        LabPicker(label: "Style", options: WritingStyle.allCases, title: \.title,
-                                  selection: $bench.sampleStyle)
-                            .frame(width: Layout.Lab.styleWidth)
-                        Text("into")
-                        LabPicker(label: "Kind of app", options: AppCategory.allCases, title: \.title,
-                                  selection: $bench.sampleCategory)
-                            .frame(width: Layout.Lab.categoryWidth)
-                        LabTextInput("App", text: appName, prompt: "App name")
-                            .frame(width: Layout.Lab.appFieldWidth)
-                        Spacer(minLength: 0)
-                    }
+                    LabTestResult(runs: runs)
+                }
+
+                if let failure = runs.failure, let latest = runs.latest {
+                    LabTestFailure(run: latest, message: failure)
+                }
+
+                // One row when the panel is wide enough, a column when it isn't.
+                ViewThatFits(in: .horizontal) {
+                    HStack(spacing: Spacing.s) { contextControls }
+                    VStack(alignment: .leading, spacing: Spacing.s) { contextControls }
+                }
+                .font(Typography.callout)
+                .foregroundStyle(Palette.inkSecondary)
+
+                footer
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var contextControls: some View {
+        @Bindable var bench = model.bench
+        Text("Dictated as")
+        LabPicker(label: "Style", options: WritingStyle.allCases, title: \.title,
+                  selection: $bench.sampleStyle)
+            .frame(width: Layout.Lab.styleWidth)
+        Text("into")
+        LabPicker(label: "Kind of app", options: AppCategory.allCases, title: \.title,
+                  selection: $bench.sampleCategory)
+            .frame(width: Layout.Lab.categoryWidth)
+        LabTextInput("App", text: appName, prompt: "App name")
+            .frame(width: Layout.Lab.appFieldWidth)
+    }
+
+    private var footer: some View {
+        let bench = model.bench
+        return HStack(spacing: Spacing.s) {
+            if bench.isRunning {
+                ProgressView().controlSize(.small)
+                Text(runningLabel)
                     .font(Typography.callout)
                     .foregroundStyle(Palette.inkSecondary)
-
-                    HStack(spacing: Spacing.s) {
-                        if bench.isRunning {
-                            ProgressView().controlSize(.small)
-                            Text(runningLabel)
-                                .font(Typography.callout)
-                                .foregroundStyle(Palette.inkSecondary)
-                                .lineLimit(1)
-                            Button("Stop") { bench.cancel() }
-                                .buttonStyle(.flowGhost)
-                                .controlSize(.small)
-                        } else {
-                            Text("Runs like a dictation: Birdtown Flow's own cleanup, polish, then your style and dictionary.")
-                                .font(Typography.caption)
-                                .foregroundStyle(Palette.inkTertiary)
-                                .fixedSize(horizontal: false, vertical: true)
-                        }
-                        Spacer(minLength: Spacing.s)
-                        Button("Run All") { bench.runAll() }
-                            .buttonStyle(.flowSecondary)
-                            .disabled(!bench.canRun || model.lab.configurations.count < 2)
-                            .help(runAllHelp)
-                        Button {
-                            if let id = bench.selectedID { bench.run(id) }
-                        } label: {
-                            Label("Run", systemImage: "play.fill")
-                        }
-                        .buttonStyle(.flowPrimary)
-                        .keyboardShortcut(.return, modifiers: .command)
-                        .disabled(!bench.canRun || bench.selected == nil)
-                        .help(runHelp)
-                    }
-                }
+                    .lineLimit(1)
+                Button("Stop") { bench.cancel() }
+                    .buttonStyle(.flowGhost)
+                    .controlSize(.small)
+            } else {
+                Text("Runs like a dictation: Birdtown Flow's own cleanup, polish, then your style and dictionary.")
+                    .font(Typography.callout)
+                    .foregroundStyle(Palette.inkSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
+            Spacer(minLength: Spacing.s)
+            Button("Run All") { bench.runAll() }
+                .buttonStyle(.flowSecondary)
+                .disabled(!bench.canRun || model.lab.configurations.count < 2)
+                .help(runAllHelp)
+            Button {
+                if let id = bench.selectedID { bench.run(id) }
+            } label: {
+                Label("Run Test", systemImage: "play.fill")
+            }
+            .buttonStyle(.flowPrimary)
+            .keyboardShortcut(.return, modifiers: .command)
+            .disabled(!bench.canRun || bench.selected == nil)
+            .help(runHelp)
         }
     }
 
@@ -642,8 +779,171 @@ private struct LabTestCard: View {
     }
 }
 
+/// The open configuration's runs, as the test panel reads them.
+private struct LabSelectedRuns {
+    /// The newest run, which may still be going or have failed.
+    let latest: LabBench.Run?
+    /// The newest run with a result to show: polished, or refused with the original kept.
+    /// A failure never replaces it.
+    let shown: LabBench.Run?
+
+    init(_ bench: LabBench) {
+        let runs = bench.runs.filter { $0.configuration.id == bench.selectedID }
+        latest = runs.first
+        shown = runs.first { run in
+            guard let verdict = run.result?.verdict else { return false }
+            if case .failed = verdict { return false }
+            return true
+        }
+    }
+
+    /// The error of the newest run, when it failed.
+    var failure: String? {
+        if case .failed(let message)? = latest?.result?.verdict { return message }
+        return nil
+    }
+
+    var isRunning: Bool { latest != nil && latest?.result == nil }
+}
+
+/// The "After polish" column: the newest result stays here while a retry runs or fails.
+private struct LabTestResult: View {
+    let runs: LabSelectedRuns
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Spacing.xs) {
+            HStack(alignment: .firstTextBaseline, spacing: Spacing.s) {
+                Text("After polish")
+                    .font(Typography.caption)
+                    .foregroundStyle(Palette.ink)
+                Spacer(minLength: Spacing.s)
+                trailing
+            }
+            well
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    /// What the result on show is, so a stale one is never mistaken for the newest.
+    @ViewBuilder
+    private var trailing: some View {
+        if runs.isRunning {
+            HStack(spacing: Spacing.xs) {
+                ProgressView().controlSize(.small)
+                Text("Polishing…")
+            }
+            .font(Typography.callout)
+            .foregroundStyle(Palette.inkSecondary)
+        } else if let shown = runs.shown {
+            let isNewest = shown.id == runs.latest?.id
+            let isCurrentText = shown.testInput == model.bench.currentTestInput
+            HStack(spacing: Spacing.s) {
+                if isRejected(shown) {
+                    Badge(text: "Original kept", symbol: "shield.lefthalf.filled", tone: .warning)
+                }
+                Text(caption(isNewest: isNewest, isCurrentText: isCurrentText, run: shown))
+                    .font(Typography.callout)
+                    .foregroundStyle(Palette.inkTertiary)
+                    .lineLimit(1)
+            }
+        }
+    }
+
+    private func isRejected(_ run: LabBench.Run) -> Bool {
+        if case .rejected? = run.result?.verdict { return true }
+        return false
+    }
+
+    private func caption(isNewest: Bool, isCurrentText: Bool, run: LabBench.Run) -> String {
+        var parts: [String] = []
+        if !isNewest { parts.append("Last result") }
+        if !isCurrentText { parts.append("Earlier text") }
+        if let wait = run.result?.totalMilliseconds, wait > 0 { parts.append(LabRunCard.format(wait)) }
+        return parts.joined(separator: " · ")
+    }
+
+    private var well: some View {
+        Group {
+            if let shown = runs.shown {
+                ScrollView {
+                    Text(shown.output)
+                        .font(Typography.transcript)
+                        .lineSpacing(Spacing.transcriptLine)
+                        .foregroundStyle(Palette.ink)
+                        .textSelection(.enabled)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+            } else {
+                Text(placeholder)
+                    .font(Typography.bodyLarge)
+                    .foregroundStyle(Palette.inkSecondary)
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+        }
+        .padding(Spacing.m)
+        .frame(height: Layout.Lab.sampleHeight)
+        .labWell(isFocused: false, fill: Palette.sunken, edge: Palette.hairline)
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Result after polish")
+    }
+
+    private var placeholder: String {
+        if runs.isRunning { return "Polishing…" }
+        if runs.failure != nil { return "No result yet. Your text is kept on the left." }
+        return "Run the test to compare the result here."
+    }
+}
+
+/// The newest run failed: its actual error beside Retry, under the unchanged text.
+private struct LabTestFailure: View {
+    let run: LabBench.Run
+    let message: String
+
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        let bench = model.bench
+        HStack(alignment: .top, spacing: Spacing.m) {
+            Image(systemName: "xmark.octagon.fill")
+                .foregroundStyle(Palette.danger)
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: Spacing.xxs) {
+                Text("“\(run.configuration.displayName)” failed")
+                    .font(Typography.headline)
+                    .foregroundStyle(Palette.ink)
+                Text(message)
+                    .font(Typography.callout)
+                    .foregroundStyle(Palette.inkSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .textSelection(.enabled)
+            }
+            Spacer(minLength: Spacing.m)
+            if run.needsSettings {
+                Button("Open Settings") { model.showSettings(.text) }
+                    .buttonStyle(.flowSecondary)
+                    .controlSize(.small)
+            }
+            Button {
+                if let id = bench.selectedID { bench.run(id) }
+            } label: {
+                Label("Retry", systemImage: "arrow.clockwise")
+            }
+            .buttonStyle(.flowSecondary)
+            .controlSize(.small)
+            .disabled(!bench.canRun || bench.selected == nil)
+            .help("Run this configuration on the text again")
+        }
+        .padding(Spacing.m)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(RoundedRectangle(cornerRadius: Radius.control, style: .continuous).fill(Palette.dangerSoft))
+        .accessibilityElement(children: .contain)
+    }
+}
+
 /// Fills the test text from a recent dictation. Its own view so typing in the test text,
-/// which re-runs `LabTestCard`, doesn't go through history again.
+/// which re-runs `LabTestPanel`, doesn't go through history again.
 private struct LabRecentMenu: View {
     @Environment(AppModel.self) private var model
 
@@ -660,11 +960,16 @@ private struct LabRecentMenu: View {
             Divider()
             Button("The sample text") { bench.sample = LabBench.defaultSample }
         } label: {
-            Label("Use a recent dictation", systemImage: "clock.arrow.circlepath")
+            Label("Use a recent one", systemImage: "clock.arrow.circlepath")
+                .font(Typography.link)
+                .foregroundStyle(Palette.accentInk)
+                .contentShape(Rectangle())
         }
-        .menuStyle(.borderlessButton)
-        .font(Typography.caption)
+        .menuStyle(.button)
+        .buttonStyle(.plain)
+        .menuIndicator(.hidden)
         .fixedSize()
+        .help("Test with something you dictated")
     }
 
     private static func menuTitle(for record: HistoryRecord) -> String {
@@ -683,7 +988,7 @@ private struct LabResults: View {
         let bench = model.bench
         if !bench.runs.isEmpty {
             VStack(alignment: .leading, spacing: Spacing.m) {
-                SectionHeader(title: "Results", detail: "\(bench.runs.count)") {
+                SectionHeader(title: "Results", detail: "\(bench.runs.count)", level: .section) {
                     Button("Clear") { bench.clearResults() }
                         .buttonStyle(.flowGhost)
                         .controlSize(.small)
@@ -703,8 +1008,8 @@ private struct LabResults: View {
                         }
                     }
                 }
-                Text("Results and unsaved edits are kept until Birdtown Flow quits.")
-                    .font(Typography.caption)
+                Text("Results are kept until Birdtown Flow quits.")
+                    .font(Typography.callout)
                     .foregroundStyle(Palette.inkTertiary)
             }
         }
@@ -818,6 +1123,19 @@ private struct LabRunCard: View {
         }
     }
 
+    /// Puts this run's text, style and app back in Test and runs the configuration again, as
+    /// it is now (the error may have been the settings, which are fixed by now).
+    private func retry() {
+        let bench = model.bench
+        bench.useTestInput(of: run)
+        bench.run(run.configuration.id)
+    }
+
+    private var canRetry: Bool {
+        let bench = model.bench
+        return !bench.isRunning && bench.version(of: run.configuration.id) != nil
+    }
+
     /// The text, style and app are on the group's header above.
     private var contextLine: String {
         let time = run.ranAt.formatted(date: .omitted, time: .shortened)
@@ -855,10 +1173,19 @@ private struct LabRunCard: View {
                     .buttonStyle(.flowSecondary)
                     .controlSize(.small)
                 }
+                Button {
+                    retry()
+                } label: {
+                    Label("Retry", systemImage: "arrow.clockwise")
+                }
+                .buttonStyle(.flowSecondary)
+                .controlSize(.small)
+                .disabled(!canRetry)
+                .help("Run this configuration on this text again")
             }
             .padding(Spacing.m)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(RoundedRectangle(cornerRadius: Radius.s, style: .continuous).fill(Palette.dangerSoft))
+            .background(RoundedRectangle(cornerRadius: Radius.control, style: .continuous).fill(Palette.dangerSoft))
             timings(result)
         case .accepted:
             diff
@@ -1036,8 +1363,8 @@ private struct LabRunCard: View {
 
 // MARK: - Fields
 
-/// A choice drawn like the Lab's inset fields: the value and a chevron in a sunken well,
-/// opening a menu with the current one ticked.
+/// A choice drawn like the Lab's inset fields: the value and a chevron in a well, opening a
+/// menu with the current one ticked.
 private struct LabPicker<Value: Hashable>: View {
     let label: String
     let options: [Value]
@@ -1045,7 +1372,7 @@ private struct LabPicker<Value: Hashable>: View {
     @Binding var selection: Value
 
     var body: some View {
-        let shape = RoundedRectangle(cornerRadius: Radius.s, style: .continuous)
+        let shape = RoundedRectangle(cornerRadius: Radius.control, style: .continuous)
         Menu {
             Picker(label, selection: $selection) {
                 ForEach(options, id: \.self) { option in
@@ -1066,6 +1393,7 @@ private struct LabPicker<Value: Hashable>: View {
                     .foregroundStyle(Palette.inkTertiary)
             }
             .padding(.horizontal, Spacing.m)
+            .frame(maxWidth: .infinity)
             .frame(height: Layout.Lab.fieldHeight)
             .labWell()
             .contentShape(shape)
@@ -1078,6 +1406,68 @@ private struct LabPicker<Value: Hashable>: View {
     }
 }
 
+/// A short row of choices in a soft track, the chosen one lifted onto a surface: the effort
+/// levels. The chosen segment is also heavier, so it never rests on colour alone.
+private struct LabSegmented<Value: Hashable>: View {
+    let label: String
+    let options: [Value]
+    let title: (Value) -> String
+    @Binding var selection: Value
+
+    var body: some View {
+        HStack(spacing: Layout.Lab.segmentGap) {
+            ForEach(options, id: \.self) { option in
+                LabSegment(title: title(option), isSelected: option == selection) {
+                    selection = option
+                }
+            }
+        }
+        .padding(Layout.Lab.segmentTrack)
+        .background(
+            RoundedRectangle(cornerRadius: Layout.Lab.segmentTrackRadius, style: .continuous).fill(Palette.soft)
+        )
+        .frame(maxWidth: Layout.Lab.effortMaxWidth, alignment: .leading)
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel(label)
+    }
+}
+
+private struct LabSegment: View {
+    let title: String
+    let isSelected: Bool
+    let action: () -> Void
+
+    @FocusState private var isFocused: Bool
+    @State private var isHovered = false
+
+    var body: some View {
+        let shape = RoundedRectangle(cornerRadius: Layout.Lab.segmentRadius, style: .continuous)
+        Button(action: action) {
+            Text(title)
+                .font(isSelected ? Typography.segmentSelected : Typography.segment)
+                .foregroundStyle(isSelected || isHovered ? Palette.ink : Palette.inkSecondary)
+                .lineLimit(1)
+                .minimumScaleFactor(Layout.Lab.segmentMinScale)
+                .padding(.vertical, Layout.Lab.segmentVertical)
+                .frame(maxWidth: .infinity)
+                .background {
+                    if isSelected {
+                        shape.fill(Palette.surface)
+                            .elevation(Elevation.segment)
+                    }
+                }
+                .contentShape(shape)
+                .flowFocusRing(shape, drawn: isFocused)
+        }
+        .buttonStyle(.plain)
+        // The ring above is drawn in the segment's own shape.
+        .focusEffectDisabled()
+        .focused($isFocused)
+        .onHover { isHovered = $0 }
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
+    }
+}
+
 /// A caption over a control, like `LabeledInput`'s.
 private struct LabField<Content: View>: View {
     let label: String
@@ -1087,9 +1477,10 @@ private struct LabField<Content: View>: View {
         VStack(alignment: .leading, spacing: Spacing.xs) {
             Text(label)
                 .font(Typography.caption)
-                .foregroundStyle(Palette.inkSecondary)
+                .foregroundStyle(Palette.ink)
             content
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
@@ -1131,24 +1522,28 @@ extension LabTextInput where Accessory == EmptyView {
     }
 }
 
-/// The sunken well every Lab input sits in: a hairline at rest, Signal blue while it has focus.
+/// The well every Lab input sits in: a control outline at rest, and the 3 pt Signal blue focus
+/// ring outside it while it has focus. Editors fill with the page's quietest tint, and the
+/// result well with a hairline edge, since nothing in it can be typed into.
 private struct LabWell: ViewModifier {
     let isFocused: Bool
+    let fill: Color
+    let edge: Color
 
     func body(content: Content) -> some View {
-        let shape = RoundedRectangle(cornerRadius: Radius.s, style: .continuous)
+        let shape = RoundedRectangle(cornerRadius: Radius.control, style: .continuous)
         content
-            .background(shape.fill(Palette.sunken))
-            .overlay(shape.strokeBorder(
-                isFocused ? Palette.accent : Palette.hairline,
-                lineWidth: isFocused ? Layout.Main.focusRing : Layout.Main.hairline
-            ))
+            .background(shape.fill(fill))
+            .overlay(shape.strokeBorder(edge, lineWidth: Layout.Main.hairline))
+            .flowFocusRing(shape, drawn: isFocused)
     }
 }
 
 extension View {
-    fileprivate func labWell(isFocused: Bool = false) -> some View {
-        modifier(LabWell(isFocused: isFocused))
+    fileprivate func labWell(
+        isFocused: Bool = false, fill: Color = Palette.surface, edge: Color = Palette.hairlineStrong
+    ) -> some View {
+        modifier(LabWell(isFocused: isFocused, fill: fill, edge: edge))
     }
 }
 
@@ -1163,5 +1558,11 @@ extension PolishConfiguration {
         var parts = [Self.providerTitle(provider)]
         if usesEffort { parts.append(effort == .standard ? "Default effort" : "\(effort.title) effort") }
         return parts.joined(separator: " · ")
+    }
+
+    /// The list row's second line: what the person said it tries, else how it's set up.
+    fileprivate var listSubtitle: String {
+        let trimmed = notes.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? providerAndEffort : trimmed
     }
 }

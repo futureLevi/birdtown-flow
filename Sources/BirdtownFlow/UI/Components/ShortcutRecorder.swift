@@ -15,7 +15,7 @@ import SwiftUI
 /// after (`activate()`), once the new shortcut is saved.
 struct ShortcutRecorder: View {
     enum Look {
-        /// A secondary pill, e.g. "Record…".
+        /// A secondary button, e.g. "Record…".
         case button(String)
         /// An inline link inside a sentence.
         case link(String)
@@ -62,7 +62,7 @@ struct ShortcutRecorder: View {
             // Fixed so a wide control beside it (a picker showing "Double-tap Left Command")
             // squeezes the row's description, never this label down to "…".
             Button(title, action: start)
-                .buttonStyle(SetupKit.SecondaryButtonStyle())
+                .settingsButton()
                 .fixedSize()
                 .help(hint)
         case .link(let title):
@@ -99,7 +99,7 @@ struct ShortcutRecorder: View {
                 .accessibilityHidden(true)
         }
         .padding(.horizontal, Spacing.m)
-        .frame(minHeight: Layout.Setup.buttonHeight)
+        .frame(minHeight: Layout.Main.buttonHeightSmall)
         .background(shape.fill(Palette.accentSoft))
         .overlay(shape.strokeBorder(Palette.accent, lineWidth: Layout.Setup.selectionStroke))
         // Keep the keycaps, the "esc" hint and the whole stroke; the row's description wraps
@@ -149,8 +149,8 @@ struct ShortcutRecorder: View {
     }
 }
 
-/// The `.field` look: the current keycaps in an inset well with a border, so they read as
-/// something to click. Hover lifts the border to Signal blue, like the listening capsule the
+/// The `.field` look: the current keycaps in a bordered control, so they read as something
+/// to click. Hover lifts the border to Signal blue, like the listening capsule the
 /// click turns it into.
 private struct KeyFieldButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
@@ -165,12 +165,12 @@ private struct KeyFieldBody: View {
     @State private var hovering = false
 
     var body: some View {
-        let shape = RoundedRectangle(cornerRadius: Radius.m, style: .continuous)
+        let shape = RoundedRectangle(cornerRadius: Radius.control, style: .continuous)
         let active = hovering && isEnabled
         configuration.label
             .padding(.horizontal, Spacing.s)
-            .frame(minHeight: Layout.Setup.buttonHeight)
-            .background(shape.fill(active ? Palette.accentSoft : Palette.sunken))
+            .frame(minHeight: Layout.Main.buttonHeightSmall)
+            .background(shape.fill(active ? Palette.accentSoft : Palette.surface))
             .overlay(
                 shape.strokeBorder(
                     active ? Palette.accent : Palette.hairlineStrong,

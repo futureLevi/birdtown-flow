@@ -19,10 +19,10 @@ extension SnapshotCatalog {
         // The hit is at the end of a long email, past the collapsed preview.
         var excerptSearch = sample
         excerptSearch.historyQuery = "afternoon"
-        // Halfway through a Shimmer sweep, the band of light over the loudest syllables. (The
-        // CI runner has Reduce Motion on, so the other shots show the hero at rest.)
+        // A third of the way round the voice field's drift, so the surface is off its resting
+        // shape. (The CI runner has Reduce Motion on, so the other shots show it at rest.)
         var shimmer = sample
-        shimmer.heroSweepPhase = VoiceprintMotion.sweepDuration / 2
+        shimmer.fieldPhase = Motion.fieldCycle / 3
         var paused = sample
         paused.status?.hotkeyActive = false
         var selected = sample
@@ -30,6 +30,10 @@ extension SnapshotCatalog {
 
         return [
             SnapshotRenderer.Shot("home", size: size) { window(.home, records: records, preview: sample) },
+            // The handoff's composition width: the setup and week panels beside Recent dictation.
+            SnapshotRenderer.Shot("home-wide", size: CGSize(width: 1440, height: 860)) {
+                window(.home, records: records, preview: sample)
+            },
             SnapshotRenderer.Shot("home-shimmer", size: size) { window(.home, records: records, preview: shimmer) },
             SnapshotRenderer.Shot("home-empty", size: size) { window(.home, records: [], preview: firstRun) },
             SnapshotRenderer.Shot("history", size: size) { window(.history, records: records, preview: sample) },
@@ -139,8 +143,6 @@ extension SnapshotCatalog {
                         SpectrumProgressBar(progress: 0.42)
                     }
                 }
-                StatTile(label: "Pace", value: 152, unit: "wpm", caption: "3.4× faster than typing",
-                         symbol: "gauge.with.dots.needle.67percent", tone: .green)
             }
             .fixedSize(horizontal: false, vertical: true)
             SearchField(text: .constant("migration"), prompt: "Search words or apps")

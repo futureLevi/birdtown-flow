@@ -33,7 +33,7 @@ struct Banner<Accessory: View>: View {
         }
         .padding(Spacing.m)
         .padding(.trailing, Spacing.xs)
-        .cardSurface(radius: Radius.m)
+        .cardSurface(radius: Radius.l)
         .accessibilityElement(children: .contain)
     }
 

@@ -90,13 +90,13 @@ struct MenuBarContent: View {
             SetupKit.AppMark(size: Layout.Setup.menuIcon, elevated: false)
             VStack(alignment: .leading, spacing: Spacing.xxs) {
                 Text("Birdtown Flow")
-                    .font(Typography.headline)
+                    .font(Typography.Compact.headline)
                     .foregroundStyle(Palette.ink)
                 HStack(spacing: Spacing.xs + Spacing.xxs) {
                     indicator(status.indicator)
                         .frame(width: Layout.Orb.small, height: Layout.Orb.small)
                     Text(status.text)
-                        .font(Typography.callout)
+                        .font(Typography.Compact.callout)
                         .foregroundStyle(status.indicator == .live ? Palette.ink : Palette.inkSecondary)
                         .lineLimit(1)
                         .contentTransition(.opacity)
@@ -106,13 +106,13 @@ struct MenuBarContent: View {
                     // first line however the note wraps, instead of orphaning on the second.
                     HStack(alignment: .firstTextBaseline, spacing: Spacing.xs) {
                         Text(standInDetail)
-                            .font(Typography.caption)
+                            .font(Typography.Compact.caption)
                             .foregroundStyle(Palette.inkTertiary)
                             .lineLimit(2)
                             .fixedSize(horizontal: false, vertical: true)
                         if let progress = SetupKit.progress(of: modelState) {
                             Text(SetupKit.percent(progress))
-                                .font(Typography.caption)
+                                .font(Typography.Compact.caption)
                                 .monospacedDigit()
                                 .foregroundStyle(Palette.inkSecondary)
                                 .contentTransition(.numericText())
@@ -309,7 +309,7 @@ struct MenuBarContent: View {
     private var recentSection: some View {
         VStack(alignment: .leading, spacing: Spacing.xxs) {
             Text("Recent")
-                .eyebrowStyle()
+                .compactEyebrowStyle()
                 .padding(.horizontal, Spacing.s)
                 .padding(.bottom, Spacing.xxs)
             ForEach(recent) { record in
@@ -420,7 +420,7 @@ private struct RecentRow: View {
                         .foregroundStyle(Palette.inkTertiary)
                         .opacity(copied ? 0 : 1)
                 }
-                .font(Typography.caption)
+                .font(Typography.Compact.caption)
             }
             .padding(.horizontal, Spacing.s)
             .padding(.vertical, Spacing.s)
@@ -461,7 +461,7 @@ private struct MenuRow: View {
                 if badge != nil || alignsWithBadge {
                     // A hidden line of title text carries the baseline; the dot centres on it.
                     Text(verbatim: " ")
-                        .font(Typography.body)
+                        .font(Typography.Compact.body)
                         .frame(width: Layout.Main.statusDot)
                         .hidden()
                         .overlay {
@@ -470,11 +470,11 @@ private struct MenuRow: View {
                 }
                 VStack(alignment: .leading, spacing: Spacing.xxs) {
                     Text(title)
-                        .font(Typography.body)
+                        .font(Typography.Compact.body)
                         .foregroundStyle(isEnabled ? Palette.ink : Palette.inkTertiary)
                     if let detail {
                         Text(detail)
-                            .font(Typography.caption)
+                            .font(Typography.Compact.caption)
                             .foregroundStyle(Palette.inkTertiary)
                             .lineLimit(2)
                             .multilineTextAlignment(.leading)
@@ -484,7 +484,7 @@ private struct MenuRow: View {
                 Spacer(minLength: Spacing.s)
                 if let shortcut {
                     Text(shortcut)
-                        .font(Typography.keycap)
+                        .font(Typography.Compact.keycap)
                         .foregroundStyle(Palette.inkTertiary)
                 }
             }

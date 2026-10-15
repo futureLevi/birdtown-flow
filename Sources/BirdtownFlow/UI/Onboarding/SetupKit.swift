@@ -260,7 +260,7 @@ extension SetupKit {
     /// `role: .destructive` button reads as destructive).
     struct SecondaryButtonStyle: ButtonStyle {
         func makeBody(configuration: Configuration) -> some View {
-            FlowSecondaryButtonStyle().makeBody(configuration: configuration)
+            FlowSecondaryButtonStyle(compact: true).makeBody(configuration: configuration)
         }
     }
 
@@ -275,7 +275,7 @@ extension SetupKit {
     struct InlineLinkStyle: ButtonStyle {
         func makeBody(configuration: Configuration) -> some View {
             configuration.label
-                .font(Typography.callout.weight(.medium))
+                .font(Typography.Compact.callout.weight(.medium))
                 .foregroundStyle(Palette.accentInk)
                 .opacity(configuration.isPressed ? Layout.Setup.pressedOpacity : 1)
                 .contentShape(Rectangle())
@@ -300,7 +300,7 @@ private struct PrimaryButtonBody: View {
     var body: some View {
         let shape = Capsule(style: .continuous)
         configuration.label
-            .font(Typography.bodyEmphasis)
+            .font(Typography.Compact.bodyEmphasis)
             .foregroundStyle(Palette.onPrimary)
             .padding(.horizontal, large ? Spacing.xxxl : Spacing.l)
             .frame(maxWidth: fullWidth ? .infinity : nil)
@@ -327,7 +327,7 @@ private struct QuietButtonBody: View {
 
     var body: some View {
         configuration.label
-            .font(Typography.body)
+            .font(Typography.Compact.body)
             .foregroundStyle(hovering && isEnabled ? Palette.ink : Palette.inkSecondary)
             .padding(.horizontal, Spacing.s)
             .frame(minHeight: Layout.Setup.buttonHeight)
@@ -377,7 +377,7 @@ extension SetupKit {
                     .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: Spacing.s) {
                     Text(text)
-                        .font(Typography.callout)
+                        .font(Typography.Compact.callout)
                         .foregroundStyle(Palette.ink)
                         .fixedSize(horizontal: false, vertical: true)
                     accessory

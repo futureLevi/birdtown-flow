@@ -49,54 +49,53 @@ Tile: Apple's macOS grid (824 px tile on a 1024 px canvas), continuous corners a
   that spins with a comet tail. It is painted once by `LogoPainter.drawDisc` and then only
   turned, so it is the logo's disc, not an imitation of it.
 
-## The app around it ("Mono v2")
+## The app around it ("Handoff")
 
+The window follows Levi's design handoff (a single-file HTML prototype plus screenshots).
 `Sources/BirdtownFlow/UI/DesignSystem/Tokens.swift` holds the rules; in short:
 
-- Calm and nearly colourless, with the logo's navy as a whisper in every grey: ink `#0E1426`
-  on white, a `#F7F8FA` sidebar; in dark mode `#E8EAF0` ink on a night navy-charcoal
-  (`#1B1D24`, sidebar `#14161B`).
-- Flat surfaces: soft grey tiles (`#F3F5F8`) and hairlines instead of shadows and boxes.
-  Settings rows sit on the page with hairlines between them; Home's recent dictations are
-  plain rows, not a card.
-- Colour lives in a few small places, all from the logo's disc. The sidebar's icons walk its
-  colour wheel from the top: Home orange, History gold, Dictionary green, Snippets cyan, Style
-  blue, Lab violet, Settings purple (deeper shades in light mode); the Settings rail follows
-  the same order. Each Home stat wears a small badge lit like the app icon, with a soft glow
-  in its corner: This week blue, Pace green, Streak orange, Time saved purple.
-- Primary actions are navy pills (porcelain in dark mode), like the tile and ring. The
-  dictation pill is the icon's navy, lit from the top; hands-free Stop keeps the colour wheel, a
-  warm-white square on the live orb.
-- One accent, Signal blue, is the orb's own blue (`#3082F8`, `#4C93FA` in dark), for
-  selection, focus and switches; as text (links) it deepens to `#2462BA` (`#6AA6FB` in dark)
-  so it reads at 4.5:1.
-- The spectrum only for live states: the orb, the thinking ring, model download progress.
-  Never for static chrome, text or backgrounds. The one exception is Home's hero (below).
-- SF Pro throughout: semibold for titles and big numbers, regular for reading.
-- What Mono v2 leaves out, on purpose: it is not a chat app. No recent dictations in the
-  sidebar, no composer or voice box on Home, no model picker, nothing under Settings at the
-  foot of the sidebar (whether the shortcut and model are ready is in Settings; anything
-  broken is a banner on Home).
+- **Light first, paired dark.** Canvas `#F6F7FB`, white surfaces, a cool `#EDF1F8` rail
+  (a faint diagonal wash), hairlines `#DCE2EF`, control outlines `#838CA5`. Dark mode is a
+  paired set, not an inversion: canvas `#0B1026`, surface `#141A33`, rail `#10182F`, lines
+  `#303B5B`. Text is navy `#0E183C` (`#EEF1FA` in dark); secondary `#4A5478`, tertiary
+  `#626C89`, all at 4.5:1 or better.
+- **Navy anchors, Signal blue marks.** Primary actions are navy capsules (porcelain in dark
+  mode), at most one per view. Signal blue (`#4256F0`, `#93A0FF` in dark) is for interaction
+  and selection: links, switches, the chosen nav row, the focus ring. Selection never relies on
+  hue alone: a marker bar and heavier weight on nav, a check on chips, a radio mark on choices.
+- **Two small accents with a job.** Violet (`#6945B5`) is tuning: the Lab, "Polished"
+  badges, prompt variables. Teal (`#176B70`) is vocabulary: the Dictionary and what it
+  knows. Both come with a soft wash for tiles. No full-spectrum decoration in the window: the
+  colour-wheel sidebar icons and gradient stat badges are gone.
+- **Big, legible type.** SF Pro. Page titles 34 pt, section titles 21-23, words you read
+  (dictation, transcripts) 19 pt on a 1.6 line height, interface text 16-17, metadata never
+  below 15. Titles semibold with tight tracking.
+- **Shape.** Rail 234 pt, toolbar 66 pt, content inset 40 pt. Controls have 8-9 pt corners,
+  panels 14 pt, dialogs and the window 18-20 pt. Surfaces are a hairline and the faintest
+  panel shadow.
+- **Focus.** Keyboard focus is a 3 pt outline 4 pt outside the control (`Layout.Focus`,
+  `flowFocusRing`). Dialogs trap focus and close on Esc.
+- **Shell.** The sidebar carries the real app icon and wordmark, Home / History / Dictionary /
+  Snippets / Style, a divider, "Workspace" (Lab), then Settings and a "fn  Hold to dictate"
+  hint that shows the user's own shortcut. The toolbar shows the page title, **Search
+  history** (opens History with its field focused) and the live status ("Ready to dictate",
+  or what is missing).
+- **The recording pill is not part of the redesign.** It keeps the icon's navy, the spectrum
+  orb and its motion; the colour wheel stays there. The spectrum means "your voice is live"
+  and appears nowhere else but the Home hero artwork.
+- Onboarding and the menu bar window keep the old compact type (`Typography.Compact`); they
+  take the new colours only.
 
-## Home hero: Voiceprint
+## Home hero: open canvas
 
-The top of Home is a navy band (the icon's tile ground, 150 pt tall, 18 pt corners) with the
-greeting on its left and the **Voiceprint** on its right: a mirrored voice waveform of fine
-tapered lines in the orb's colours, shaped by the pill's 18-bar rhythm. It rises out of the
-navy in violet under the end of the greeting, burns cyan at its loudest and trails off in warm
-gold. No birds, no pill, orb, microphone or meter: it is artwork, not a control.
-
-- **Source:** `tools/voiceprint/gen.py` is the generator the design was made with;
-  `tools/voiceprint/export_swift.py` turns it into `UI/Brand/VoiceprintData.swift`, which
-  `VoiceprintArt` draws. Change the design there and re-export; never edit the data by hand.
-- **Motion, "Shimmer":** the lines hold still while a soft band of light (a gaussian, sigma
-  26 pt) glides left to right in 2.8 s, once every 7.5 s, lifting the lines it passes by 4.5 %.
-  As Home appears the voice rises once from left to right (1.4 s). The numbers live in
-  `MurmurKit/Brand/VoiceprintMotion.swift`.
-- **Polite:** still with Reduce Motion, paused while the window is in the background or the
-  hero is scrolled away, and nothing redraws between sweeps.
-- **Width:** the art is designed at 660 pt and anchored right. A wider hero gives the words
-  more calm room; a narrower one squeezes the art horizontally.
+Home has no hero card. Its art sits on the canvas behind the toolbar and the content: a
+cropped violet-blue-teal field with five white capsule bars, short, tall, tallest, tall,
+short (the logo's bars). "Recent dictation" owns the main column; "Your setup" links and a
+quiet "This week" summary sit in a right column. The art is `VoiceField`, drawn natively
+from the handoff's voice field: flat (no depth shading), with the surface and its two pigments
+drifting slowly (a 20 s cycle) around a fixed centre while the bars and halo stay still. It
+rests under Reduce Motion, and its colours are `Palette.Field`. In a narrow window it gives up
+its bars and fades.
 
 ## Later
 

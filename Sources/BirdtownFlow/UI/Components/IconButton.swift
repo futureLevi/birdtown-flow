@@ -1,6 +1,7 @@
 import SwiftUI
 
-/// An icon-only button: quiet until hovered, and always labelled for VoiceOver and tooltips.
+/// An icon-only button: quiet until hovered (then a Signal blue tint), and always labelled for
+/// VoiceOver and tooltips.
 struct IconButton: View {
     let symbol: String
     /// Spoken by VoiceOver and shown as the tooltip.
@@ -17,7 +18,7 @@ struct IconButton: View {
                 .symbolRenderingMode(.hierarchical)
         }
         .buttonStyle(IconButtonStyle(tint: tint, drawsFocusRing: isFocused))
-        // The style draws a Signal blue focus ring in its own rounded shape.
+        // The style draws the 3 pt focus ring in its own rounded shape.
         .focusEffectDisabled()
         .focused($isFocused)
         .help(label)
@@ -26,7 +27,7 @@ struct IconButton: View {
 }
 
 /// The square hover well behind icon buttons. Also usable on `Menu` labels. The system focus
-/// ring follows the well's shape; to draw the Signal blue one instead, pass the button's own
+/// ring follows the well's shape; to draw the 3 pt ring instead, pass the button's own
 /// focus as `drawsFocusRing` and add `.focusEffectDisabled()` to the button (`IconButton` does).
 struct IconButtonStyle: ButtonStyle {
     var tint: Color = Palette.inkSecondary
@@ -47,12 +48,12 @@ private struct IconButtonBody: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        let shape = RoundedRectangle(cornerRadius: Radius.s, style: .continuous)
+        let shape = RoundedRectangle(cornerRadius: Radius.control, style: .continuous)
         configuration.label
-            .foregroundStyle(isHovered && isEnabled ? Palette.ink : tint)
+            .foregroundStyle(isHovered && isEnabled ? Palette.accentInk : tint)
             .frame(width: Layout.Main.iconButton, height: Layout.Main.iconButton)
             .background(shape.fill(configuration.isPressed ? Palette.surfacePressed
-                                   : (isHovered && isEnabled ? Palette.surfaceHover : .clear)))
+                                   : (isHovered && isEnabled ? Palette.accentSoft : .clear)))
             .contentShape(shape)
             .flowFocusRing(shape, drawn: drawsFocusRing)
             .scaleEffect(configuration.isPressed && !reduceMotion ? Interaction.pressedScale : 1)

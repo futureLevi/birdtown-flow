@@ -6,9 +6,9 @@ import SwiftUI
 /// Narrow History to the dictations you're looking for.
 enum HistoryFilter: String, CaseIterable, Identifiable {
     case all
-    case failed
-    case corrected
     case polished
+    case corrected
+    case failed
 
     var id: String { rawValue }
 
@@ -57,6 +57,12 @@ struct HistoryDay: Identifiable {
             return day.formatted(.dateTime.month(.wide).day())
         }
         return day.formatted(.dateTime.month(.wide).day().year())
+    }
+
+    /// Whether `title` is "Today" or "Yesterday" rather than a weekday or a date.
+    var hasRelativeTitle: Bool {
+        let calendar = Calendar.current
+        return calendar.isDateInToday(day) || calendar.isDateInYesterday(day)
     }
 
     /// Groups newest-first records into days, newest day first.
@@ -134,6 +140,7 @@ struct HistoryView: View {
                         .padding(.bottom, Spacing.xs)
                     if visible.isEmpty {
                         emptyState(searchMatches: result.searched.count)
+                            .cardSurface()
                     } else {
                         ForEach(list.days) { day in
                             Section {
@@ -143,6 +150,7 @@ struct HistoryView: View {
                             }
                         }
                     }
+                    retentionNote
                 }
                 .pageLayout()
             }
@@ -213,61 +221,97 @@ struct HistoryView: View {
 
     private var showsTimings: Bool { model.settings.historyShowsTimings }
 
-    /// Matches Settings › Keep audio, so the header never promises audio that isn't kept.
+    /// Matches Settings › Keep audio, so History never promises audio that isn't kept.
     /// Failed dictations keep theirs regardless, so they can be retried.
-    private var subtitle: String {
+    private var retentionSummary: String {
         switch model.settings.audioRetentionDays {
-        case ..<0: "Everything you've dictated, with its audio. Nothing you say is lost."
-        case 0: "Everything you've dictated. Audio is kept only for dictations that fail."
-        case 1: "Everything you've dictated. Audio is kept for a day."
-        case let days: "Everything you've dictated. Audio is kept for \(days) days."
+        case ..<0: "Audio is kept for every dictation. Nothing you say is lost."
+        case 0: "Audio is kept only for dictations that fail."
+        case 1: "Audio is kept for a day."
+        case let days: "Audio is kept for \(days) days."
         }
     }
 
+    /// The toolbar's Search history: lets the search field take focus when it's asked to.
+    private var searchRequest: Binding<Bool> {
+        Binding(
+            get: { model.historySearchRequested },
+            set: { model.historySearchRequested = $0 }
+        )
+    }
+
     private func header(counts: [HistoryFilter: Int], rollup: TimingRollup?) -> some View {
-        VStack(alignment: .leading, spacing: Spacing.l) {
+        VStack(alignment: .leading, spacing: Layout.History.filterGap) {
             PageHeader(
-                title: "History",
-                subtitle: subtitle
-            ) {
-                SearchField(text: $query, prompt: "Search words or apps")
-                    .frame(width: Layout.Main.searchFieldWidth)
-            }
-            HStack(spacing: Spacing.s) {
-                ForEach(HistoryFilter.allCases) { option in
-                    let count = option == .all ? nil : counts[option, default: 0]
-                    FilterChip(
-                        title: option.title,
-                        symbol: option.symbol,
-                        count: count,
-                        isSelected: filter == option
-                    ) {
-                        filter = option
+                "History",
+                subtitle: "Your words, ready to find and use again.",
+                symbol: "clock.arrow.circlepath"
+            )
+            .padding(.bottom, Spacing.s)
+            FilterBar {
+                HStack(spacing: Spacing.s) {
+                    ForEach(HistoryFilter.allCases) { option in
+                        FilterChip(
+                            title: option.title,
+                            symbol: option.symbol,
+                            count: option == .all ? nil : counts[option, default: 0],
+                            isSelected: filter == option
+                        ) {
+                            filter = option
+                        }
                     }
-                    // Still clickable (its empty state explains), but it shouldn't look as
-                    // inviting as a chip with something behind it.
-                    .opacity(count == 0 && filter != option ? Interaction.dimmedOpacity : 1)
                 }
-                Spacer(minLength: Spacing.s)
-                // A view, not a filter: it sits apart from the chips and keeps every row listed.
-                FilterChip(title: "Timings", symbol: "stopwatch", isSelected: showsTimings) {
-                    model.settings.historyShowsTimings.toggle()
+                .accessibilityElement(children: .contain)
+                .accessibilityLabel("Filter history")
+            } tools: {
+                HStack(spacing: Spacing.s) {
+                    SearchField(text: $query, prompt: "Search words or apps", focusRequest: searchRequest)
+                        .frame(width: Layout.Main.searchFieldWidth)
+                    // A view, not a filter: it keeps every row listed and adds the timings.
+                    TimingsToggle(isOn: showsTimings) {
+                        model.settings.historyShowsTimings.toggle()
+                    }
                 }
-                .help(showsTimings
-                      ? "Hide how long each dictation took"
-                      : "Show how long transcription, polish and the rest took, in milliseconds")
-                .accessibilityLabel("Show timings")
             }
             if showsTimings, let rollup {
-                // p50 is a typical dictation, p90 a slow one.
-                Text(rollup.summary(format: OriginalPanel.format))
-                    .font(Typography.caption)
-                    .foregroundStyle(Palette.inkTertiary)
-                    .monospacedDigit()
-                    .help("Typical (p50) and slow (p90) times over your most recent dictations that were "
-                        + "typed or copied, measured from when you let go of the key")
+                timingSummary(rollup)
             }
         }
+    }
+
+    /// p50 is a typical dictation, p90 a slow one.
+    private func timingSummary(_ rollup: TimingRollup) -> some View {
+        HStack(spacing: Spacing.s) {
+            Image(systemName: "stopwatch")
+                .accessibilityHidden(true)
+            Text(rollup.summary(format: OriginalPanel.format))
+                .monospacedDigit()
+        }
+        .font(Typography.callout)
+        .foregroundStyle(Palette.accentInk)
+        .padding(.vertical, Spacing.m)
+        .padding(.horizontal, Spacing.l)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(RoundedRectangle(cornerRadius: Radius.field, style: .continuous).fill(Palette.accentSoft))
+        .padding(.top, Spacing.xs)
+        .accessibilityElement(children: .combine)
+        .help("Typical (p50) and slow (p90) times over your most recent dictations that were "
+            + "typed or copied, measured from when you let go of the key")
+    }
+
+    /// How long audio is kept, with the way to change it.
+    private var retentionNote: some View {
+        HStack(spacing: Spacing.s) {
+            Image(systemName: "clock")
+                .accessibilityHidden(true)
+            Text(retentionSummary)
+            Button("Manage retention") { model.showSettings(.privacy) }
+                .buttonStyle(.flowGhost)
+                .controlSize(.small)
+        }
+        .font(Typography.callout)
+        .foregroundStyle(Palette.inkSecondary)
+        .padding(.top, Spacing.xs)
     }
 
     // MARK: - List
@@ -276,7 +320,7 @@ struct HistoryView: View {
         VStack(spacing: 0) {
             ForEach(Array(day.records.enumerated()), id: \.element.id) { index, record in
                 if index > 0 {
-                    RowDivider(leadingInset: HistoryRow.textInset)
+                    RowDivider()
                 }
                 HistoryRow(
                     record: record,
@@ -302,10 +346,11 @@ struct HistoryView: View {
 
     private func dayHeader(_ day: HistoryDay) -> some View {
         let words = day.records.reduce(0) { $0 + $1.wordCount }
-        return SectionHeader(
-            day.title,
-            detail: "\(day.records.count) \(day.records.count == 1 ? "dictation" : "dictations") · \(words.formatted()) words"
-        )
+        let counts = "\(day.records.count) \(day.records.count == 1 ? "dictation" : "dictations") · \(words.formatted()) words"
+        let date = day.day.formatted(.dateTime.weekday(.wide).month(.wide).day())
+        // "Today" and "Yesterday" say nothing about the date; the others already are one.
+        let detail = day.hasRelativeTitle ? "\(date) · \(counts)" : counts
+        return SectionHeader(day.title, detail: detail)
         .padding(.vertical, Spacing.s)
         // The text lines up with the title and cards; the pinned backing still covers the gutter.
         .background { Palette.canvas.padding(.horizontal, -Spacing.xs) }
@@ -558,5 +603,100 @@ struct HistoryView: View {
         }
         let rollup = TimingRollup.recent(key.records.lazy.filter { !key.hidden.contains($0.id) })
         return SearchResult(searched: searched, counts: counts, rollup: rollup)
+    }
+}
+
+/// The filter chips on the left and the search tools on the right, on one row when they fit
+/// and stacked (chips above) when the window is too narrow for both.
+private struct FilterBar<Chips: View, Tools: View>: View {
+    @ViewBuilder var chips: Chips
+    @ViewBuilder var tools: Tools
+
+    var body: some View {
+        let layout = FilterBarLayout(spacing: Spacing.xl, lineSpacing: Layout.History.filterGap)
+        layout {
+            chips
+            tools
+        }
+    }
+}
+
+/// Lays out its subviews on one row, the last pushed to the trailing edge, or one above the
+/// other when the row would be wider than the space offered. Spelled `SwiftUI.Layout`
+/// because the design system's `Layout` enum shadows the protocol.
+private struct FilterBarLayout: SwiftUI.Layout {
+    var spacing: CGFloat
+    var lineSpacing: CGFloat
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let sizes = subviews.map { $0.sizeThatFits(.unspecified) }
+        let rowWidth = Self.rowWidth(sizes, spacing: spacing)
+        let available = proposal.width ?? rowWidth
+        if rowWidth <= available {
+            return CGSize(width: available.isFinite ? available : rowWidth,
+                          height: sizes.map(\.height).max() ?? 0)
+        }
+        let stackedHeight = sizes.reduce(0) { $0 + $1.height } + lineSpacing * CGFloat(max(sizes.count - 1, 0))
+        return CGSize(width: available, height: stackedHeight)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        let sizes = subviews.map { $0.sizeThatFits(.unspecified) }
+        if Self.rowWidth(sizes, spacing: spacing) <= bounds.width {
+            let rowHeight = sizes.map(\.height).max() ?? 0
+            var x = bounds.minX
+            for index in subviews.indices {
+                let size = sizes[index]
+                let isTrailing = index == subviews.count - 1 && subviews.count > 1
+                subviews[index].place(
+                    at: CGPoint(x: isTrailing ? bounds.maxX - size.width : x,
+                                y: bounds.minY + (rowHeight - size.height) / 2),
+                    anchor: .topLeading,
+                    proposal: ProposedViewSize(size)
+                )
+                x += size.width + spacing
+            }
+        } else {
+            var y = bounds.minY
+            for index in subviews.indices {
+                subviews[index].place(
+                    at: CGPoint(x: bounds.minX, y: y),
+                    anchor: .topLeading,
+                    proposal: ProposedViewSize(sizes[index])
+                )
+                y += sizes[index].height + lineSpacing
+            }
+        }
+    }
+
+    private static func rowWidth(_ sizes: [CGSize], spacing: CGFloat) -> CGFloat {
+        sizes.reduce(0) { $0 + $1.width } + spacing * CGFloat(max(sizes.count - 1, 0))
+    }
+}
+
+/// The clock beside the search field: shows or hides History's timing details. Filled, with a
+/// blue wash, while on, so the state isn't colour alone.
+private struct TimingsToggle: View {
+    let isOn: Bool
+    let action: () -> Void
+
+    @FocusState private var isFocused: Bool
+
+    var body: some View {
+        let shape = RoundedRectangle(cornerRadius: Radius.control, style: .continuous)
+        Button(action: action) {
+            Image(systemName: isOn ? "clock.fill" : "clock")
+                .font(Typography.bodyEmphasis)
+                .symbolRenderingMode(.hierarchical)
+        }
+        .buttonStyle(IconButtonStyle(tint: isOn ? Palette.accentInk : Palette.inkSecondary,
+                                     drawsFocusRing: isFocused))
+        // The style draws the 3 pt focus ring in its own shape.
+        .focusEffectDisabled()
+        .focused($isFocused)
+        .background(shape.fill(isOn ? Palette.accentSoft : .clear))
+        .help(isOn ? "Hide timing details" : "Show how long transcription, polish and the rest took")
+        .accessibilityLabel(isOn ? "Hide timing details" : "Show timing details")
+        .accessibilityAddTraits(isOn ? .isSelected : [])
     }
 }

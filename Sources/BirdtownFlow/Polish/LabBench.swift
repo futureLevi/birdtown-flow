@@ -2,9 +2,10 @@ import Foundation
 import MurmurKit
 import Observation
 
-/// The Lab's working state: which setup is open, edits not saved yet, the test text and the
+/// The Lab's working state: which setup is open, edits waiting to save, the test text and the
 /// results so far. It lives as long as the app, so leaving the page loses nothing; quitting
-/// does lose unsaved edits and results, which the page says.
+/// does lose the results, which the page says. Edits save themselves a moment after typing
+/// stops.
 @MainActor
 @Observable
 final class LabBench {
@@ -54,7 +55,18 @@ final class LabBench {
     /// The run in progress, while one is.
     private(set) var runningID: UUID?
 
+    /// Where a configuration's edits stand, for the editor's status line.
+    enum SaveState: Equatable {
+        /// An edit is waiting for the pause that saves it.
+        case saving
+        /// On disk, as of this time.
+        case saved(Date)
+        /// The last write to disk failed, with the system's reason.
+        case failed(String)
+    }
+
     private var drafts: [UUID: PolishConfiguration] = [:]
+    private var autosaveTasks: [UUID: Task<Void, Never>] = [:]
     private var task: Task<Void, Never>?
     private var prewarmTask: Task<Void, Never>?
 
@@ -64,6 +76,8 @@ final class LabBench {
     private let snippets: SnippetStore
 
     static let maxRuns = 40
+    /// How long typing pauses before an edit is written, so each keystroke isn't a save.
+    static let autosaveDelay: Duration = .milliseconds(800)
 
     /// Fillers, a stutter, a self-correction, a question and two names from the dictionary:
     /// enough for a setup to show what it does.
@@ -89,20 +103,57 @@ final class LabBench {
 
     func hasUnsavedChanges(_ id: UUID) -> Bool { drafts[id] != nil }
 
-    /// Keeps an edit without saving it. Editing back to what's saved clears the draft.
+    /// "Saved" only once the write has worked: a failed one stays `.failed` until a later
+    /// write succeeds, whichever edit or assignment made it.
+    func saveState(of id: UUID) -> SaveState? {
+        if let failure = lab.persistenceError { return .failed(failure) }
+        if drafts[id] != nil { return .saving }
+        return lab.configuration(id: id).map { SaveState.saved($0.updatedAt) }
+    }
+
+    /// Keeps an edit as a draft and saves it once typing pauses. Editing back to what's saved
+    /// clears the draft.
     func edit(_ configuration: PolishConfiguration) {
         guard let saved = lab.configuration(id: configuration.id) else { return }
         drafts[configuration.id] = configuration.hasSameSetup(as: saved) ? nil : configuration
+        scheduleAutosave(configuration.id)
         schedulePrewarm()
     }
 
     func save(_ id: UUID) {
+        autosaveTasks[id]?.cancel()
+        autosaveTasks[id] = nil
         guard let draft = drafts[id] else { return }
         lab.update(draft)
         drafts[id] = nil
     }
 
+    /// After a failed write: the draft goes out again, or, with none waiting, the store
+    /// writes what it has.
+    func retrySave(_ id: UUID) {
+        if drafts[id] != nil {
+            save(id)
+        } else {
+            lab.retrySave()
+        }
+    }
+
+    private func scheduleAutosave(_ id: UUID) {
+        autosaveTasks[id]?.cancel()
+        guard drafts[id] != nil else {
+            autosaveTasks[id] = nil
+            return
+        }
+        autosaveTasks[id] = Task { [weak self] in
+            try? await Task.sleep(for: Self.autosaveDelay)
+            guard !Task.isCancelled else { return }
+            self?.save(id)
+        }
+    }
+
     func revert(_ id: UUID) {
+        autosaveTasks[id]?.cancel()
+        autosaveTasks[id] = nil
         drafts[id] = nil
         schedulePrewarm()
     }
@@ -111,14 +162,16 @@ final class LabBench {
     func saveAsCopy(_ id: UUID) {
         guard let current = version(of: id) else { return }
         let copy = lab.duplicate(current)
+        autosaveTasks[id]?.cancel()
+        autosaveTasks[id] = nil
         drafts[id] = nil
         selectedID = copy.id
     }
 
-    /// A copy of what's saved.
+    /// A copy of what's on screen, so an edit still waiting to save comes along.
     func duplicate(_ id: UUID) {
-        guard let saved = lab.configuration(id: id) else { return }
-        selectedID = lab.duplicate(saved).id
+        guard let current = version(of: id) else { return }
+        selectedID = lab.duplicate(current).id
     }
 
     func addNew() {
@@ -129,6 +182,8 @@ final class LabBench {
         let ids = lab.configurations.map(\.id)
         let index = ids.firstIndex(of: id) ?? 0
         lab.delete(id: id)
+        autosaveTasks[id]?.cancel()
+        autosaveTasks[id] = nil
         drafts[id] = nil
         if selectedID == id {
             let remaining = lab.configurations
