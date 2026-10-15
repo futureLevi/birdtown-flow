@@ -1,0 +1,11 @@
+sha=c73b9af01857ff33ea102567359c2ef6ef8d53ac
+branch=claude/polish-vocabulary-ehaa67
+build=success
+test=success
+snapshots=success
+synth=success
+speech=success
+segmented=success
+signcheck=success
+signing=skipped
+release=skipped
