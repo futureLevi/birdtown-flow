@@ -2,6 +2,7 @@ import AppKit
 import ApplicationServices
 import Carbon
 import Foundation
+import MurmurKit
 
 /// Types dictated text into the app the user is in, at the caret.
 ///
@@ -73,7 +74,8 @@ enum TextInjector {
             return (outcome: .copied(.noAccessibility), timings: timings)
         }
 
-        let pasteFirst = prefersPasteboard(NSWorkspace.shared.frontmostApplication)
+        let frontmost = NSWorkspace.shared.frontmostApplication
+        let pasteFirst = prefersPasteboard(frontmost)
 
         // Every AX call blocks until the target app answers, and the hotkey's event tap lives
         // on the main run loop, so the probe and write run on their own queue: a slow app
@@ -89,6 +91,9 @@ enum TextInjector {
 
         switch attempt {
         case .noTextField:
+            // Names the app, so a text box that should have worked can be added to the list.
+            let app = frontmost?.bundleIdentifier ?? "unknown app"
+            Log.inject.info("nothing editable focused in \(app, privacy: .public) — copied")
             copy(text)
             return (outcome: .copied(.noTextField), timings: timings)
         case .inserted:
@@ -301,21 +306,24 @@ enum TextInjector {
         "com.linear", "com.figma.Desktop", "com.anthropic.claudefordesktop",
         "com.exafunction.windsurf", "dev.zed.Zed", "com.microsoft.teams2",
         "net.whatsapp.WhatsApp", "ru.keepcoder.Telegram", "org.whispersystems.signal-desktop",
+        // ChatGPT (Electron since it took over the Codex app's bundle ID)
+        "com.openai.codex",
     ]
 
-    /// Electron apps not on the list are recognized by their bundled framework.
-    private static var electronCache: [String: Bool] = [:]
+    /// Electron and other Chromium apps not on the list are recognized by what they bundle.
+    private static var chromiumCache: [String: Bool] = [:]
 
     private static func prefersPasteboard(_ app: NSRunningApplication?) -> Bool {
         guard let app, let bundleID = app.bundleIdentifier else { return false }
         if pasteFirstBundleIDs.contains(bundleID) { return true }
-        if let cached = electronCache[bundleID] { return cached }
-        let isElectron = app.bundleURL.map {
-            FileManager.default.fileExists(
-                atPath: $0.appendingPathComponent("Contents/Frameworks/Electron Framework.framework").path)
+        if let cached = chromiumCache[bundleID] { return cached }
+        let isChromium = app.bundleURL.map { url in
+            let frameworks = url.appendingPathComponent("Contents/Frameworks").path
+            let entries = (try? FileManager.default.contentsOfDirectory(atPath: frameworks)) ?? []
+            return ChromiumBundle.isChromiumBased(frameworkEntries: entries)
         } ?? false
-        electronCache[bundleID] = isElectron
-        return isElectron
+        chromiumCache[bundleID] = isChromium
+        return isChromium
     }
 
     // MARK: - Pasteboard + ⌘V
