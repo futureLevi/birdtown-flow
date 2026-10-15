@@ -780,6 +780,7 @@ private struct LabTestPanel: View {
 }
 
 /// The open configuration's runs, as the test panel reads them.
+@MainActor
 private struct LabSelectedRuns {
     /// The newest run, which may still be going or have failed.
     let latest: LabBench.Run?
