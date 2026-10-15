@@ -1,0 +1,335 @@
+[0/1] Planning build
+Building for debugging...
+[0/7] Write sources
+[3/7] Write swift-version-7974D3F7F03D5E95.txt
+[5/10] Compiling MurmurDictionary DictionaryEntry.swift
+[6/10] Emitting module MurmurDictionary
+[7/10] Compiling MurmurDictionary DictionaryCorrector.swift
+[8/39] Compiling MurmurKit FeedbackNote.swift
+[9/39] Compiling MurmurKit FeedbackOutbox.swift
+[10/39] Compiling MurmurKit GitHubIssues.swift
+[11/39] Compiling MurmurKit HistoryDeletion.swift
+[12/39] Compiling MurmurKit HistoryStore.swift
+[13/39] Compiling MurmurKit ListSelection.swift
+[14/39] Compiling MurmurKit RecordingLength.swift
+[15/39] Compiling MurmurKit Retranscription.swift
+[16/39] Compiling MurmurKit SearchHighlight.swift
+[17/39] Compiling MurmurKit KeyShortcut.swift
+[18/39] Compiling MurmurKit ModifierPairTap.swift
+[19/39] Compiling MurmurKit QuietRelease.swift
+[20/39] Compiling MurmurKit ShortcutCapture.swift
+[21/39] Compiling MurmurKit ShortcutRules.swift
+[22/52] Emitting module MurmurKit
+[23/52] Compiling MurmurKit DictationFeedback.swift
+[24/52] Compiling MurmurKit EngineFallback.swift
+[25/52] Compiling MurmurKit Models.swift
+[26/52] Compiling MurmurKit Readiness.swift
+[27/52] Compiling MurmurKit ClaudeModel.swift
+[28/52] Compiling MurmurKit Polish.swift
+[29/52] Compiling MurmurKit PolishChunker.swift
+[30/52] Compiling MurmurKit PolishDiagnostics.swift
+[31/52] Compiling MurmurKit PolishLab.swift
+[32/52] Compiling MurmurKit PolishTimeLimit.swift
+[33/52] Compiling MurmurKit DictationStats.swift
+[34/52] Compiling MurmurKit LibraryUsage.swift
+[35/52] Compiling MurmurKit TimingLine.swift
+[36/52] Compiling MurmurKit TimingRollup.swift
+[37/52] Compiling MurmurKit AppCategoryResolver.swift
+[38/52] Compiling MurmurKit BoostGuard.swift
+[39/52] Compiling MurmurKit Cleanup.swift
+[40/52] Compiling MurmurKit Regex.swift
+[41/52] Compiling MurmurKit Replacements.swift
+[42/52] Compiling MurmurKit SnippetStore.swift
+[43/52] Compiling MurmurKit TextPipeline.swift
+[44/52] Compiling MurmurKit UndoableDeletion.swift
+[45/52] Compiling MurmurKit SegmentLedger.swift
+[46/52] Compiling MurmurKit SegmentPlanner.swift
+[47/52] Compiling MurmurKit SegmentStitcher.swift
+[48/52] Compiling MurmurKit TranscriptionTimeLimit.swift
+[49/52] Compiling MurmurKit WAVQuantization.swift
+[50/94] Compiling BirdtownFlow LaunchAtLogin.swift
+[51/94] Compiling BirdtownFlow Log.swift
+[52/94] Compiling BirdtownFlow Permissions.swift
+[53/94] Compiling BirdtownFlow PermissionsMonitor.swift
+[54/94] Compiling BirdtownFlow Settings.swift
+[55/94] Compiling BirdtownFlow Sounds.swift
+[56/94] Compiling BirdtownFlow SpeechSmokeTest.swift
+[57/94] Compiling BirdtownFlow AppleSpeechEngine.swift
+[58/94] Compiling BirdtownFlow HardDeadline.swift
+[59/94] Compiling BirdtownFlow LongTranscription.swift
+[60/94] Compiling BirdtownFlow ModelManager.swift
+[61/94] Compiling BirdtownFlow ParakeetEngine.swift
+[62/94] Compiling BirdtownFlow SegmentedTranscriber.swift
+[63/94] Compiling BirdtownFlow TranscriptionEngine.swift
+[64/94] Compiling BirdtownFlow VocabularyBooster.swift
+[65/94] Compiling BirdtownFlow Brand.swift
+[66/94] Compiling BirdtownFlow IconExporter.swift
+[67/94] Compiling BirdtownFlow LogoPainter.swift
+[68/94] Compiling BirdtownFlow SpectrumOrb.swift
+[69/94] Compiling BirdtownFlow VoiceField.swift
+[70/114] Compiling BirdtownFlow AppModel.swift
+[71/114] Compiling BirdtownFlow MurmurApp.swift
+[72/114] Compiling BirdtownFlow AudioDevices.swift
+[73/114] Compiling BirdtownFlow AudioRecorder.swift
+[74/114] Compiling BirdtownFlow DictationController.swift
+[75/114] Compiling BirdtownFlow FrontmostContext.swift
+[76/114] Compiling BirdtownFlow GlobalShortcut.swift
+[77/114] Compiling BirdtownFlow HotkeyMonitor.swift
+[78/114] Compiling BirdtownFlow IncrementalWAVWriter.swift
+[79/114] Compiling BirdtownFlow LiveDictation.swift
+[80/114] Compiling BirdtownFlow TextInjector.swift
+[81/114] Compiling BirdtownFlow Watchdog.swift
+[82/114] Compiling BirdtownFlow FeedbackCenter.swift
+[83/114] Compiling BirdtownFlow AppleIntelligencePolisher.swift
+[84/114] Compiling BirdtownFlow ClaudeCodePolisher.swift
+[85/114] Compiling BirdtownFlow Keychain.swift
+[86/114] Compiling BirdtownFlow LabBench.swift
+[87/114] Compiling BirdtownFlow PolishService.swift
+[88/114] Compiling BirdtownFlow ProgressivePolisher.swift
+[89/114] Compiling BirdtownFlow DictionaryStore.swift
+[90/114] Compiling BirdtownFlow AppPaths.swift
+[91/114] Emitting module BirdtownFlow
+[92/154] Compiling BirdtownFlow AppIcon.swift
+[93/154] Compiling BirdtownFlow Badge.swift
+[94/154] Compiling BirdtownFlow Banner.swift
+[95/154] Compiling BirdtownFlow ButtonStyles.swift
+[96/154] Compiling BirdtownFlow Card.swift
+[97/154] Compiling BirdtownFlow EmptyState.swift
+[98/154] Compiling BirdtownFlow FilterChip.swift
+[99/154] Compiling BirdtownFlow FocusRing.swift
+[100/154] Compiling BirdtownFlow IconButton.swift
+[101/154] Compiling BirdtownFlow KeyCap.swift
+[102/154] Compiling BirdtownFlow LabeledInput.swift
+[103/154] Compiling BirdtownFlow SearchField.swift
+[104/154] Compiling BirdtownFlow SectionHeader.swift
+[105/154] Compiling BirdtownFlow ShortcutRecorder.swift
+[106/154] Compiling BirdtownFlow SpectrumProgressBar.swift
+[107/154] Compiling BirdtownFlow UndoToast.swift
+[108/154] Compiling BirdtownFlow AppearanceSupport.swift
+[109/154] Compiling BirdtownFlow Tokens+DictionarySnippets.swift
+[110/154] Compiling BirdtownFlow Tokens+HUD.swift
+[111/154] Compiling BirdtownFlow Tokens+History.swift
+[112/154] Compiling BirdtownFlow SnippetsView.swift
+/Users/runner/work/birdtown-flow/birdtown-flow/Sources/BirdtownFlow/UI/Main/StyleView.swift:236:25: warning: '+' was deprecated in macOS 26.0: Use string interpolation on `Text` instead: `Text("Hello \(name)")` [#DeprecatedDeclaration]
+234 |                     (Text("Polished with ")
+235 |                         .foregroundStyle(Palette.inkSecondary)
+236 |                         + Text(configuration?.name ?? provider.title)
+    |                         `- warning: '+' was deprecated in macOS 26.0: Use string interpolation on `Text` instead: `Text("Hello \(name)")` [#DeprecatedDeclaration]
+237 |                         .fontWeight(.semibold)
+238 |                         .foregroundStyle(Palette.violet))
+
+[#DeprecatedDeclaration]: <https://docs.swift.org/compiler/documentation/diagnostics/deprecated-declaration>
+[113/154] Compiling BirdtownFlow StyleView.swift
+/Users/runner/work/birdtown-flow/birdtown-flow/Sources/BirdtownFlow/UI/Main/StyleView.swift:236:25: warning: '+' was deprecated in macOS 26.0: Use string interpolation on `Text` instead: `Text("Hello \(name)")` [#DeprecatedDeclaration]
+234 |                     (Text("Polished with ")
+235 |                         .foregroundStyle(Palette.inkSecondary)
+236 |                         + Text(configuration?.name ?? provider.title)
+    |                         `- warning: '+' was deprecated in macOS 26.0: Use string interpolation on `Text` instead: `Text("Hello \(name)")` [#DeprecatedDeclaration]
+237 |                         .fontWeight(.semibold)
+238 |                         .foregroundStyle(Palette.violet))
+
+[#DeprecatedDeclaration]: <https://docs.swift.org/compiler/documentation/diagnostics/deprecated-declaration>
+[114/154] Compiling BirdtownFlow ViewMemo.swift
+/Users/runner/work/birdtown-flow/birdtown-flow/Sources/BirdtownFlow/UI/Main/StyleView.swift:236:25: warning: '+' was deprecated in macOS 26.0: Use string interpolation on `Text` instead: `Text("Hello \(name)")` [#DeprecatedDeclaration]
+234 |                     (Text("Polished with ")
+235 |                         .foregroundStyle(Palette.inkSecondary)
+236 |                         + Text(configuration?.name ?? provider.title)
+    |                         `- warning: '+' was deprecated in macOS 26.0: Use string interpolation on `Text` instead: `Text("Hello \(name)")` [#DeprecatedDeclaration]
+237 |                         .fontWeight(.semibold)
+238 |                         .foregroundStyle(Palette.violet))
+
+[#DeprecatedDeclaration]: <https://docs.swift.org/compiler/documentation/diagnostics/deprecated-declaration>
+[115/154] Compiling BirdtownFlow WeekSummary.swift
+/Users/runner/work/birdtown-flow/birdtown-flow/Sources/BirdtownFlow/UI/Main/StyleView.swift:236:25: warning: '+' was deprecated in macOS 26.0: Use string interpolation on `Text` instead: `Text("Hello \(name)")` [#DeprecatedDeclaration]
+234 |                     (Text("Polished with ")
+235 |                         .foregroundStyle(Palette.inkSecondary)
+236 |                         + Text(configuration?.name ?? provider.title)
+    |                         `- warning: '+' was deprecated in macOS 26.0: Use string interpolation on `Text` instead: `Text("Hello \(name)")` [#DeprecatedDeclaration]
+237 |                         .fontWeight(.semibold)
+238 |                         .foregroundStyle(Palette.violet))
+
+[#DeprecatedDeclaration]: <https://docs.swift.org/compiler/documentation/diagnostics/deprecated-declaration>
+[116/154] Compiling BirdtownFlow MenuBarContent.swift
+/Users/runner/work/birdtown-flow/birdtown-flow/Sources/BirdtownFlow/UI/Main/StyleView.swift:236:25: warning: '+' was deprecated in macOS 26.0: Use string interpolation on `Text` instead: `Text("Hello \(name)")` [#DeprecatedDeclaration]
+234 |                     (Text("Polished with ")
+235 |                         .foregroundStyle(Palette.inkSecondary)
+236 |                         + Text(configuration?.name ?? provider.title)
+    |                         `- warning: '+' was deprecated in macOS 26.0: Use string interpolation on `Text` instead: `Text("Hello \(name)")` [#DeprecatedDeclaration]
+237 |                         .fontWeight(.semibold)
+238 |                         .foregroundStyle(Palette.violet))
+
+[#DeprecatedDeclaration]: <https://docs.swift.org/compiler/documentation/diagnostics/deprecated-declaration>
+[117/154] Compiling BirdtownFlow OnboardingView.swift
+/Users/runner/work/birdtown-flow/birdtown-flow/Sources/BirdtownFlow/UI/Main/StyleView.swift:236:25: warning: '+' was deprecated in macOS 26.0: Use string interpolation on `Text` instead: `Text("Hello \(name)")` [#DeprecatedDeclaration]
+234 |                     (Text("Polished with ")
+235 |                         .foregroundStyle(Palette.inkSecondary)
+236 |                         + Text(configuration?.name ?? provider.title)
+    |                         `- warning: '+' was deprecated in macOS 26.0: Use string interpolation on `Text` instead: `Text("Hello \(name)")` [#DeprecatedDeclaration]
+237 |                         .fontWeight(.semibold)
+238 |                         .foregroundStyle(Palette.violet))
+
+[#DeprecatedDeclaration]: <https://docs.swift.org/compiler/documentation/diagnostics/deprecated-declaration>
+[118/154] Compiling BirdtownFlow OnboardingWindowController.swift
+/Users/runner/work/birdtown-flow/birdtown-flow/Sources/BirdtownFlow/UI/Main/StyleView.swift:236:25: warning: '+' was deprecated in macOS 26.0: Use string interpolation on `Text` instead: `Text("Hello \(name)")` [#DeprecatedDeclaration]
+234 |                     (Text("Polished with ")
+235 |                         .foregroundStyle(Palette.inkSecondary)
+236 |                         + Text(configuration?.name ?? provider.title)
+    |                         `- warning: '+' was deprecated in macOS 26.0: Use string interpolation on `Text` instead: `Text("Hello \(name)")` [#DeprecatedDeclaration]
+237 |                         .fontWeight(.semibold)
+238 |                         .foregroundStyle(Palette.violet))
+
+[#DeprecatedDeclaration]: <https://docs.swift.org/compiler/documentation/diagnostics/deprecated-declaration>
+[119/154] Compiling BirdtownFlow SetupKit.swift
+/Users/runner/work/birdtown-flow/birdtown-flow/Sources/BirdtownFlow/UI/Main/StyleView.swift:236:25: warning: '+' was deprecated in macOS 26.0: Use string interpolation on `Text` instead: `Text("Hello \(name)")` [#DeprecatedDeclaration]
+234 |                     (Text("Polished with ")
+235 |                         .foregroundStyle(Palette.inkSecondary)
+236 |                         + Text(configuration?.name ?? provider.title)
+    |                         `- warning: '+' was deprecated in macOS 26.0: Use string interpolation on `Text` instead: `Text("Hello \(name)")` [#DeprecatedDeclaration]
+237 |                         .fontWeight(.semibold)
+238 |                         .foregroundStyle(Palette.violet))
+
+[#DeprecatedDeclaration]: <https://docs.swift.org/compiler/documentation/diagnostics/deprecated-declaration>
+[120/154] Compiling BirdtownFlow FeedbackSettingsGroup.swift
+/Users/runner/work/birdtown-flow/birdtown-flow/Sources/BirdtownFlow/UI/Main/StyleView.swift:236:25: warning: '+' was deprecated in macOS 26.0: Use string interpolation on `Text` instead: `Text("Hello \(name)")` [#DeprecatedDeclaration]
+234 |                     (Text("Polished with ")
+235 |                         .foregroundStyle(Palette.inkSecondary)
+236 |                         + Text(configuration?.name ?? provider.title)
+    |                         `- warning: '+' was deprecated in macOS 26.0: Use string interpolation on `Text` instead: `Text("Hello \(name)")` [#DeprecatedDeclaration]
+237 |                         .fontWeight(.semibold)
+238 |                         .foregroundStyle(Palette.violet))
+
+[#DeprecatedDeclaration]: <https://docs.swift.org/compiler/documentation/diagnostics/deprecated-declaration>
+[121/154] Compiling BirdtownFlow SettingsPanes.swift
+/Users/runner/work/birdtown-flow/birdtown-flow/Sources/BirdtownFlow/UI/Main/StyleView.swift:236:25: warning: '+' was deprecated in macOS 26.0: Use string interpolation on `Text` instead: `Text("Hello \(name)")` [#DeprecatedDeclaration]
+234 |                     (Text("Polished with ")
+235 |                         .foregroundStyle(Palette.inkSecondary)
+236 |                         + Text(configuration?.name ?? provider.title)
+    |                         `- warning: '+' was deprecated in macOS 26.0: Use string interpolation on `Text` instead: `Text("Hello \(name)")` [#DeprecatedDeclaration]
+237 |                         .fontWeight(.semibold)
+238 |                         .foregroundStyle(Palette.violet))
+
+[#DeprecatedDeclaration]: <https://docs.swift.org/compiler/documentation/diagnostics/deprecated-declaration>
+[122/154] Compiling BirdtownFlow SettingsView.swift
+/Users/runner/work/birdtown-flow/birdtown-flow/Sources/BirdtownFlow/UI/Main/StyleView.swift:236:25: warning: '+' was deprecated in macOS 26.0: Use string interpolation on `Text` instead: `Text("Hello \(name)")` [#DeprecatedDeclaration]
+234 |                     (Text("Polished with ")
+235 |                         .foregroundStyle(Palette.inkSecondary)
+236 |                         + Text(configuration?.name ?? provider.title)
+    |                         `- warning: '+' was deprecated in macOS 26.0: Use string interpolation on `Text` instead: `Text("Hello \(name)")` [#DeprecatedDeclaration]
+237 |                         .fontWeight(.semibold)
+238 |                         .foregroundStyle(Palette.violet))
+
+[#DeprecatedDeclaration]: <https://docs.swift.org/compiler/documentation/diagnostics/deprecated-declaration>
+[123/154] Compiling BirdtownFlow SampleData.swift
+/Users/runner/work/birdtown-flow/birdtown-flow/Sources/BirdtownFlow/UI/Main/StyleView.swift:236:25: warning: '+' was deprecated in macOS 26.0: Use string interpolation on `Text` instead: `Text("Hello \(name)")` [#DeprecatedDeclaration]
+234 |                     (Text("Polished with ")
+235 |                         .foregroundStyle(Palette.inkSecondary)
+236 |                         + Text(configuration?.name ?? provider.title)
+    |                         `- warning: '+' was deprecated in macOS 26.0: Use string interpolation on `Text` instead: `Text("Hello \(name)")` [#DeprecatedDeclaration]
+237 |                         .fontWeight(.semibold)
+238 |                         .foregroundStyle(Palette.violet))
+
+[#DeprecatedDeclaration]: <https://docs.swift.org/compiler/documentation/diagnostics/deprecated-declaration>
+[124/154] Compiling BirdtownFlow SnapshotCatalog+HUD.swift
+/Users/runner/work/birdtown-flow/birdtown-flow/Sources/BirdtownFlow/UI/Main/StyleView.swift:236:25: warning: '+' was deprecated in macOS 26.0: Use string interpolation on `Text` instead: `Text("Hello \(name)")` [#DeprecatedDeclaration]
+234 |                     (Text("Polished with ")
+235 |                         .foregroundStyle(Palette.inkSecondary)
+236 |                         + Text(configuration?.name ?? provider.title)
+    |                         `- warning: '+' was deprecated in macOS 26.0: Use string interpolation on `Text` instead: `Text("Hello \(name)")` [#DeprecatedDeclaration]
+237 |                         .fontWeight(.semibold)
+238 |                         .foregroundStyle(Palette.violet))
+
+[#DeprecatedDeclaration]: <https://docs.swift.org/compiler/documentation/diagnostics/deprecated-declaration>
+[125/154] Compiling BirdtownFlow SnapshotCatalog+Lab.swift
+/Users/runner/work/birdtown-flow/birdtown-flow/Sources/BirdtownFlow/UI/Main/StyleView.swift:236:25: warning: '+' was deprecated in macOS 26.0: Use string interpolation on `Text` instead: `Text("Hello \(name)")` [#DeprecatedDeclaration]
+234 |                     (Text("Polished with ")
+235 |                         .foregroundStyle(Palette.inkSecondary)
+236 |                         + Text(configuration?.name ?? provider.title)
+    |                         `- warning: '+' was deprecated in macOS 26.0: Use string interpolation on `Text` instead: `Text("Hello \(name)")` [#DeprecatedDeclaration]
+237 |                         .fontWeight(.semibold)
+238 |                         .foregroundStyle(Palette.violet))
+
+[#DeprecatedDeclaration]: <https://docs.swift.org/compiler/documentation/diagnostics/deprecated-declaration>
+[126/154] Compiling BirdtownFlow SnapshotCatalog+Library.swift
+/Users/runner/work/birdtown-flow/birdtown-flow/Sources/BirdtownFlow/UI/Main/StyleView.swift:236:25: warning: '+' was deprecated in macOS 26.0: Use string interpolation on `Text` instead: `Text("Hello \(name)")` [#DeprecatedDeclaration]
+234 |                     (Text("Polished with ")
+235 |                         .foregroundStyle(Palette.inkSecondary)
+236 |                         + Text(configuration?.name ?? provider.title)
+    |                         `- warning: '+' was deprecated in macOS 26.0: Use string interpolation on `Text` instead: `Text("Hello \(name)")` [#DeprecatedDeclaration]
+237 |                         .fontWeight(.semibold)
+238 |                         .foregroundStyle(Palette.violet))
+
+[#DeprecatedDeclaration]: <https://docs.swift.org/compiler/documentation/diagnostics/deprecated-declaration>
+[127/154] Compiling BirdtownFlow SnapshotCatalog+Main.swift
+/Users/runner/work/birdtown-flow/birdtown-flow/Sources/BirdtownFlow/UI/Main/StyleView.swift:236:25: warning: '+' was deprecated in macOS 26.0: Use string interpolation on `Text` instead: `Text("Hello \(name)")` [#DeprecatedDeclaration]
+234 |                     (Text("Polished with ")
+235 |                         .foregroundStyle(Palette.inkSecondary)
+236 |                         + Text(configuration?.name ?? provider.title)
+    |                         `- warning: '+' was deprecated in macOS 26.0: Use string interpolation on `Text` instead: `Text("Hello \(name)")` [#DeprecatedDeclaration]
+237 |                         .fontWeight(.semibold)
+238 |                         .foregroundStyle(Palette.violet))
+
+[#DeprecatedDeclaration]: <https://docs.swift.org/compiler/documentation/diagnostics/deprecated-declaration>
+[128/154] Compiling BirdtownFlow SnapshotCatalog+MenuBar.swift
+/Users/runner/work/birdtown-flow/birdtown-flow/Sources/BirdtownFlow/UI/Main/StyleView.swift:236:25: warning: '+' was deprecated in macOS 26.0: Use string interpolation on `Text` instead: `Text("Hello \(name)")` [#DeprecatedDeclaration]
+234 |                     (Text("Polished with ")
+235 |                         .foregroundStyle(Palette.inkSecondary)
+236 |                         + Text(configuration?.name ?? provider.title)
+    |                         `- warning: '+' was deprecated in macOS 26.0: Use string interpolation on `Text` instead: `Text("Hello \(name)")` [#DeprecatedDeclaration]
+237 |                         .fontWeight(.semibold)
+238 |                         .foregroundStyle(Palette.violet))
+
+[#DeprecatedDeclaration]: <https://docs.swift.org/compiler/documentation/diagnostics/deprecated-declaration>
+[129/154] Compiling BirdtownFlow SnapshotCatalog+Setup.swift
+/Users/runner/work/birdtown-flow/birdtown-flow/Sources/BirdtownFlow/UI/Main/StyleView.swift:236:25: warning: '+' was deprecated in macOS 26.0: Use string interpolation on `Text` instead: `Text("Hello \(name)")` [#DeprecatedDeclaration]
+234 |                     (Text("Polished with ")
+235 |                         .foregroundStyle(Palette.inkSecondary)
+236 |                         + Text(configuration?.name ?? provider.title)
+    |                         `- warning: '+' was deprecated in macOS 26.0: Use string interpolation on `Text` instead: `Text("Hello \(name)")` [#DeprecatedDeclaration]
+237 |                         .fontWeight(.semibold)
+238 |                         .foregroundStyle(Palette.violet))
+
+[#DeprecatedDeclaration]: <https://docs.swift.org/compiler/documentation/diagnostics/deprecated-declaration>
+[130/154] Compiling BirdtownFlow SnapshotCatalog+Shortcuts.swift
+/Users/runner/work/birdtown-flow/birdtown-flow/Sources/BirdtownFlow/UI/Main/StyleView.swift:236:25: warning: '+' was deprecated in macOS 26.0: Use string interpolation on `Text` instead: `Text("Hello \(name)")` [#DeprecatedDeclaration]
+234 |                     (Text("Polished with ")
+235 |                         .foregroundStyle(Palette.inkSecondary)
+236 |                         + Text(configuration?.name ?? provider.title)
+    |                         `- warning: '+' was deprecated in macOS 26.0: Use string interpolation on `Text` instead: `Text("Hello \(name)")` [#DeprecatedDeclaration]
+237 |                         .fontWeight(.semibold)
+238 |                         .foregroundStyle(Palette.violet))
+
+[#DeprecatedDeclaration]: <https://docs.swift.org/compiler/documentation/diagnostics/deprecated-declaration>
+[131/154] Compiling BirdtownFlow SnapshotRenderer.swift
+/Users/runner/work/birdtown-flow/birdtown-flow/Sources/BirdtownFlow/UI/Main/StyleView.swift:236:25: warning: '+' was deprecated in macOS 26.0: Use string interpolation on `Text` instead: `Text("Hello \(name)")` [#DeprecatedDeclaration]
+234 |                     (Text("Polished with ")
+235 |                         .foregroundStyle(Palette.inkSecondary)
+236 |                         + Text(configuration?.name ?? provider.title)
+    |                         `- warning: '+' was deprecated in macOS 26.0: Use string interpolation on `Text` instead: `Text("Hello \(name)")` [#DeprecatedDeclaration]
+237 |                         .fontWeight(.semibold)
+238 |                         .foregroundStyle(Palette.violet))
+
+[#DeprecatedDeclaration]: <https://docs.swift.org/compiler/documentation/diagnostics/deprecated-declaration>
+[132/154] Compiling BirdtownFlow Tokens+Home.swift
+[133/154] Compiling BirdtownFlow Tokens+Lab.swift
+[134/154] Compiling BirdtownFlow Tokens+Settings.swift
+[135/154] Compiling BirdtownFlow Tokens+Style.swift
+[136/154] Compiling BirdtownFlow Tokens.swift
+[137/154] Compiling BirdtownFlow HUDController.swift
+[138/154] Compiling BirdtownFlow HUDFilm.swift
+[139/154] Compiling BirdtownFlow HUDState.swift
+[140/154] Compiling BirdtownFlow HUDView.swift
+[141/154] Compiling BirdtownFlow HUDWaveform.swift
+[142/154] Compiling BirdtownFlow AudioPlayback.swift
+[143/154] Compiling BirdtownFlow DictionaryView.swift
+[144/154] Compiling BirdtownFlow HistoryFloatingBar.swift
+[145/154] Compiling BirdtownFlow HistoryRow.swift
+[146/154] Compiling BirdtownFlow HistoryView.swift
+[147/154] Compiling BirdtownFlow HomeView.swift
+[148/154] Compiling BirdtownFlow LabView.swift
+[149/154] Compiling BirdtownFlow MainEnvironment.swift
+[150/154] Compiling BirdtownFlow MainView.swift
+[151/154] Compiling BirdtownFlow RetryTracker.swift
+[151/154] Write Objects.LinkFileList
+[152/154] Linking BirdtownFlow
+[153/154] Applying BirdtownFlow
+Build complete! (39.48s)

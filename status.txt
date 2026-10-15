@@ -1,0 +1,11 @@
+sha=b812f1954d9f6d4f03277cff7e73ec1d79d03a32
+branch=claude/design-handoff-xpr0hd
+build=success
+test=success
+snapshots=success
+synth=success
+speech=success
+segmented=success
+signcheck=success
+signing=skipped
+release=skipped
