@@ -1,0 +1,11 @@
+sha=54a10efaa77c38eafddded433bd8886c3e8c62fa
+branch=claude/chatgpt-app-typing-wotbyc
+build=success
+test=success
+snapshots=success
+synth=success
+speech=success
+segmented=success
+signcheck=success
+signing=skipped
+release=skipped
