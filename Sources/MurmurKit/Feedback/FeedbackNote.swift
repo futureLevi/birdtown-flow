@@ -216,8 +216,11 @@ public enum FeedbackIssue {
         lines.append(quoted(record.finalText.isEmpty ? "(nothing)" : record.finalText))
         if !record.corrections.isEmpty {
             lines.append("")
-            let changes = record.corrections.map { correction in
-                "`\(correction.from)` → `\(correction.to)`" + (correction.count > 1 ? " ×\(correction.count)" : "")
+            let changes = record.corrections.map { correction -> String in
+                var change = "`\(correction.from)` → `\(correction.to)`"
+                if correction.count > 1 { change += " ×\(correction.count)" }
+                if let source = correction.source { change += " (\(source.rawValue))" }
+                return change
             }
             lines.append("Replacements: " + changes.joined(separator: ", "))
         }

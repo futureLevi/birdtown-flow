@@ -677,9 +677,15 @@ struct OriginalPanel: View {
                                     .font(Typography.caption)
                                     .foregroundStyle(Palette.inkTertiary)
                             }
+                            // Which step made it, so a misfire points straight at its cause.
+                            if let source = correction.source {
+                                Text(source.title)
+                                    .font(Typography.caption)
+                                    .foregroundStyle(Palette.inkTertiary)
+                            }
                         }
                         .accessibilityElement(children: .ignore)
-                        .accessibilityLabel("Heard \(correction.from), wrote \(correction.to)")
+                        .accessibilityLabel(Self.spoken(correction))
                     }
                 }
             }
@@ -729,6 +735,13 @@ struct OriginalPanel: View {
         if !record.engine.isEmpty { rows.append(Detail(label: "Engine", value: record.engine)) }
         if let wpm = record.wordsPerMinute { rows.append(Detail(label: "Speed", value: "\(wpm) wpm")) }
         return rows
+    }
+
+    /// "Heard cloud code, wrote Claude Code, by polish".
+    private static func spoken(_ correction: AppliedCorrection) -> String {
+        let change = "Heard \(correction.from), wrote \(correction.to)"
+        guard let source = correction.source else { return change }
+        return "\(change), by \(source.title.lowercased())"
     }
 
     @ViewBuilder

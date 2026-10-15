@@ -8,11 +8,39 @@ public struct AppliedCorrection: Codable, Hashable, Sendable {
     public let to: String
     /// How many places in the transcript the rule changed.
     public let count: Int
+    /// The step that made the change, for History. `nil` in records saved before steps were
+    /// told apart, and until the dictation labels it (`labeled(_:)`).
+    public let source: CorrectionSource?
 
-    public init(from: String, to: String, count: Int) {
+    public init(from: String, to: String, count: Int, source: CorrectionSource? = nil) {
         self.from = from
         self.to = to
         self.count = count
+        self.source = source
+    }
+
+    /// The same change, credited to `source`.
+    public func labeled(_ source: CorrectionSource) -> AppliedCorrection {
+        AppliedCorrection(from: from, to: to, count: count, source: source)
+    }
+}
+
+/// Which step of a dictation wrote a dictionary term in.
+public enum CorrectionSource: String, Codable, Hashable, Sendable {
+    /// Vocabulary boosting: the speech engine rescored the words against the audio.
+    case boost
+    /// A "heard X, write Y" dictionary entry, matched exactly (`DictionaryCorrector`).
+    case dictionary
+    /// The polish model, reading the vocabulary in its prompt.
+    case polish
+
+    /// A word for History's Replacements list.
+    public var title: String {
+        switch self {
+        case .boost: "Boost"
+        case .dictionary: "Dictionary"
+        case .polish: "Polish"
+        }
     }
 }
 

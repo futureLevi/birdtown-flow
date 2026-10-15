@@ -87,13 +87,15 @@ actor SegmentedTranscriber {
     var isAcceptingWindows: Bool { !isClosed && failure == nil }
     /// Windows decoded so far.
     var committedCount: Int { parts.count }
-    /// The decoded windows' text, boosted as the final transcript will be: a window's text
-    /// is fixed once it's decoded, so this is exactly the start of the transcript key-up
-    /// builds, and what's polished from it while recording (`ProgressivePolisher`) is
-    /// reused.
-    var committedRawText: String {
+    /// The decoded windows' text before boosting, as polish will get it: a window's text is
+    /// fixed once it's decoded, so this is exactly the start of the text key-up polishes, and
+    /// what's polished from it while recording (`ProgressivePolisher`) is reused.
+    var committedPlainText: String { Self.plainText(of: parts) }
+
+    /// The windows' text as decoded, before boosting rewrote any of it.
+    private static func plainText(of parts: [WindowTranscript]) -> String {
         SegmentStitcher.join(parts.map {
-            SegmentStitcher.Part(leadingPunctuation: $0.kept.leadingPunctuation, text: $0.text)
+            SegmentStitcher.Part(leadingPunctuation: $0.kept.leadingPunctuation, text: $0.kept.text)
         })
     }
 
@@ -307,7 +309,9 @@ actor SegmentedTranscriber {
             SegmentStitcher.Part(leadingPunctuation: $0.kept.leadingPunctuation, text: $0.text)
         })
         return Outcome(
-            transcript: Transcript(text: text, boosted: Self.merged(parts.map(\.boosted))),
+            transcript: Transcript(
+                text: text, boosted: Self.merged(parts.map(\.boosted)),
+                unboosted: parts.contains { !$0.boosted.isEmpty } ? Self.plainText(of: parts) : nil),
             line: line,
             parts: parts.map(\.text),
             windows: parts.count,

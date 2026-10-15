@@ -8,7 +8,7 @@ lands wherever you were typing. It is built to be a product that can stand next 
 | Area | What it does |
 |---|---|
 | **Dictation** | Hold the push-to-talk key (default **fn**) to record; release to transcribe and insert. Double-tap the key, or press **Space** while holding it, for hands-free; tap again to finish. Settings can make hands-free a tap of **⌃⌥** or a recorded chord instead (`HandsFreeShortcut`), for a 🌐 key that macOS also answers. Push-to-talk can be any single modifier key (either side) or a recorded chord; hands-free and paste-last chords can be recorded too (`MurmurKit/Input`: `KeyShortcut`, `ShortcutRules`, `ShortcutCapture`). **Esc** cancels. **⌃⌥V** (by default) pastes the last dictation again. |
-| **Engine** | Parakeet Ultra (FluidAudio, CoreML on the Neural Engine) by default. Parakeet v3/v2 and Apple Speech as alternatives. Dictionary words boost recognition (CTC vocabulary boosting), tuned for precision: a word is only rewritten to a dictionary term when it sounds like it, and every rewrite is listed under Replacements in History. While the selected Parakeet model downloads or loads, Apple Speech (or the previously loaded model) stands in and History names it (`ModelManager.standInName`, `MurmurKit.EngineFallback`); it switches over automatically. |
+| **Engine** | Parakeet Ultra (FluidAudio, CoreML on the Neural Engine) by default. Parakeet v3/v2 and Apple Speech as alternatives. Dictionary words boost recognition (CTC vocabulary boosting), tuned for precision: a word is only rewritten to a dictionary term when it sounds like it. While polish is on, the boosted text is only the fallback: polish gets the words as heard plus the vocabulary, and fixes terms with the whole sentence in view. Every replacement is listed under Replacements in History with the step that made it (Boost, Polish or Dictionary). While the selected Parakeet model downloads or loads, Apple Speech (or the previously loaded model) stands in and History names it (`ModelManager.standInName`, `MurmurKit.EngineFallback`); it switches over automatically. |
 | **Pipeline** | raw text → fillers / stutters / spoken commands → optional AI polish → dictionary corrections → snippets → style rules → insert. |
 | **Styles** | Per app category (personal messages, work messages, email, other): formal, casual, very casual, excited. Category comes from the frontmost app (and the window title, for web apps in browsers). |
 | **AI polish** | Off, Apple Intelligence (on-device), Claude (Anthropic key) or any OpenAI-compatible endpoint. Hard timeout; any failure falls back to the deterministic text. |
@@ -63,9 +63,12 @@ key up   ─► AudioRecorder.stop → samples
               HistoryStore.add(record: audio saved, outcome pending)
               too short or silent under 1 s? → dropped; silent ≥ 1 s → "no speech" pill
               engine.transcribe(samples, vocabulary)          [Transcription]
+                (the text as heard, and boosted when the CTC model is loaded)
               TextPipeline.prepare                            [MurmurKit]
+                (polish on: the text as heard; off: the boosted text)
               PolishService.polish (timeout, PolishGuard)     [Polish]
-                (Settings' provider, or the Lab configuration the style uses)
+                (Settings' provider, or the Lab configuration the style uses;
+                 not used → the boosted text is prepared instead)
               TextPipeline.finalize (dictionary, snippets, style)
               TextInjector.insert                             [Core]
               HistoryStore.update(final text, timings, outcome)
@@ -85,7 +88,7 @@ recording, every second, once 20 s of audio exist:
               1. the window's audio is appended to the record's WAV (IncrementalWAVWriter)
               2. first window only: a hidden placeholder History row is saved
               3. only then is the window decoded and boosted (SegmentedTranscriber)
-              committed text (boosted, the start of key-up's transcript) →
+              committed text (as heard, unboosted: the start of what key-up polishes) →
                 ProgressivePolisher: finished parts polished and cached
 key up   ─► LiveDictation.stop; the WAV is rewritten whole, atomically, at the same URL;
               the placeholder row is replaced (HistoryStore.update)
