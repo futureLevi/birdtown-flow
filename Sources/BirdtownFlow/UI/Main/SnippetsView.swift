@@ -7,6 +7,9 @@ struct SnippetsView: View {
     @State private var query = ""
     @State private var isAdding = false
     @State private var editing: Snippet?
+    /// "New Snippet" opened the sheet, so it takes focus back when the sheet closes.
+    @State private var addOpenedSheet = false
+    @FocusState private var newSnippetFocused: Bool
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
@@ -19,14 +22,20 @@ struct SnippetsView: View {
             trimmed.isEmpty || $0.trigger.localizedStandardContains(trimmed) || $0.expansion.localizedStandardContains(trimmed)
         }
         ScrollView {
-            VStack(alignment: .leading, spacing: Spacing.xxl) {
-                PageHeader(title: "Snippets", subtitle: "Say the trigger and Birdtown Flow types the expansion.") {
+            VStack(alignment: .leading, spacing: Layout.Library.blockGap) {
+                PageHeader(
+                    title: "Snippets",
+                    subtitle: "A few spoken words. The whole thing, typed.",
+                    symbol: "text.badge.plus",
+                    tone: .teal
+                ) {
                     Button {
-                        isAdding = true
+                        openNewSnippet()
                     } label: {
                         Label("New Snippet", systemImage: "plus")
                     }
-                    .buttonStyle(.flowSecondary)
+                    .buttonStyle(.flowPrimary)
+                    .focused($newSnippetFocused)
                     .keyboardShortcut("n", modifiers: .command)
                     .help("Add a snippet (⌘N)")
                 }
@@ -38,29 +47,25 @@ struct SnippetsView: View {
                         message: "Your scheduling link, your address, a sign-off. Give each a short phrase "
                             + "and say it whenever you need it."
                     ) {
-                        Button("New Snippet") { isAdding = true }
+                        Button("New Snippet") { openNewSnippet() }
                             .buttonStyle(.flowSecondary)
                     }
-                    .cardSurface()
+                    .dashedPanel()
                 } else {
-                    SearchField(text: $query, prompt: "Search snippets")
-                        .frame(maxWidth: Layout.Main.searchFieldWidth)
+                    searchRow(total: store.visible.count, matching: visible.count, isSearching: !trimmed.isEmpty)
                     if visible.isEmpty {
                         EmptyState(
                             symbol: "magnifyingglass",
                             title: "No snippets match “\(trimmed)”",
-                            message: "Search looks at triggers and expansions."
+                            message: "Search looks at the phrase you say and the text it types. Clear the "
+                                + "search to see every snippet."
                         ) {
                             Button("Clear Search") { query = "" }
                                 .buttonStyle(.flowSecondary)
                         }
-                        .cardSurface()
+                        .dashedPanel()
                     } else {
-                        LazyVGrid(
-                            columns: [GridItem(.adaptive(minimum: Layout.Main.snippetCardMinWidth), spacing: Spacing.m)],
-                            alignment: .leading,
-                            spacing: Spacing.m
-                        ) {
+                        VStack(alignment: .leading, spacing: Layout.Library.snippetCardGap) {
                             ForEach(visible) { snippet in
                                 SnippetCard(
                                     snippet: snippet,
@@ -75,6 +80,9 @@ struct SnippetsView: View {
                                 )
                             }
                         }
+                        if trimmed.isEmpty {
+                            tip
+                        }
                     }
                 }
             }
@@ -88,14 +96,70 @@ struct SnippetsView: View {
         .animation(Motion.resolve(Motion.smooth, reduceMotion: reduceMotion), value: store.deletion.pending)
         // As in History, leaving the page doesn't make a delete final: it stays undoable for
         // the rest of its window (the store commits it then, or at quit).
-        .sheet(isPresented: $isAdding) {
-            SnippetEditorSheet(original: nil) { model.snippets.add($0) }
+        .sheet(isPresented: $isAdding, onDismiss: restoreFocusToOpener) {
+            SnippetEditorSheet(original: nil, onSave: { model.snippets.add($0) })
                 .environment(model)
         }
         .sheet(item: $editing) { snippet in
-            SnippetEditorSheet(original: snippet) { model.snippets.update($0) }
-                .environment(model)
+            SnippetEditorSheet(
+                original: snippet,
+                onSave: { model.snippets.update($0) },
+                onDelete: { delete(snippet) }
+            )
+            .environment(model)
         }
+    }
+
+    private func openNewSnippet() {
+        addOpenedSheet = true
+        isAdding = true
+    }
+
+    /// The system returns focus to the card's own button after Edit; only the page's "New
+    /// Snippet" button needs help.
+    private func restoreFocusToOpener() {
+        guard addOpenedSheet else { return }
+        addOpenedSheet = false
+        newSnippetFocused = true
+    }
+
+    private func searchRow(total: Int, matching: Int, isSearching: Bool) -> some View {
+        HStack(spacing: Spacing.xl) {
+            SearchField(text: $query, prompt: "Find a snippet")
+                .frame(width: Layout.Main.searchFieldWidth)
+            Spacer(minLength: Spacing.l)
+            let noun = total == 1 ? "snippet" : "snippets"
+            Text(isSearching ? "\(matching) of \(total) \(noun)" : "\(total) \(noun)")
+                .font(Typography.callout)
+                .foregroundStyle(Palette.inkSecondary)
+                .monospacedDigit()
+        }
+    }
+
+    /// A nudge under the list, in the handoff's dashed panel.
+    private var tip: some View {
+        HStack(spacing: Layout.Library.tipGap) {
+            Image(systemName: "text.badge.plus")
+                .font(Typography.pageSymbol)
+                .foregroundStyle(Palette.teal)
+                .frame(width: Layout.Library.tipIcon, height: Layout.Library.tipIcon)
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: Spacing.xs) {
+                Text("Save the things you say again and again.")
+                    .font(Typography.headline)
+                    .foregroundStyle(Palette.ink)
+                Text("Meeting links, your address, a sign-off. Give each one a phrase that feels natural to say.")
+                    .font(Typography.bodyLarge)
+                    .foregroundStyle(Palette.inkSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.vertical, Layout.Library.tipInsetVertical)
+        .padding(.horizontal, Layout.Library.tipInsetHorizontal)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .dashedPanel()
+        .accessibilityElement(children: .combine)
     }
 
     /// Deletes at once, with Undo (and ⌘Z) for `Motion.undoWindow`, as History does.
@@ -116,6 +180,7 @@ struct SnippetsView: View {
     }
 }
 
+/// One snippet in two parts: what you say on a teal wash, what Birdtown Flow types beside it.
 private struct SnippetCard: View {
     let snippet: Snippet
     let uses: Int
@@ -123,70 +188,25 @@ private struct SnippetCard: View {
     let onEdit: () -> Void
     let onDelete: () -> Void
 
-    @State private var isHovered = false
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
     var body: some View {
-        VStack(alignment: .leading, spacing: Spacing.m) {
-            HStack(alignment: .center, spacing: Spacing.s) {
-                // The logo's bars mark what you say, as they do in the app's own mark.
-                LogoBars()
-                    .fill(Palette.inkTertiary)
-                    .frame(width: LogoBars.groupWidth(height: Layout.Main.triggerMark), height: Layout.Main.triggerMark)
-                    .accessibilityHidden(true)
-                    .opacity(dimming)
-                Text("“\(snippet.trigger)”")
-                    .font(Typography.headline)
-                    .foregroundStyle(Palette.ink)
-                    .lineLimit(1)
-                    .help(snippet.trigger)
-                    .opacity(dimming)
-                Spacer(minLength: Spacing.s)
-                // Hidden visually; VoiceOver names the switch after the snippet it controls.
-                Toggle("Snippet “\(snippet.trigger)”", isOn: Binding(get: { snippet.isEnabled }, set: { onToggle($0) }))
-                    .toggleStyle(.switch)
-                    .controlSize(.mini)
-                    .labelsHidden()
-                    .help(snippet.isEnabled ? "Turn off without deleting" : "Turn back on")
-            }
-            Text(snippet.expansion)
-                .font(Typography.transcript)
-                .foregroundStyle(Palette.inkSecondary)
-                .lineSpacing(Spacing.transcriptLine)
-                .lineLimit(Layout.Main.transcriptLines)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .help(snippet.expansion)
-                .opacity(dimming)
-            Spacer(minLength: 0)
-            HStack(spacing: Spacing.xxs) {
-                Text(uses == 0 ? "Not used yet" : (uses == 1 ? "Used once" : "Used \(uses) times"))
-                    .font(Typography.caption)
-                    .foregroundStyle(Palette.inkTertiary)
-                    .opacity(dimming)
-                Spacer(minLength: Spacing.s)
-                HStack(spacing: Spacing.xxs) {
-                    IconButton(symbol: "pencil", label: "Edit") { onEdit() }
-                    IconButton(symbol: "trash", label: "Delete") { onDelete() }
-                }
-                .opacity(isHovered ? 1 : 0)
-                .allowsHitTesting(isHovered)
-            }
+        HStack(spacing: 0) {
+            triggerPane
+                .frame(width: Layout.Library.snippetTriggerWidth)
+                .frame(maxHeight: .infinity, alignment: .topLeading)
+                .background(Palette.tealSoft)
+            Rectangle()
+                .fill(Palette.hairline)
+                .frame(width: Layout.Main.hairline)
+            expansionPane
         }
-        .padding(Spacing.l)
-        .frame(maxWidth: .infinity, minHeight: Layout.Main.snippetCardMinHeight, alignment: .topLeading)
-        .cardSurface(isHovered: isHovered)
-        .contentShape(Rectangle())
-        .onHover { isHovered = $0 }
-        .onTapGesture(count: 2) { onEdit() }
-        .animation(Motion.resolve(Motion.fadeFast, reduceMotion: reduceMotion), value: isHovered)
+        .cardSurface()
         .contextMenu {
             Button("Edit…", systemImage: "pencil") { onEdit() }
             Button(snippet.isEnabled ? "Turn Off" : "Turn On", systemImage: "power") { onToggle(!snippet.isEnabled) }
             Divider()
             Button("Delete", systemImage: "trash", role: .destructive) { onDelete() }
         }
-        // The hover buttons are invisible (and so missing from the accessibility tree) most of
-        // the time; offer Edit and Delete as VoiceOver actions on the card.
+        // Delete lives in the context menu and the edit sheet; offer it to VoiceOver here too.
         .accessibilityElement(children: .contain)
         .accessibilityActions {
             Button("Edit") { onEdit() }
@@ -194,10 +214,99 @@ private struct SnippetCard: View {
         }
     }
 
-    /// A turned-off snippet dims everything it says, as a dictionary row does; the switch and
-    /// the actions stay at full strength.
-    private var dimming: Double {
-        snippet.isEnabled ? 1 : Interaction.dimmedOpacity
+    /// What you say, and how often you have.
+    private var triggerPane: some View {
+        VStack(alignment: .leading, spacing: Layout.Library.snippetGap) {
+            HStack(spacing: Spacing.s) {
+                Image(systemName: "mic")
+                    .accessibilityHidden(true)
+                Text("When you say")
+                Spacer(minLength: Spacing.s)
+                // A turned-off snippet is also dimmed, but the dimming isn't the only cue.
+                if !snippet.isEnabled {
+                    Badge(text: "Off")
+                }
+            }
+            .font(Typography.callout)
+            .foregroundStyle(Palette.teal)
+            Text("“\(snippet.trigger)”")
+                .font(Typography.snippetTrigger)
+                .tracking(Tracking.snippetTrigger)
+                .foregroundStyle(snippet.isEnabled ? Palette.ink : Palette.inkTertiary)
+                .fixedSize(horizontal: false, vertical: true)
+                .help(snippet.trigger)
+            Spacer(minLength: Spacing.s)
+            Text(uses == 0 ? "Not used yet" : (uses == 1 ? "Used once" : "Used \(uses) times"))
+                .font(Typography.callout)
+                .foregroundStyle(Palette.teal)
+        }
+        .padding(Layout.Library.snippetInset)
+    }
+
+    /// What Birdtown Flow types, with Edit and the switch under it.
+    private var expansionPane: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text("Flow types")
+                .font(Typography.callout)
+                .foregroundStyle(Palette.inkSecondary)
+            Text(snippet.expansion)
+                .font(Typography.transcript)
+                .foregroundStyle(snippet.isEnabled ? Palette.ink : Palette.inkTertiary)
+                .lineSpacing(Spacing.transcriptLine)
+                .lineLimit(Layout.Library.expansionLines)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.top, Spacing.m)
+                .help(snippet.expansion)
+            Spacer(minLength: Layout.Library.snippetFooterTop)
+            Rectangle()
+                .fill(Palette.hairline)
+                .frame(height: Layout.Main.hairline)
+            HStack(spacing: Spacing.l) {
+                Button {
+                    onEdit()
+                } label: {
+                    Label("Edit snippet", systemImage: "pencil")
+                }
+                .buttonStyle(EditLinkButtonStyle())
+                Spacer(minLength: Spacing.s)
+                // Hidden visually; VoiceOver names the switch after the snippet it controls.
+                Toggle("Snippet “\(snippet.trigger)”", isOn: Binding(get: { snippet.isEnabled }, set: { onToggle($0) }))
+                    .toggleStyle(.switch)
+                    .labelsHidden()
+                    .help(snippet.isEnabled ? "Turn off without deleting" : "Turn back on")
+            }
+            .padding(.top, Layout.Library.snippetFooterInset)
+        }
+        .padding(Layout.Library.snippetInset)
+        .frame(maxWidth: .infinity, alignment: .topLeading)
+    }
+}
+
+/// "Edit snippet": a Signal blue text link that underlines on hover and dims on press.
+private struct EditLinkButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        EditLinkBody(configuration: configuration)
+    }
+}
+
+private struct EditLinkBody: View {
+    let configuration: ButtonStyleConfiguration
+
+    @State private var isHovered = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        configuration.label
+            .font(Typography.caption)
+            .foregroundStyle(Palette.accentInk)
+            .underline(isHovered)
+            .opacity(configuration.isPressed ? Interaction.dimmedOpacity : 1)
+            .contentShape(Rectangle())
+            .onHover { isHovered = $0 }
+            .animation(Motion.resolve(Motion.fadeFast, reduceMotion: reduceMotion), value: configuration.isPressed)
+            .animation(Motion.resolve(Motion.fadeFast, reduceMotion: reduceMotion), value: isHovered)
+            // The system's focus ring, shaped to the link.
+            .flowFocusRing(RoundedRectangle(cornerRadius: Radius.s, style: .continuous))
     }
 }
 
@@ -205,6 +314,8 @@ private struct SnippetCard: View {
 struct SnippetEditorSheet: View {
     let original: Snippet?
     let onSave: (Snippet) -> Void
+    /// Offered when editing: removes the snippet, with Undo on the page behind the sheet.
+    let onDelete: (() -> Void)?
 
     @State private var trigger: String
     @State private var expansion: String
@@ -212,9 +323,10 @@ struct SnippetEditorSheet: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
 
-    init(original: Snippet?, onSave: @escaping (Snippet) -> Void) {
+    init(original: Snippet?, onSave: @escaping (Snippet) -> Void, onDelete: (() -> Void)? = nil) {
         self.original = original
         self.onSave = onSave
+        self.onDelete = onDelete
         _trigger = State(initialValue: original?.trigger ?? "")
         _expansion = State(initialValue: original?.expansion ?? "")
     }
@@ -235,46 +347,53 @@ struct SnippetEditorSheet: View {
     }
 
     var body: some View {
-        let shape = RoundedRectangle(cornerRadius: Radius.s, style: .continuous)
+        let shape = RoundedRectangle(cornerRadius: Radius.control, style: .continuous)
         VStack(alignment: .leading, spacing: Spacing.l) {
             Text(original == nil ? "New Snippet" : "Edit Snippet")
-                .font(Typography.title)
+                .font(Typography.sectionTitle)
                 .tracking(Tracking.title)
                 .foregroundStyle(Palette.ink)
+                .accessibilityAddTraits(.isHeader)
 
             VStack(alignment: .leading, spacing: Spacing.xs) {
-                LabeledInput(label: "When you say", text: $trigger, prompt: "my calendly link")
+                LabeledInput(label: "When you say", text: $trigger, prompt: "my calendly link", autofocus: true)
                 if !trimmedTrigger.isEmpty && !triggerHasWords {
                     problemRow("A trigger needs at least one word you can say.")
                 } else if hasConflict {
                     problemRow("Another snippet already uses “\(trimmedTrigger)”. Pick a different phrase.")
                 } else {
                     Text("A short phrase you wouldn't say by accident works best.")
-                        .font(Typography.caption)
-                        .foregroundStyle(Palette.inkTertiary)
+                        .font(Typography.callout)
+                        .foregroundStyle(Palette.inkSecondary)
                 }
             }
 
             VStack(alignment: .leading, spacing: Spacing.xs) {
                 Text("It types")
                     .font(Typography.caption)
-                    .foregroundStyle(Palette.inkSecondary)
+                    .foregroundStyle(Palette.ink)
+                // Return adds a line here, so Enter submits from the trigger field only.
                 TextEditor(text: $expansion)
                     .font(Typography.transcript)
                     .foregroundStyle(Palette.ink)
                     .scrollContentBackground(.hidden)
                     .padding(Spacing.s)
                     .frame(height: Layout.Main.expansionEditorHeight)
-                    .background(shape.fill(Palette.sunken))
+                    .background(shape.fill(Palette.surface))
                     .focused($expansionFocused)
-                    .overlay(shape.strokeBorder(
-                        expansionFocused ? Palette.accent : Palette.hairline,
-                        lineWidth: expansionFocused ? Layout.Main.focusRing : Layout.Main.hairline
-                    ))
+                    .overlay(shape.strokeBorder(Palette.hairlineStrong, lineWidth: Layout.Main.hairline))
+                    .flowFocusRing(shape, drawn: expansionFocused)
                     .accessibilityLabel("Expansion")
             }
 
             HStack(spacing: Spacing.s) {
+                if original != nil, let onDelete {
+                    Button("Delete", role: .destructive) {
+                        onDelete()
+                        dismiss()
+                    }
+                    .buttonStyle(.flowSecondary)
+                }
                 Spacer()
                 Button("Cancel") { dismiss() }
                     .buttonStyle(.flowSecondary)
@@ -291,7 +410,7 @@ struct SnippetEditorSheet: View {
         }
         .padding(Spacing.xxl)
         .frame(width: Layout.Main.sheetWidth)
-        .background(Palette.canvas)
+        .background(Palette.surface)
     }
 
     /// A message that blocks saving, drawn like the dictionary sheet's so it doesn't read as advice.

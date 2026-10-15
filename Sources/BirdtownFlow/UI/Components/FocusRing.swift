@@ -15,12 +15,12 @@ import SwiftUI
 /// It always shapes the system focus ring to `shape`, so the default ring follows the pill
 /// instead of the control's rectangular bounds.
 ///
-/// A control that draws its own Signal blue ring instead passes `drawn:` the button's own focus
-/// (a `@FocusState` bound with `.focused(_:)` on the `Button`) and puts `.focusEffectDisabled()`
-/// on that `Button`. The ring sits `Layout.Main.focusRingGap` outside the control's edge so it
-/// never merges with a selection border. It deliberately doesn't read `\.isFocused`: inside a
-/// focusable container (History's list) that can report the container's focus, which would
-/// ring every control in it.
+/// A control that draws its own ring instead passes `drawn:` the button's own focus (a
+/// `@FocusState` bound with `.focused(_:)` on the `Button`) and puts `.focusEffectDisabled()`
+/// on that `Button`. The ring is `Layout.Focus.width` (3 pt) thick and sits
+/// `Layout.Focus.offset` (4 pt) outside the control's edge, so it never merges with a selection
+/// border. It deliberately doesn't read `\.isFocused`: inside a focusable container (History's
+/// list) that can report the container's focus, which would ring every control in it.
 struct FlowFocusRing<S: InsettableShape>: ViewModifier {
     let shape: S
     let isDrawn: Bool
@@ -30,9 +30,11 @@ struct FlowFocusRing<S: InsettableShape>: ViewModifier {
             .contentShape(.focusEffect, shape)
             .overlay {
                 if isDrawn {
+                    // `strokeBorder` draws inside its shape, so grow the shape by the offset
+                    // plus the stroke to leave the full offset clear inside the ring.
                     shape
-                        .strokeBorder(Palette.accent, lineWidth: Layout.Main.focusRing)
-                        .padding(-Layout.Main.focusRingGap)
+                        .strokeBorder(Palette.focus, lineWidth: Layout.Focus.width)
+                        .padding(-(Layout.Focus.offset + Layout.Focus.width))
                         .allowsHitTesting(false)
                 }
             }

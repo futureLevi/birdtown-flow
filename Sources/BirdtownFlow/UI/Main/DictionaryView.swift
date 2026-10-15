@@ -10,6 +10,9 @@ struct DictionaryView: View {
     @State private var query = ""
     @State private var isAdding = false
     @State private var editing: DictionaryEntry?
+    /// "New Entry" opened the sheet, so it takes focus back when the sheet closes.
+    @State private var addOpenedSheet = false
+    @FocusState private var newEntryFocused: Bool
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// Usage counts only change with history or the dictionary (entries and their aliases,
     /// which only change alongside a `revision` bump), not with each keystroke in the search.
@@ -29,17 +32,20 @@ struct DictionaryView: View {
             store.usageCounts(in: $0.records)
         }
         ScrollView {
-            VStack(alignment: .leading, spacing: Spacing.xxl) {
+            VStack(alignment: .leading, spacing: Layout.Library.blockGap) {
                 PageHeader(
                     title: "Dictionary",
-                    subtitle: "Teach Birdtown Flow the names, products and jargon you use."
+                    subtitle: "The names, products, and phrases that make your words yours.",
+                    symbol: "character.book.closed",
+                    tone: .teal
                 ) {
                     Button {
-                        isAdding = true
+                        openNewEntry()
                     } label: {
                         Label("New Entry", systemImage: "plus")
                     }
-                    .buttonStyle(.flowSecondary)
+                    .buttonStyle(.flowPrimary)
+                    .focused($newEntryFocused)
                     .keyboardShortcut("n", modifiers: .command)
                     .help("Add a word or a replacement (⌘N)")
                 }
@@ -51,40 +57,42 @@ struct DictionaryView: View {
                         message: "Add a name, a product or a bit of jargon, or tell it that when it hears "
                             + "“cloud code” you mean “Claude Code”."
                     ) {
-                        Button("New Entry") { isAdding = true }
+                        Button("New Entry") { openNewEntry() }
                             .buttonStyle(.flowSecondary)
                     }
-                    .cardSurface()
+                    .dashedPanel()
                 } else {
-                    SearchField(text: $query, prompt: "Search dictionary")
-                        .frame(maxWidth: Layout.Main.searchFieldWidth)
+                    searchRow(total: store.visible.count, matching: entries.count)
                     if entries.isEmpty {
                         EmptyState(
                             symbol: "magnifyingglass",
                             title: "No entries match “\(query)”",
-                            message: "Search looks at both sides of a replacement."
+                            message: "Search looks at both sides of a replacement. Try another spelling, "
+                                + "or clear the search to see everything."
                         ) {
                             Button("Clear Search") { query = "" }
                                 .buttonStyle(.flowSecondary)
                         }
-                        .cardSurface()
+                        .dashedPanel()
                     } else {
-                        group(
-                            title: "Replacements",
-                            explainer: "When Birdtown Flow hears the phrase on the left, it writes the one on the right.",
-                            entries: entries.filter { $0.kind == .correction },
-                            fired: fired
-                        )
-                        group(
-                            title: "Vocabulary",
-                            explainer: "Words Birdtown Flow listens for, spelled exactly the way you want them.",
-                            entries: entries.filter { $0.kind == .term },
-                            fired: fired
-                        )
+                        let corrections = entries.filter { $0.kind == .correction }
+                        let terms = entries.filter { $0.kind == .term }
+                        // One table needs no heading; two need to say which is which.
+                        let showsHeadings = !corrections.isEmpty && !terms.isEmpty
+                        VStack(alignment: .leading, spacing: Spacing.xxl) {
+                            group(
+                                title: "Replacements", kind: .correction, entries: corrections,
+                                fired: fired, showsHeading: showsHeadings
+                            )
+                            group(
+                                title: "Vocabulary", kind: .term, entries: terms,
+                                fired: fired, showsHeading: showsHeadings
+                            )
+                        }
                     }
                 }
 
-                fileNote
+                footnotes
             }
             .pageLayout()
             // Room for the toast, so the last row can scroll clear of it.
@@ -96,29 +104,63 @@ struct DictionaryView: View {
         .animation(Motion.resolve(Motion.smooth, reduceMotion: reduceMotion), value: store.deletion.pending)
         // As in History, leaving the page doesn't make a delete final: it stays undoable for
         // the rest of its window (the store commits it then, or at quit).
-        .sheet(isPresented: $isAdding) {
-            DictionaryEditorSheet(original: nil) { model.dictionary.add($0) }
+        .sheet(isPresented: $isAdding, onDismiss: restoreFocusToOpener) {
+            DictionaryEditorSheet(original: nil, onSave: { model.dictionary.add($0) })
                 .environment(model)
         }
         .sheet(item: $editing) { entry in
-            DictionaryEditorSheet(original: entry) { model.dictionary.update($0) }
-                .environment(model)
+            DictionaryEditorSheet(
+                original: entry,
+                onSave: { model.dictionary.update($0) },
+                onDelete: { delete(entry) }
+            )
+            .environment(model)
+        }
+    }
+
+    private func openNewEntry() {
+        addOpenedSheet = true
+        isAdding = true
+    }
+
+    /// The system returns focus to the row's own button after Edit; only the page's "New
+    /// Entry" button needs help.
+    private func restoreFocusToOpener() {
+        guard addOpenedSheet else { return }
+        addOpenedSheet = false
+        newEntryFocused = true
+    }
+
+    private func searchRow(total: Int, matching: Int) -> some View {
+        HStack(spacing: Spacing.xl) {
+            SearchField(text: $query, prompt: "Find a word or phrase")
+                .frame(width: Layout.Main.searchFieldWidth)
+            Spacer(minLength: Spacing.l)
+            let noun = total == 1 ? "entry" : "entries"
+            Text(query.isEmpty ? "\(total) \(noun)" : "\(matching) of \(total) \(noun)")
+                .font(Typography.callout)
+                .foregroundStyle(Palette.inkSecondary)
+                .monospacedDigit()
         }
     }
 
     @ViewBuilder
-    private func group(title: String, explainer: String, entries: [DictionaryEntry], fired: [UUID: Int]) -> some View {
+    private func group(
+        title: String,
+        kind: DictionaryEntry.Kind,
+        entries: [DictionaryEntry],
+        fired: [UUID: Int],
+        showsHeading: Bool
+    ) -> some View {
         if !entries.isEmpty {
-            VStack(alignment: .leading, spacing: Spacing.m) {
-                VStack(alignment: .leading, spacing: Spacing.xs) {
+            VStack(alignment: .leading, spacing: Layout.Library.groupGap) {
+                if showsHeading {
                     SectionHeader(title, detail: "\(entries.count)")
-                    Text(explainer)
-                        .font(Typography.callout)
-                        .foregroundStyle(Palette.inkSecondary)
                 }
                 VStack(spacing: 0) {
-                    ForEach(Array(entries.enumerated()), id: \.element.id) { index, entry in
-                        if index > 0 { RowDivider(leadingInset: Spacing.l) }
+                    DictionaryHeaderRow(kind: kind)
+                    ForEach(entries) { entry in
+                        RowDivider()
                         DictionaryRow(
                             entry: entry,
                             firedCount: entry.kind == .correction ? fired[entry.id] ?? 0 : 0,
@@ -137,19 +179,31 @@ struct DictionaryView: View {
         }
     }
 
-    private var fileNote: some View {
-        HStack(spacing: Spacing.s) {
-            Image(systemName: "doc.plaintext")
-                .foregroundStyle(Palette.inkTertiary)
-            Text("Prefer a text editor? The dictionary is a plain file, and edits show up here instantly.")
-                .font(Typography.callout)
-                .foregroundStyle(Palette.inkSecondary)
-            Spacer(minLength: Spacing.s)
-            Button("Open dictionary.txt") { NSWorkspace.shared.open(DictionaryStore.fileURL) }
-                .buttonStyle(.flowGhost)
-                .controlSize(.small)
-                .help(DictionaryStore.fileURL.path)
-                .disabled(!FileManager.default.fileExists(atPath: DictionaryStore.fileURL.path))
+    private var footnotes: some View {
+        VStack(alignment: .leading, spacing: Spacing.m) {
+            HStack(alignment: .firstTextBaseline, spacing: Spacing.m) {
+                Image(systemName: "info.circle")
+                    .foregroundStyle(Palette.inkTertiary)
+                    .accessibilityHidden(true)
+                Text("Replacements are applied automatically after you dictate. Turn an entry off to keep it without using it.")
+                    .font(Typography.callout)
+                    .foregroundStyle(Palette.inkSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            HStack(spacing: Spacing.m) {
+                Image(systemName: "doc.plaintext")
+                    .foregroundStyle(Palette.inkTertiary)
+                    .accessibilityHidden(true)
+                Text("Prefer a text editor? The dictionary is a plain file, and edits show up here instantly.")
+                    .font(Typography.callout)
+                    .foregroundStyle(Palette.inkSecondary)
+                Spacer(minLength: Spacing.s)
+                Button("Open dictionary.txt") { NSWorkspace.shared.open(DictionaryStore.fileURL) }
+                    .buttonStyle(.flowGhost)
+                    .controlSize(.small)
+                    .help(DictionaryStore.fileURL.path)
+                    .disabled(!FileManager.default.fileExists(atPath: DictionaryStore.fileURL.path))
+            }
         }
     }
 
@@ -179,6 +233,41 @@ struct DictionaryView: View {
     }
 }
 
+/// The column names over a table. It shares `DictionaryRow`'s widths, so they line up.
+private struct DictionaryHeaderRow: View {
+    let kind: DictionaryEntry.Kind
+
+    var body: some View {
+        HStack(spacing: Layout.Library.columnGap) {
+            if kind == .correction {
+                Text("When you say")
+                    .frame(minWidth: Layout.Library.textColumnMin, maxWidth: .infinity, alignment: .leading)
+                Color.clear
+                    .frame(width: Layout.Library.arrowColumn, height: 0)
+                Text("Flow writes")
+                    .frame(minWidth: Layout.Library.textColumnMin, maxWidth: .infinity, alignment: .leading)
+            } else {
+                Text("Word or phrase")
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            Text(kind == .correction ? "Used" : "")
+                .frame(width: Layout.Library.usedColumn, alignment: .trailing)
+            Text("On")
+                .frame(width: Layout.Library.switchColumn, alignment: .leading)
+            Color.clear
+                .frame(width: Layout.Library.editColumn, height: 0)
+        }
+        .font(Typography.callout)
+        .foregroundStyle(Palette.inkSecondary)
+        .lineLimit(1)
+        .padding(.horizontal, Layout.Library.tableInset)
+        .padding(.vertical, Layout.Library.headVertical)
+        .background(Palette.canvas)
+        // The rows say all of this to VoiceOver; the heads would only repeat it.
+        .accessibilityHidden(true)
+    }
+}
+
 private struct DictionaryRow: View {
     let entry: DictionaryEntry
     let firedCount: Int
@@ -190,70 +279,45 @@ private struct DictionaryRow: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        let warnings = DictionaryWarning.check(entry)
-        HStack(alignment: .center, spacing: Spacing.m) {
-            VStack(alignment: .leading, spacing: Spacing.xxs) {
-                HStack(spacing: Spacing.s) {
-                    if entry.kind == .correction {
-                        Text(entry.hear)
-                            .font(Typography.body)
-                            .foregroundStyle(Palette.inkSecondary)
-                        Image(systemName: "arrow.right")
-                            .font(Typography.caption)
-                            .foregroundStyle(Palette.inkTertiary)
-                            .accessibilityLabel("becomes")
-                    }
-                    Text(entry.write)
-                        .font(Typography.bodyEmphasis)
-                        .foregroundStyle(Palette.ink)
-                }
-                ForEach(warnings) { warning in
-                    HStack(alignment: .firstTextBaseline, spacing: Spacing.xs) {
-                        Image(systemName: "exclamationmark.triangle.fill")
-                            .foregroundStyle(Palette.warning)
-                        Text(warning.message)
-                            .foregroundStyle(Palette.inkSecondary)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                    .font(Typography.caption)
-                }
+        HStack(spacing: Layout.Library.columnGap) {
+            if entry.kind == .correction {
+                Text(entry.hear)
+                    .font(Typography.bodyLarge)
+                    .foregroundStyle(entry.isEnabled ? Palette.inkSecondary : Palette.inkTertiary)
+                    .frame(minWidth: Layout.Library.textColumnMin, maxWidth: .infinity, alignment: .leading)
+                Image(systemName: "arrow.right")
+                    .font(Typography.bodyLarge)
+                    .foregroundStyle(entry.isEnabled ? Palette.teal : Palette.inkTertiary)
+                    .frame(width: Layout.Library.arrowColumn)
+                    .accessibilityLabel("becomes")
+                written
+                    .frame(minWidth: Layout.Library.textColumnMin, maxWidth: .infinity, alignment: .leading)
+            } else {
+                written
+                    .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .opacity(entry.isEnabled ? 1 : Interaction.dimmedOpacity)
-
-            Spacer(minLength: Spacing.m)
-
-            // One trailing slot: the count sits next to the switch at rest, and the hover
-            // actions take its place, so no empty gap strands the count mid-row.
-            ZStack(alignment: .trailing) {
-                if firedCount > 0 {
-                    Text(firedCount == 1 ? "Used once" : "Used \(firedCount) times")
-                        .font(Typography.caption)
-                        .monospacedDigit()
-                        .foregroundStyle(Palette.inkTertiary)
-                        .help("Dictations in your history this replacement has changed")
-                        .opacity(isHovered ? 0 : 1)
-                }
-                HStack(spacing: Spacing.xxs) {
-                    IconButton(symbol: "pencil", label: "Edit") { onEdit() }
-                    IconButton(symbol: "trash", label: "Delete") { onDelete() }
-                }
-                .opacity(isHovered ? 1 : 0)
-                .allowsHitTesting(isHovered)
-            }
+            Text(usedText)
+                .font(Typography.callout)
+                .monospacedDigit()
+                .foregroundStyle(Palette.inkSecondary)
+                .lineLimit(1)
+                .frame(width: Layout.Library.usedColumn, alignment: .trailing)
+                .help(firedCount > 0 ? "Dictations in your history this replacement has changed" : "")
             // Hidden visually; VoiceOver names the switch after the entry it controls.
             Toggle(
                 entry.kind == .correction ? "\(entry.hear) becomes \(entry.write)" : entry.write,
                 isOn: Binding(get: { entry.isEnabled }, set: { onToggle($0) })
             )
-                .toggleStyle(.switch)
-                .controlSize(.mini)
-                .labelsHidden()
-                .help(entry.isEnabled ? "Turn off without deleting" : "Turn back on")
+            .toggleStyle(.switch)
+            .labelsHidden()
+            .frame(width: Layout.Library.switchColumn, alignment: .leading)
+            .help(entry.isEnabled ? "Turn off without deleting" : "Turn back on")
+            IconButton(symbol: "pencil", label: "Edit entry") { onEdit() }
         }
-        .padding(.horizontal, Spacing.l)
-        .padding(.vertical, Spacing.s)
-        .frame(minHeight: Layout.rowMinHeight)
-        .background(isHovered ? Palette.surfaceHover : Palette.surface)
+        .padding(.horizontal, Layout.Library.tableInset)
+        .padding(.vertical, Layout.Library.rowVertical)
+        .frame(minHeight: Layout.Library.rowMinHeight)
+        .background(isHovered ? Palette.editor : Palette.surface)
         .contentShape(Rectangle())
         .onHover { isHovered = $0 }
         .onTapGesture(count: 2) { onEdit() }
@@ -264,13 +328,35 @@ private struct DictionaryRow: View {
             Divider()
             Button("Delete", systemImage: "trash", role: .destructive) { onDelete() }
         }
-        // The hover buttons are invisible (and so missing from the accessibility tree) most of
-        // the time; offer Edit and Delete as VoiceOver actions on the row.
+        // Delete lives in the context menu and the edit sheet; offer it to VoiceOver here too.
         .accessibilityElement(children: .contain)
         .accessibilityActions {
             Button("Edit") { onEdit() }
             Button("Delete", role: .destructive) { onDelete() }
         }
+    }
+
+    /// What Birdtown Flow writes, with any false-positive warnings under it.
+    private var written: some View {
+        VStack(alignment: .leading, spacing: Spacing.xxs) {
+            Text(entry.write)
+                .font(Typography.bodyLargeEmphasis)
+                .foregroundStyle(entry.isEnabled ? Palette.ink : Palette.inkTertiary)
+            ForEach(DictionaryWarning.check(entry)) { warning in
+                HStack(alignment: .firstTextBaseline, spacing: Spacing.xs) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .foregroundStyle(Palette.warning)
+                    Text(warning.message)
+                        .foregroundStyle(Palette.inkSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .font(Typography.callout)
+            }
+        }
+    }
+
+    private var usedText: String {
+        firedCount == 0 ? "" : (firedCount == 1 ? "1 use" : "\(firedCount) uses")
     }
 }
 
@@ -280,8 +366,12 @@ struct DictionaryEditorSheet: View {
     /// The dictation this entry came from, offered as context and quick-fill suggestions.
     let context: String?
     let onSave: (DictionaryEntry) -> Void
+    /// Offered when editing: removes the entry, with Undo on the page behind the sheet.
+    let onDelete: (() -> Void)?
 
     @State private var kind: DictionaryEntry.Kind
+    /// Which field the sheet opens on: the replacement's "When it hears", or the word.
+    private let initialKind: DictionaryEntry.Kind
     @State private var write: String
     @State private var hear: String
     /// Fixed for the sheet's lifetime, so the duplicate check can exclude this entry.
@@ -293,11 +383,14 @@ struct DictionaryEditorSheet: View {
         original: DictionaryEntry?,
         kind: DictionaryEntry.Kind = .term,
         context: String? = nil,
-        onSave: @escaping (DictionaryEntry) -> Void
+        onSave: @escaping (DictionaryEntry) -> Void,
+        onDelete: (() -> Void)? = nil
     ) {
         self.original = original
         self.context = context
         self.onSave = onSave
+        self.onDelete = onDelete
+        initialKind = original?.kind ?? kind
         _kind = State(initialValue: original?.kind ?? kind)
         _write = State(initialValue: original?.write ?? "")
         _hear = State(initialValue: original?.hear ?? "")
@@ -354,9 +447,10 @@ struct DictionaryEditorSheet: View {
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.l) {
             Text(original == nil ? "New Entry" : "Edit Entry")
-                .font(Typography.title)
+                .font(Typography.sectionTitle)
                 .tracking(Tracking.title)
                 .foregroundStyle(Palette.ink)
+                .accessibilityAddTraits(.isHeader)
 
             Picker("Kind", selection: $kind) {
                 Text("Vocabulary").tag(DictionaryEntry.Kind.term)
@@ -376,12 +470,13 @@ struct DictionaryEditorSheet: View {
             }
 
             if kind == .correction {
-                LabeledInput(label: "When it hears", text: $hear, prompt: "cloud code")
+                LabeledInput(label: "When it hears", text: $hear, prompt: "cloud code", autofocus: true)
             }
             LabeledInput(
                 label: kind == .term ? "Word or phrase" : "Write it as",
                 text: $write,
-                prompt: kind == .term ? "Anthropic" : "Claude Code"
+                prompt: kind == .term ? "Anthropic" : "Claude Code",
+                autofocus: initialKind == .term
             )
 
             if let problem {
@@ -407,6 +502,13 @@ struct DictionaryEditorSheet: View {
             }
 
             HStack(spacing: Spacing.s) {
+                if original != nil, let onDelete {
+                    Button("Delete", role: .destructive) {
+                        onDelete()
+                        dismiss()
+                    }
+                    .buttonStyle(.flowSecondary)
+                }
                 Spacer()
                 Button("Cancel") { dismiss() }
                     .buttonStyle(.flowSecondary)
@@ -423,7 +525,7 @@ struct DictionaryEditorSheet: View {
         }
         .padding(Spacing.xxl)
         .frame(width: Layout.Main.sheetWidth)
-        .background(Palette.canvas)
+        .background(Palette.surface)
     }
 
     private func contextBlock(_ context: String) -> some View {

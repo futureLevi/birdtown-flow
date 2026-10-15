@@ -134,7 +134,7 @@ struct GeneralSettingsPane: View {
                                 guard preview == nil else { return }
                                 LaunchAtLogin.openSystemSettings()
                             }
-                            .buttonStyle(SetupKit.SecondaryButtonStyle())
+                            .settingsButton()
                         }
                         SettingsSwitch(label: "Open at login", isOn: launchBinding)
                     }
@@ -145,7 +145,7 @@ struct GeneralSettingsPane: View {
                         guard preview == nil else { return }
                         OnboardingWindowController.shared.show(model: model)
                     }
-                    .buttonStyle(SetupKit.SecondaryButtonStyle())
+                    .settingsButton()
                 }
             }
         }
@@ -235,7 +235,7 @@ struct GeneralSettingsPane: View {
 
     @ViewBuilder private func notice(for role: ShortcutRole) -> some View {
         if let verdict = shortcutNotices[role], verdict != .accepted {
-            ShortcutNotice(verdict: verdict)
+            SettingsShortcutNotice(verdict: verdict)
                 .padding(.horizontal, Layout.SettingsRail.rowInset)
                 .padding(.bottom, Spacing.m)
         }
@@ -472,14 +472,15 @@ private struct EngineRow: View {
             VStack(alignment: .leading, spacing: Spacing.xxs) {
                 HStack(spacing: Spacing.s) {
                     Text(choice.displayName)
-                        .font(Typography.bodyEmphasis)
+                        .font(Typography.settingsRowTitle)
                         .foregroundStyle(Palette.ink)
                     if choice == .parakeetUltra {
                         Badge(text: "Recommended", tone: .neutral)
                     }
                 }
                 Text(detail)
-                    .font(Typography.callout)
+                    .font(Typography.settingsRowDetail)
+                    .lineSpacing(Layout.SettingsRail.detailLineSpacing)
                     .foregroundStyle(Palette.inkSecondary)
                     .fixedSize(horizontal: false, vertical: true)
                 if selected, let progress = SetupKit.progress(of: state) {
@@ -519,7 +520,7 @@ private struct EngineRow: View {
                 ProgressView().controlSize(.small)
             } else {
                 Button(SetupKit.isFailed(state) ? "Try Again" : "Download", action: onUse)
-                    .buttonStyle(SetupKit.SecondaryButtonStyle())
+                    .settingsButton()
             }
         } else if downloaded || !choice.isParakeet {
             HStack(spacing: Spacing.s) {
@@ -527,7 +528,7 @@ private struct EngineRow: View {
                     IconButton(symbol: "trash", label: "Delete the downloaded \(choice.displayName) model", action: onDelete)
                 }
                 Button("Use", action: onUse)
-                    .buttonStyle(SetupKit.SecondaryButtonStyle())
+                    .settingsButton()
                     .help("Switch to \(choice.displayName)")
             }
         } else {
@@ -537,7 +538,7 @@ private struct EngineRow: View {
                     IconButton(symbol: "trash", label: "Delete the partial \(choice.displayName) download", action: onDelete)
                 }
                 Button("Download", action: onUse)
-                    .buttonStyle(SetupKit.SecondaryButtonStyle())
+                    .settingsButton()
                     .help("Switch to \(choice.displayName) and download it. Dictation keeps working meanwhile.")
             }
         }
@@ -610,9 +611,7 @@ struct TextSettingsPane: View {
             }
 
             VStack(alignment: .leading, spacing: Spacing.s) {
-                Text("AI polish")
-                    .eyebrowStyle()
-                    .padding(.leading, Spacing.xs)
+                SettingsGroupTitle(text: "AI polish")
                 LazyVGrid(
                     columns: [GridItem(.flexible(), spacing: Spacing.m), GridItem(.flexible(), spacing: Spacing.m)],
                     spacing: Spacing.m
@@ -627,6 +626,7 @@ struct TextSettingsPane: View {
                     }
                 }
             }
+            .padding(.top, Layout.SettingsRail.groupTop - Spacing.s)
 
             if settings.polishProvider != .off {
                 providerSettings(settings)
@@ -664,7 +664,7 @@ struct TextSettingsPane: View {
                     // Closes Settings and lands on the Lab in the window behind it.
                     model.show(.lab)
                 }
-                .buttonStyle(SetupKit.SecondaryButtonStyle())
+                .settingsButton()
             }
         }
     }
@@ -703,7 +703,7 @@ struct TextSettingsPane: View {
             preview == nil ? PolishService(settings: source).availability() : (available: true, reason: nil)
         VStack(alignment: .leading, spacing: Spacing.m) {
             if !availability.available, let reason = availability.reason {
-                SetupKit.Callout(
+                SettingsNotice(
                     symbol: "exclamationmark.triangle.fill",
                     tint: Palette.warning,
                     fill: Palette.warningSoft,
@@ -741,6 +741,7 @@ struct TextSettingsPane: View {
                     SettingsRow(title: "Model") {
                         TextField("Model", text: $settings.anthropicModel)
                             .textFieldStyle(.roundedBorder)
+                            .font(Typography.callout)
                             .frame(width: Layout.sidebarWidth)
                     }
                     SettingsDivider()
@@ -749,12 +750,14 @@ struct TextSettingsPane: View {
                     SettingsRow(title: "Base URL", detail: "OpenAI, Groq, Ollama, LM Studio…") {
                         TextField("Base URL", text: $settings.openAIBaseURL)
                             .textFieldStyle(.roundedBorder)
+                            .font(Typography.callout)
                             .frame(width: Layout.sidebarWidth)
                     }
                     SettingsDivider()
                     SettingsRow(title: "Model") {
                         TextField("Model", text: $settings.openAIModel)
                             .textFieldStyle(.roundedBorder)
+                            .font(Typography.callout)
                             .frame(width: Layout.sidebarWidth)
                     }
                     SettingsDivider()
@@ -779,7 +782,7 @@ struct TextSettingsPane: View {
                             Text("Test")
                         }
                     }
-                    .buttonStyle(SetupKit.SecondaryButtonStyle())
+                    .settingsButton()
                     .disabled(testing)
                 }
                 if let testResult {
@@ -819,16 +822,17 @@ struct TextSettingsPane: View {
                     Keychain.set(nil, for: account(for: provider))
                     refreshKey()
                 }
-                .buttonStyle(SetupKit.SecondaryButtonStyle())
+                .settingsButton()
             }
         } else {
             HStack(spacing: Spacing.s) {
                 SecureField("API key", text: $keyDraft, prompt: Text("Paste your key"))
                     .textFieldStyle(.roundedBorder)
+                    .font(Typography.callout)
                     .frame(width: Layout.sidebarWidth - Spacing.huge)
                     .onSubmit { saveKey(provider) }
                 Button("Save") { saveKey(provider) }
-                    .buttonStyle(SetupKit.SecondaryButtonStyle())
+                    .settingsButton()
                     .disabled(keyDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             }
         }
@@ -851,7 +855,7 @@ struct TextSettingsPane: View {
                     .background(RoundedRectangle(cornerRadius: Radius.s, style: .continuous).fill(Palette.sunken))
             }
         case .failure(let error):
-            SetupKit.Callout(
+            SettingsNotice(
                 symbol: "xmark.octagon.fill",
                 tint: Palette.danger,
                 fill: Palette.dangerSoft,
@@ -1021,6 +1025,7 @@ struct PrivacySettingsPane: View {
             .padding(Spacing.l)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(RoundedRectangle(cornerRadius: Radius.m, style: .continuous).fill(Palette.sunken))
+            .padding(.top, Layout.SettingsRail.firstBlockTop - Layout.SettingsRail.paneTop)
 
             SettingsGroup(title: "History", footnote: "Older dictations are removed automatically.") {
                 SettingsRow(title: "Keep history", detail: "Text of every dictation, searchable in History.") {
@@ -1056,12 +1061,12 @@ struct PrivacySettingsPane: View {
                         guard preview == nil else { return }
                         _ = NSWorkspace.shared.open(AppPaths.support)
                     }
-                    .buttonStyle(SetupKit.SecondaryButtonStyle())
+                    .settingsButton()
                 }
                 SettingsDivider()
                 SettingsRow(title: "Clear history", detail: "Removes every dictation and its audio from this Mac.") {
                     Button("Clear History…", role: .destructive) { confirmClear = true }
-                        .buttonStyle(.flowSecondary)
+                        .settingsButton()
                         .disabled(model.history.records.isEmpty)
                 }
             }
@@ -1111,7 +1116,8 @@ struct AboutSettingsPane: View {
                     .textSelection(.enabled)
             }
             .frame(maxWidth: .infinity)
-            .padding(.vertical, Spacing.s)
+            .padding(.top, Layout.SettingsRail.firstBlockTop - Layout.SettingsRail.paneTop)
+            .padding(.bottom, Spacing.s)
 
             FeedbackSettingsGroup()
 

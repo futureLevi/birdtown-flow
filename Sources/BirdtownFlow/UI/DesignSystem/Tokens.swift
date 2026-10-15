@@ -1,88 +1,117 @@
 import AppKit
 import SwiftUI
 
-// MARK: - Birdtown Flow design language ("Mono v2")
+// MARK: - Birdtown Flow design language (the "Handoff" direction)
 //
-// Calm and nearly colourless, with the logo's navy as a whisper in every grey: near-black navy
-// ink on white, a soft grey sidebar, and a night navy-charcoal in dark mode. Surfaces are flat:
-// soft grey fills and hairlines instead of shadows and boxes. The colour lives in a few small,
-// deliberate places, all taken from the logo's disc: the sidebar's icons walk its colour wheel
-// (`Palette.Wheel`), each Home stat wears its own badge and glow (`Palette.Stat`), and Signal
-// blue, the orb's own blue, is the accent for selection, focus, links and switches. Primary actions are navy pills
-// (porcelain in dark mode), like the logo's tile and ring. The spectrum itself, the logo's
-// disc, means "your voice is live": the recording orb, the thinking ring, download progress and
-// the onboarding hero. Its one resting use is Home's Voiceprint hero, a voice drawn as artwork
-// on the icon's navy. SF Pro throughout: semibold for titles and big numbers, regular for
-// everything you read, including your own words. Motion is springy but brief, and collapses to
-// fades under Reduce Motion.
+// Calm, large and legible. Light is the default; dark mode is a set of paired semantic tokens,
+// not an inversion. Navy anchors the type and the primary actions (navy capsules, porcelain in
+// dark mode); Signal blue (indigo-leaning, `Palette.accent`) marks interaction and selection;
+// two small accents carry meaning: violet for tuning, Lab and polish, teal for vocabulary and
+// the Dictionary. There is no full-spectrum decoration in the window. The logo's spectrum
+// (`Spectrum`, `SpectrumOrb`) still means "your voice is live" on the recording pill, and the
+// colour wheel stays there. Type is big on purpose: 19 pt for words you read (dictation,
+// transcripts), 16-17 pt for interface text, nothing under 15 pt, 34 pt page titles. Surfaces
+// are quiet: a hairline `line` edge, a barely-there panel shadow, 14 pt corners (8-9 pt on
+// controls). Keyboard focus is a 3 pt outline 4 pt outside the control (`Layout.Focus`).
+// Selection never relies on hue alone: a check, a radio mark, a marker bar or a heavier weight
+// comes with the colour. Motion is springy but brief, and collapses to fades under Reduce Motion.
 //
 // Rules:
 //  - Views never contain literal colours, sizes, radii or durations. Use these tokens; if a
 //    token is missing, add it here.
-//  - Spectrum only for live states (`Spectrum`, `SpectrumOrb`) and the Home hero
-//    (`VoiceprintArt`). Signal blue only for selection, focus, links and toggles. Wheel
-//    colours only on icons (sidebar sections, Settings sections, Home stat badges), never on
-//    text or backgrounds. At most one primary (navy) action per view.
+//  - The spectrum is for live states only (`Spectrum`, `SpectrumOrb`, the pill) and the
+//    Home hero artwork. Signal blue only for selection, focus, links and toggles. Violet and
+//    teal only as small accents (icon tiles, badges, section tints), never for body text.
+//    At most one primary (navy) action per view.
 //  - Every animation goes through `Motion` so Reduce Motion is honoured everywhere.
 
 enum Palette {
-    /// Window background: white, a night navy-charcoal in dark mode.
-    static let canvas = Color.adaptive(light: 0xFFFFFF, dark: 0x1B1D24)
-    /// The main window's sidebar and the Settings card's section rail: a step off the canvas.
-    static let sidebar = Color.adaptive(light: 0xF7F8FA, dark: 0x14161B)
-    /// Raised surfaces: cards, popovers. White with a hairline in light mode; a breath lighter
-    /// than the canvas in dark.
-    static let surface = Color.adaptive(light: 0xFFFFFF, dark: 0x1F2128)
-    /// Hovered surface.
-    static let surfaceHover = Color.adaptive(light: 0xF3F5F8, dark: 0x262932)
-    /// Inset wells: text inputs, code, empty states.
-    static let sunken = Color.adaptive(light: 0xF3F5F8, dark: 0x14161B)
-    /// The soft grey tile: Home's stat cards, keycaps, badges, chips.
-    static let soft = Color.adaptive(light: 0xF3F5F8, dark: 0x262932)
-    /// The chosen row in the sidebar and the Settings rail: grey, never coloured.
-    static let selection = Color.adaptive(light: 0xEAEDF3, dark: 0x262932)
-    /// A sidebar or rail row under the pointer: half a step toward `selection`.
-    static let sidebarHover = Color.adaptive(light: 0xF0F2F6, dark: 0x1D2026)
-    /// 1px separators and card borders, tinted navy.
-    static let hairline = Color.adaptive(light: 0x0E1426, lightAlpha: 0.08, dark: 0xE8EAF0, darkAlpha: 0.08)
-    /// Stronger border for focused inputs and selected cards.
-    static let hairlineStrong = Color.adaptive(light: 0x0E1426, lightAlpha: 0.16, dark: 0xE8EAF0, darkAlpha: 0.18)
+    /// Window background: a cool off-white, a deep navy in dark mode.
+    static let canvas = Color.adaptive(light: 0xF6F7FB, dark: 0x0B1026)
+    /// The main window's sidebar and the Settings card's section rail (flat). The main sidebar
+    /// itself paints `sidebarGradient`.
+    static let sidebar = Color.adaptive(light: 0xEDF1F8, dark: 0x10182F)
+    /// Raised surfaces: cards, panels, popovers.
+    static let surface = Color.adaptive(light: 0xFFFFFF, dark: 0x141A33)
+    /// Hovered surface: a breath off `surface`, still visible on the canvas.
+    static let surfaceHover = Color.adaptive(light: 0xEEF2FA, dark: 0x1B2342)
+    /// Inset wells: text editors, prompt fields, code, empty states.
+    static let sunken = Color.adaptive(light: 0xF8FAFF, dark: 0x0E1530)
+    /// Editors and table headers: the page's quietest tint (same as `sunken`).
+    static let editor = Color.adaptive(light: 0xF8FAFF, dark: 0x0E1530)
+    /// The soft tile: keycaps, badges, chips, segmented tracks. Darker than the card in light
+    /// mode, lighter in dark.
+    static let soft = Color.adaptive(light: 0xEDF1F8, dark: 0x1C2444)
+    /// The chosen row in the sidebar and the Settings rail: Signal blue's tint (with a marker
+    /// bar and accent text, so never hue alone).
+    static let selection = Color.adaptive(light: 0xEAF0FF, dark: 0x222E56)
+    /// A sidebar or rail row under the pointer.
+    static let sidebarHover = Color.adaptive(light: 0xFFFFFF, dark: 0x141A33)
+    /// The toolbar's own fill: halfway between surface and canvas.
+    static let toolbar = Color.adaptive(light: 0xFCFCFE, dark: 0x11162E)
+    /// The sidebar's quiet diagonal wash, top to bottom.
+    static let sidebarGradient: [Gradient.Stop] = [
+        .init(color: .adaptive(light: 0xF4F7FD, dark: 0x17213C), location: 0),
+        .init(color: .adaptive(light: 0xEDF2FA, dark: 0x10182F), location: 0.65),
+        .init(color: .adaptive(light: 0xEAF1F6, dark: 0x10182F), location: 1),
+    ]
+    /// The wash runs slightly across the column, not straight down.
+    static let sidebarGradientStart = UnitPoint(x: 0.3, y: 0)
+    static let sidebarGradientEnd = UnitPoint(x: 0.7, y: 1)
+    /// 1 px separators and card borders.
+    static let hairline = Color.adaptive(light: 0xDCE2EF, dark: 0x303B5B)
+    /// Control borders (inputs, secondary buttons, keycaps) and unselected radio marks. Clears
+    /// 3:1 against its surface.
+    static let hairlineStrong = Color.adaptive(light: 0x838CA5, dark: 0x7E89AB)
+    /// The same value under its handoff name, for control outlines.
+    static let control = hairlineStrong
 
-    /// Primary text: near-black with the logo's navy in it.
-    static let ink = Color.adaptive(light: 0x0E1426, dark: 0xE8EAF0)
-    /// The few words that lead a screen: the greeting, the stat numbers. Ink in light mode,
-    /// pure white in dark.
-    static let heading = Color.adaptive(light: 0x0E1426, dark: 0xFFFFFF)
-    /// Secondary text: metadata, descriptions.
-    static let inkSecondary = Color.adaptive(light: 0x596072, dark: 0xA3A8B5)
-    /// Tertiary text: placeholders, disabled, timestamps. Still clears 4.5:1 on canvas, surface
-    /// and hovered surface in both themes, because people read what it carries.
-    static let inkTertiary = Color.adaptive(light: 0x666C7E, dark: 0x9197A6)
+    /// Primary text: deep navy.
+    static let ink = Color.adaptive(light: 0x0E183C, dark: 0xEEF1FA)
+    /// The few words that lead a screen: greeting, big numbers. Same as `ink`.
+    static let heading = Color.adaptive(light: 0x0E183C, dark: 0xEEF1FA)
+    /// Secondary text: descriptions, labels, metadata.
+    static let inkSecondary = Color.adaptive(light: 0x4A5478, dark: 0xB0B8D3)
+    /// Tertiary text: placeholders, disabled, timestamps. Still clears 4.5:1 on canvas and
+    /// surface in both themes, because people read what it carries.
+    static let inkTertiary = Color.adaptive(light: 0x626C89, dark: 0xA0AAC8)
     /// Quiet icons (chevrons, the sidebar's hide button). Icons only, never text.
-    static let icon = Color.adaptive(light: 0x8A90A0, dark: 0x8C92A1)
+    static let icon = Color.adaptive(light: 0x838CA5, dark: 0x7E89AB)
 
-    /// The primary action: a navy pill in light mode, porcelain in dark (the logo's tile and ring).
-    static let primaryFill = Color.adaptive(light: 0x0E183C, dark: 0xE8EAF0)
-    static let primaryFillHover = Color.adaptive(light: 0x1D2B5E, dark: 0xFFFFFF)
-    static let primaryFillPressed = Color.adaptive(light: 0x08102A, dark: 0xD2D5DE)
+    /// The primary action: a navy capsule in light mode, porcelain in dark.
+    static let primaryFill = Color.adaptive(light: 0x0E183C, dark: 0xEEF1FA)
+    static let primaryFillHover = Color.adaptive(light: 0x233567, dark: 0xFFFFFF)
+    static let primaryFillPressed = Color.adaptive(light: 0x08102A, dark: 0xD3D9EC)
     /// Text and icons on `primaryFill`.
-    static let onPrimary = Color.adaptive(light: 0xFFFFFF, dark: 0x0E1426)
+    static let onPrimary = Color.adaptive(light: 0xFFFFFF, dark: 0x0E183C)
 
-    /// Signal blue, the orb's own blue: selection rings, focus rings, toggles, checkmarks.
-    static let accent = Color.adaptive(light: 0x3082F8, dark: 0x4C93FA)
-    /// Signal blue at low strength: selected backgrounds, badges.
-    static let accentSoft = Color.adaptive(light: 0x3082F8, lightAlpha: 0.10, dark: 0x4C93FA, darkAlpha: 0.18)
-    /// Signal blue as text (links, "Add a key…"): deep enough to read at 4.5:1.
-    static let accentInk = Color.adaptive(light: 0x2462BA, dark: 0x6AA6FB)
+    /// Signal blue: selection, focus, toggles, checkmarks, links.
+    static let accent = Color.adaptive(light: 0x4256F0, dark: 0x93A0FF)
+    static let accentHover = Color.adaptive(light: 0x3546CD, dark: 0xB2BBFF)
+    /// Signal blue's tint: selected backgrounds, soft buttons, badges.
+    static let accentSoft = Color.adaptive(light: 0xEAF0FF, dark: 0x222E56)
+    /// A selected control's hairline edge: the accent at low strength.
+    static let accentEdge = Color.adaptive(light: 0x4256F0, lightAlpha: 0.15, dark: 0x93A0FF, darkAlpha: 0.22)
+    /// Signal blue as text (links, "Add a key..."): already 4.5:1 on canvas and surface.
+    static let accentInk = Color.adaptive(light: 0x4256F0, dark: 0x93A0FF)
     /// Text drawn on a blue fill.
-    static let onAccent = Color.white
+    static let onAccent = Color.adaptive(light: 0xFFFFFF, dark: 0x0E183C)
+    /// The keyboard focus ring.
+    static let focus = Color.adaptive(light: 0x4256F0, dark: 0xB2BBFF)
 
-    static let success = Color.adaptive(light: 0x1E8F63, dark: 0x4FD39A)
-    static let successSoft = Color.adaptive(light: 0x1E8F63, lightAlpha: 0.10, dark: 0x4FD39A, darkAlpha: 0.16)
-    static let warning = Color.adaptive(light: 0xB7791F, dark: 0xF0B04A)
-    static let warningSoft = Color.adaptive(light: 0xB7791F, lightAlpha: 0.10, dark: 0xF0B04A, darkAlpha: 0.15)
-    static let danger = Color.adaptive(light: 0xD03A4E, dark: 0xFF6B7A)
-    static let dangerSoft = Color.adaptive(light: 0xD03A4E, lightAlpha: 0.09, dark: 0xFF6B7A, darkAlpha: 0.15)
+    /// Violet, a small accent for tuning: the Lab, polish, "Polished" badges.
+    static let violet = Color.adaptive(light: 0x6945B5, dark: 0xB9A6F4)
+    static let violetSoft = Color.adaptive(light: 0xF0EBFB, dark: 0x302647)
+    /// Teal, a small accent for vocabulary: the Dictionary and what it knows.
+    static let teal = Color.adaptive(light: 0x176B70, dark: 0x85D1CB)
+    static let tealSoft = Color.adaptive(light: 0xE5F3F1, dark: 0x142F38)
+
+    static let success = Color.adaptive(light: 0x216D50, dark: 0x94D6B5)
+    static let successSoft = Color.adaptive(light: 0xE9F4EE, dark: 0x22382E)
+    static let warning = Color.adaptive(light: 0x9B4C21, dark: 0xEFB489)
+    static let warningSoft = Color.adaptive(light: 0xFFF0E5, dark: 0x3F3025)
+    static let danger = Color.adaptive(light: 0xAE344C, dark: 0xFFA3B8)
+    static let dangerSoft = Color.adaptive(light: 0xFCECF0, dark: 0x422931)
     /// Where a History search matched: amber like the system's find highlight, strong enough
     /// to read on a selected row's Signal blue wash.
     static let searchMatch = Color.adaptive(light: 0xB7791F, lightAlpha: 0.22, dark: 0xF0B04A, darkAlpha: 0.28)
@@ -154,26 +183,36 @@ extension Motion {
 }
 
 enum Typography {
-    /// Page titles: "History", "Good evening, Levi".
-    static let display = Font.system(size: 28, weight: .bold)
-    /// Section titles inside a page, sheet titles.
-    static let title = Font.system(size: 19, weight: .semibold)
-    /// Big numbers in stat tiles.
-    static let numeral = Font.system(size: 24, weight: .semibold).monospacedDigit()
-    /// Card and row headings.
-    static let headline = Font.system(size: 13, weight: .semibold)
-    static let body = Font.system(size: 13)
-    static let bodyEmphasis = Font.system(size: 13, weight: .medium)
-    /// Dictated text: the user's own words, set a step larger than interface text.
-    static let transcript = Font.system(size: 15)
-    static let transcriptLarge = Font.system(size: 17)
-    static let callout = Font.system(size: 12)
-    static let caption = Font.system(size: 11, weight: .medium)
-    /// Small uppercase labels above sections. Use with `.textCase(.uppercase)` and `Tracking.eyebrow`.
-    static let eyebrow = Font.system(size: 10.5, weight: .semibold)
+    /// Page titles: "History", "Good evening, Levi". 34 pt.
+    static let display = Font.system(size: 34, weight: .semibold)
+    /// Section titles inside a page ("Recent dictation"), sheet titles. 21 pt.
+    static let title = Font.system(size: 21, weight: .semibold)
+    /// A heading a step above a section: panels, dialogs, Settings panes. 23 pt.
+    static let sectionTitle = Font.system(size: 23, weight: .semibold)
+    /// Big numbers in stat summaries.
+    static let numeral = Font.system(size: 30, weight: .semibold).monospacedDigit()
+    /// Card and row headings. 16 pt.
+    static let headline = Font.system(size: 16, weight: .semibold)
+    /// Interface text: labels, buttons, fields. 16 pt.
+    static let body = Font.system(size: 16)
+    static let bodyEmphasis = Font.system(size: 16, weight: .medium)
+    /// Interface text that leads a row: Dictionary terms, Settings row titles, page
+    /// descriptions. 17 pt.
+    static let bodyLarge = Font.system(size: 17)
+    static let bodyLargeEmphasis = Font.system(size: 17, weight: .medium)
+    /// Dictated text: the user's own words, 19 pt on a 1.6 line height (`transcriptLine`).
+    static let transcript = Font.system(size: 19)
+    /// The same words opened up in a detail view. 21 pt.
+    static let transcriptLarge = Font.system(size: 21)
+    /// Metadata: times, durations, helper text. Never below 15 pt.
+    static let callout = Font.system(size: 15)
+    static let caption = Font.system(size: 15, weight: .medium)
+    /// A small label above a group of rows. Sentence case at 15 pt; the old tracked
+    /// uppercase would shout at this size.
+    static let eyebrow = Font.system(size: 15, weight: .semibold)
     /// Keycaps and shortcuts.
-    static let keycap = Font.system(size: 12, weight: .medium)
-    static let mono = Font.system(size: 12, design: .monospaced)
+    static let keycap = Font.system(size: 15, weight: .medium)
+    static let mono = Font.system(size: 15, design: .monospaced)
     /// HUD labels.
     static let hud = Font.system(size: 12, weight: .medium)
     static let hudNumeral = Font.system(size: 12, weight: .medium).monospacedDigit()
@@ -181,12 +220,37 @@ enum Typography {
     static func monogram(size: CGFloat) -> Font {
         .system(size: size, weight: .semibold)
     }
+
+    /// The old compact scale, for the surfaces the redesign leaves alone: onboarding, the
+    /// menu bar window and the documentation sheets in the snapshots. Same names as above.
+    enum Compact {
+        static let display = Font.system(size: 28, weight: .bold)
+        static let title = Font.system(size: 19, weight: .semibold)
+        static let headline = Font.system(size: 13, weight: .semibold)
+        static let body = Font.system(size: 13)
+        static let bodyEmphasis = Font.system(size: 13, weight: .medium)
+        static let transcript = Font.system(size: 15)
+        static let transcriptLarge = Font.system(size: 17)
+        static let callout = Font.system(size: 12)
+        static let caption = Font.system(size: 11, weight: .medium)
+        static let eyebrow = Font.system(size: 10.5, weight: .semibold)
+        static let keycap = Font.system(size: 12, weight: .medium)
+        static let mono = Font.system(size: 12, design: .monospaced)
+    }
 }
 
 enum Tracking {
     static let eyebrow: CGFloat = 0.8
-    static let display: CGFloat = -0.5
-    static let title: CGFloat = -0.25
+    /// Page titles (34 pt).
+    static let display: CGFloat = -1.1
+    /// Section titles (21-23 pt).
+    static let title: CGFloat = -0.55
+
+    /// Tracking for `Typography.Compact`.
+    enum Compact {
+        static let display: CGFloat = -0.5
+        static let title: CGFloat = -0.25
+    }
 }
 
 enum Spacing {
@@ -199,28 +263,35 @@ enum Spacing {
     static let xxl: CGFloat = 24
     static let xxxl: CGFloat = 32
     static let huge: CGFloat = 48
-    /// Page padding inside the detail column.
-    static let page: CGFloat = 32
-    /// Line spacing for transcript text.
-    static let transcriptLine: CGFloat = 4
+    /// Page padding inside the detail column: the content inset.
+    static let page: CGFloat = 40
+    /// Line spacing for transcript text: 19 pt on a 1.6 line height is 30 pt a line, and
+    /// the system's own line is about 23, so this adds the rest.
+    static let transcriptLine: CGFloat = 7
 }
 
 enum Radius {
     static let xs: CGFloat = 4
     static let s: CGFloat = 6
+    /// Controls: buttons, inputs, icon buttons.
+    static let control: CGFloat = 8
+    /// Fields and nav rows, a hair rounder than buttons.
+    static let field: CGFloat = 9
     static let m: CGFloat = 10
+    /// Cards, panels, tables, list frames.
     static let l: CGFloat = 14
+    /// Dialogs, the window's own corners.
     static let xl: CGFloat = 20
 }
 
 enum Layout {
     static let sidebarWidth: CGFloat = 220
-    /// Reading measure for the detail column.
-    static let contentMaxWidth: CGFloat = 760
+    /// The detail column's widest content (a page's inner width at the 40 pt inset).
+    static let contentMaxWidth: CGFloat = 1120
     static let windowMinWidth: CGFloat = 860
     static let windowMinHeight: CGFloat = 560
-    static let windowIdealWidth: CGFloat = 1040
-    static let windowIdealHeight: CGFloat = 700
+    static let windowIdealWidth: CGFloat = 1180
+    static let windowIdealHeight: CGFloat = 760
     static let rowMinHeight: CGFloat = 44
     static let iconSmall: CGFloat = 16
     static let iconMedium: CGFloat = 20
@@ -248,10 +319,37 @@ enum Layout {
     }
 }
 
+extension Layout {
+    /// Keyboard focus: a 3 pt outline, 4 pt outside the control's edge (`flowFocusRing`).
+    enum Focus {
+        static let width: CGFloat = 3
+        static let offset: CGFloat = 4
+    }
+
+    /// The window toolbar: page title on the left, Search history and status on the right.
+    /// 66 pt tall, level with the traffic lights' row in the sidebar.
+    enum Toolbar {
+        static let height: CGFloat = 66
+        /// Side padding, the same as a page's content inset.
+        static let inset: CGFloat = 40
+        /// With the sidebar hidden the title steps past the traffic lights and Show sidebar.
+        static let hiddenLeading: CGFloat = 124
+        /// Between the toolbar's right-hand items.
+        static let gap: CGFloat = 24
+        /// Between an item's icon or dot and its label.
+        static let itemSpacing: CGFloat = 8
+        static let searchIcon: CGFloat = 15
+    }
+}
+
 enum Elevation {
     struct Shadow { let color: Color; let radius: CGFloat; let y: CGFloat }
-    /// Cards at rest are flat (a hairline carries the edge), so this is no shadow at all.
-    static let card = Shadow(color: .clear, radius: 0, y: 0)
+    /// Cards and panels at rest: a hairline carries the edge, with the faintest lift under it.
+    static let card = Shadow(
+        color: Color.adaptive(light: 0x172653, lightAlpha: 0.04, dark: 0x000000, darkAlpha: 0.10),
+        radius: 10,
+        y: 3
+    )
     static let raised = Shadow(color: .black.opacity(0.10), radius: 18, y: 8)
     static let hud = Shadow(color: .black.opacity(0.35), radius: 16, y: 6)
 }
@@ -273,7 +371,7 @@ extension Palette.HUD {
     static let controlHover = Color.white.opacity(0.18)
     /// The done check: the logo's warm white, a nod rather than a celebration.
     static let check = Color(hex: 0xFEFCF8)
-    /// The pill's body: the icon's navy, lit from the top (Mono v2's navy pill).
+    /// The pill's body: the icon's navy, lit from the top (the pill is not part of the redesign).
     static let fillTop = Color(hex: 0x1C2B57)
     static let fillBottom = Color(hex: 0x0E183B)
     static let dangerSoft = Color(hex: 0xFF6B7A, alpha: 0.18)
@@ -429,20 +527,7 @@ extension Elevation {
 
 extension Palette {
     /// Dims the main window behind the Settings card.
-    static let scrim = Color.adaptive(light: 0x0E1426, lightAlpha: 0.28, dark: 0x000000, darkAlpha: 0.55)
-}
-
-extension Layout {
-    /// Settings as a card over the main window: a column of sections, then a pane as wide
-    /// as the old Settings window. In a smaller window the card shrinks and its pane scrolls.
-    enum SettingsModal {
-        static let sidebarWidth: CGFloat = 208
-        static let rowHeight: CGFloat = 32
-        static let size = CGSize(
-            width: sidebarWidth + Setup.hairline + Layout.settingsWidth,
-            height: Setup.settingsHeight
-        )
-    }
+    static let scrim = Color.adaptive(light: 0x0E183C, lightAlpha: 0.34, dark: 0x000000, darkAlpha: 0.55)
 }
 
 extension Motion {
@@ -498,9 +583,15 @@ extension View {
         self.shadow(color: shadow.color, radius: shadow.radius, x: 0, y: shadow.y)
     }
 
-    /// Section label style: small, uppercase, tracked.
+    /// Label above a group of rows: 15 pt, semibold, sentence case.
     func eyebrowStyle() -> some View {
         self.font(Typography.eyebrow)
+            .foregroundStyle(Palette.inkSecondary)
+    }
+
+    /// The old small, uppercase, tracked label, for the menu bar window.
+    func compactEyebrowStyle() -> some View {
+        self.font(Typography.Compact.eyebrow)
             .tracking(Tracking.eyebrow)
             .textCase(.uppercase)
             .foregroundStyle(Palette.inkTertiary)
@@ -516,28 +607,34 @@ extension Layout {
         /// Line widths: resting card edge, selected ring.
         static let hairline: CGFloat = 1
         static let selectionRing: CGFloat = 1.5
-        static let buttonHeight: CGFloat = 30
-        static let buttonHeightSmall: CGFloat = 24
-        static let buttonHeightLarge: CGFloat = 38
-        static let iconButton: CGFloat = 28
-        static let chipHeight: CGFloat = 28
-        static let searchFieldHeight: CGFloat = 32
-        static let searchFieldWidth: CGFloat = 260
-        static let keyCapHeight: CGFloat = 22
-        static let keyCapMinWidth: CGFloat = 26
-        static let keyCapHeightLarge: CGFloat = 44
-        static let keyCapMinWidthLarge: CGFloat = 56
-        /// The darker lip along a keycap's bottom edge — it's what makes it read as a key.
-        static let keyCapLip: CGFloat = 1.5
+        /// Buttons: 42 pt regular, 35 pt small, 48 pt large (the handoff's hit areas).
+        static let buttonHeight: CGFloat = 42
+        static let buttonHeightSmall: CGFloat = 35
+        static let buttonHeightLarge: CGFloat = 48
+        /// Side padding inside a button; the navy capsule takes a little more than the rest.
+        static let buttonPadding: CGFloat = 15
+        static let buttonPaddingPrimary: CGFloat = 19
+        static let buttonPaddingSmall: CGFloat = 11
+        static let buttonPaddingLarge: CGFloat = 24
+        static let iconButton: CGFloat = 36
+        static let chipHeight: CGFloat = 34
+        static let searchFieldHeight: CGFloat = 44
+        static let searchFieldWidth: CGFloat = 320
+        static let keyCapHeight: CGFloat = 27
+        static let keyCapMinWidth: CGFloat = 27
+        static let keyCapHeightLarge: CGFloat = 48
+        static let keyCapMinWidthLarge: CGFloat = 48
+        /// The darker lip along a keycap's bottom edge: it's what makes it read as a key.
+        static let keyCapLip: CGFloat = 2
         static let keyCapLipLarge: CGFloat = 3
         static let statusDot: CGFloat = 7
-        static let rowIcon: CGFloat = 28
+        static let rowIcon: CGFloat = 31
         static let progressRing: CGFloat = 14
         static let progressRingLine: CGFloat = 2
         static let emptyStateBadge: CGFloat = 56
-        static let emptyStateTextWidth: CGFloat = 380
-        static let bannerIcon: CGFloat = 30
-        static let sheetWidth: CGFloat = 480
+        static let emptyStateTextWidth: CGFloat = 460
+        static let bannerIcon: CGFloat = 34
+        static let sheetWidth: CGFloat = 570
         static let snippetCardMinWidth: CGFloat = 300
         static let snippetCardMinHeight: CGFloat = 148
         static let progressBarWidth: CGFloat = 140
@@ -550,15 +647,17 @@ extension Layout {
         /// Roughly how many transcript characters fit on one line of a history row.
         static let transcriptCharsPerLine = 86
         static let recentCount = 5
-        static let pageHeaderBottom: CGFloat = 20
+        static let pageHeaderBottom: CGFloat = 29
+        /// A page header's symbol tile and its gap to the title; the description's measure.
+        static let pageHeaderSymbol: CGFloat = 52
+        static let pageHeaderSymbolGap: CGFloat = 17
+        static let pageSubtitleWidth: CGFloat = 640
         /// The logo's bars in the first-run "speak" step and in empty states.
         static let brandMarkLarge: CGFloat = 40
         static let brandMarkSmall: CGFloat = 22
-        /// Focused inputs: a Signal blue ring this wide.
+        /// An input's own border while focused (onboarding and Lab fields draw it inside the
+        /// field). Controls that use `flowFocusRing` get the 3 pt `Layout.Focus` ring instead.
         static let focusRing: CGFloat = 1.5
-        /// Space between a focused control's edge and its focus ring (`flowFocusRing`), so the
-        /// ring stays distinct from a selected chip's Signal blue border.
-        static let focusRingGap: CGFloat = 2
         /// `AppIcon`'s monogram tile, as fractions of the icon's size: corner radius, letter
         /// size, and the inset that matches the margin real app icons leave around their tile.
         static let monogramCornerRatio: CGFloat = 0.24
@@ -568,32 +667,7 @@ extension Layout {
         static let progressBarHeight: CGFloat = 4
         /// The logo's bars beside a snippet's trigger.
         static let triggerMark: CGFloat = 10
-        /// The app icon in the sidebar wordmark: its tile (about 80 % of this) fills the
-        /// wordmark's 28 pt slot.
-        static let sidebarLogo: CGFloat = 35
     }
-
-    /// The Lab: polish configurations, their editor, the test text and results.
-    enum Lab {
-        static let listWidth: CGFloat = 210
-        static let instructionsHeight: CGFloat = 260
-        static let sampleHeight: CGFloat = 88
-        static let fieldHeight: CGFloat = 30
-        static let appFieldWidth: CGFloat = 150
-        static let providerWidth: CGFloat = 190
-        static let styleWidth: CGFloat = 130
-        static let categoryWidth: CGFloat = 180
-        static let modelMenuWidth: CGFloat = 24
-        /// The refused reply, shown on request, scrolls past this.
-        static let replyMaxHeight: CGFloat = 160
-    }
-}
-
-extension Typography {
-    /// The app's name beside its icon at the top of the sidebar.
-    static let wordmark = Font.system(size: 15, weight: .semibold)
-    /// The unit beside a stat numeral ("words", "wpm").
-    static let statUnit = Font.system(size: 13, weight: .medium)
 }
 
 /// Press and disabled feedback shared by every custom control.
@@ -605,20 +679,18 @@ enum Interaction {
 
 extension Palette {
     /// Pressed surfaces and ghost buttons.
-    static let surfacePressed = Color.adaptive(light: 0xEAEDF3, dark: 0x2E313B)
-    /// Keycaps: a face a shade lighter than the surface and a darker lip below it.
-    static let keyFace = Color.adaptive(light: 0xFFFFFF, dark: 0x2E313B)
-    static let keyLip = Color.adaptive(light: 0x0E1426, lightAlpha: 0.20, dark: 0x000000, darkAlpha: 0.60)
-    static let keyHighlight = Color.adaptive(light: 0xFFFFFF, lightAlpha: 1, dark: 0xFFFFFF, darkAlpha: 0.12)
+    static let surfacePressed = Color.adaptive(light: 0xE3E9F6, dark: 0x222E56)
+    /// Keycaps: a surface-coloured face with a control-coloured edge and a heavier lip below.
+    static let keyFace = Color.adaptive(light: 0xFFFFFF, dark: 0x141A33)
+    static let keyLip = Color.adaptive(light: 0x838CA5, dark: 0x7E89AB)
     /// Style's sample message bubbles: a step darker than the card in light mode and a step
-    /// lighter in dark, like chat bubbles. `sunken` would read as a hole in dark mode.
-    static let bubble = Color.adaptive(light: 0xF3F5F8, dark: 0x262932)
+    /// lighter in dark, like chat bubbles.
+    static let bubble = Color.adaptive(light: 0xEDF1F8, dark: 0x1C2444)
     /// The bubble on a chosen card's Signal blue wash.
-    static let bubbleOnSelection = Color.adaptive(light: 0xFFFFFF, dark: 0x2F3C58)
-    /// Small filled marks that sit on a card: neutral badges, monogram tiles, icon tiles. Same
-    /// step as `bubble`: darker than the card in light mode, lighter in dark, so they read as
-    /// raised. Keep `sunken` for inset wells (inputs, code, practice fields).
-    static let chip = Color.adaptive(light: 0xF3F5F8, dark: 0x262932)
+    static let bubbleOnSelection = Color.adaptive(light: 0xFFFFFF, dark: 0x2B3868)
+    /// Small filled marks that sit on a card: neutral badges, monogram tiles, icon tiles.
+    /// Same as `soft`.
+    static let chip = Color.adaptive(light: 0xEDF1F8, dark: 0x1C2444)
 }
 
 extension Motion {
@@ -634,226 +706,83 @@ extension Motion {
     static let demoKeyInterval: Duration = .milliseconds(1400)
 }
 
-// MARK: - Home hero (Voiceprint)
-//
-// The navy band at the top of Home with the greeting on it, and the one place the spectrum
-// appears at rest: a voice drawn as artwork (`VoiceprintArt`), which reads as the logo's big
-// echo, not as a live state. It is the app icon's tile, so it stays navy in both appearances.
-
-extension Palette {
-    enum Hero {
-        /// The icon tile's ground, top to bottom.
-        static let ground: [Gradient.Stop] = [
-            .init(color: Color(hex: 0x263B6E), location: 0),
-            .init(color: Color(hex: 0x203569), location: 0.10),
-            .init(color: Color(hex: 0x0E183B), location: 0.45),
-            .init(color: Color(hex: 0x091231), location: 1),
-        ]
-        /// A faint inner edge, so the tile reads as an object on midnight navy.
-        static let edge = Color.white.opacity(0.06)
-        static let ink = Color.white
-        static let inkSecondary = Color.white.opacity(0.72)
-        /// The logo's warm-white bars before the hint.
-        static let mark = Color(hex: 0xFEFCF8)
-        /// The shortcut's keycap on navy.
-        static let keyFill = Color.white.opacity(0.12)
-        static let keyStroke = Color.white.opacity(0.22)
-        /// The lift under the hero on a light page (none in dark, where it would be lost).
-        static let shadow = Color(hex: 0x091231)
-    }
-}
-
 extension Layout {
-    enum Hero {
-        static let height: CGFloat = 150
-        /// The width the art was designed at. Wider heroes add calm room on the left; narrower
-        /// ones squeeze the art horizontally, so the voice always ends at the right edge.
-        static let designWidth: CGFloat = 660
-        static let cornerRadius: CGFloat = 18
-        static let edge: CGFloat = 1
-        /// The greeting's left inset and the gap between it and the hint.
-        static let textInset: CGFloat = 28
-        static let textSpacing: CGFloat = 8
-        /// Where, in the design's space, the greeting and the hint should end: the voice is
-        /// only a whisper until about here, and full strength past it.
-        static let greetingEndX: CGFloat = 360
-        static let hintEndX: CGFloat = 300
-        /// The logo's bars before the hint, and the gaps around the shortcut keycap.
-        static let markHeight: CGFloat = 12
-        static let hintSpacing: CGFloat = 8
-        static let keySpacing: CGFloat = 5
-        static let keyHeight: CGFloat = 20
-        static let keyPadding: CGFloat = 6
-        static let keyRadius: CGFloat = 6
-    }
-}
-
-extension Typography {
-    /// The hint under the greeting on the hero, a step up from body so it holds its own on navy.
-    static let heroHint = Font.system(size: 14.5)
-    static let heroKey = Font.system(size: 11.5, weight: .medium)
-}
-
-extension Elevation {
-    /// The hero's lift on a light page: a tight contact shadow and a soft, wider one.
-    static let heroContact = Shadow(color: Palette.Hero.shadow.opacity(0.10), radius: 1, y: 1)
-    static let heroLift = Shadow(color: Palette.Hero.shadow.opacity(0.14), radius: 14, y: 10)
-}
-
-extension Motion {
-    /// The hero redraws at most this often while it moves (never between sweeps).
-    static let heroFrameInterval: Double = 1.0 / 60.0
-    /// The first Shimmer sweep starts this long after the opening ends; later ones follow
-    /// every `VoiceprintMotion.sweepInterval`.
-    static let heroFirstSweepDelay: Double = 1.2
-    /// The glows behind the loudest syllables rising with the opening (easeOutCubic).
-    static let heroGlowRise = Animation.timingCurve(0.33, 1, 0.68, 1, duration: 0.85)
-}
-
-// MARK: - Mono v2: the sidebar, the Settings rail and Home's stats
-//
-// The few places colour lives at rest. The sidebar's icons walk the logo's colour wheel from
-// the top (Home orange through Settings purple), the Settings rail follows the same order, and
-// each Home stat wears a small badge built like the app icon plus a soft glow in its corner.
-// Light mode takes deeper shades so the icons hold their own on pale grey.
-
-extension Palette {
-    /// The logo disc's colour wheel, in the order the sidebar walks it.
-    enum Wheel {
-        static let orange = Color.adaptive(light: 0xE8701F, dark: 0xFEA964)
-        static let gold = Color.adaptive(light: 0xD08C00, dark: 0xF6CB4C)
-        static let green = Color.adaptive(light: 0x1FA36A, dark: 0x3CCB8A)
-        static let cyan = Color.adaptive(light: 0x1693C4, dark: 0x2FB8E6)
-        static let blue = Color.adaptive(light: 0x3082F8, dark: 0x4C93FA)
-        static let violet = Color.adaptive(light: 0x6F54FB, dark: 0x8B76FC)
-        static let purple = Color.adaptive(light: 0xB348ED, dark: 0xC26CF2)
-
-        /// The wheel from the top, for lists that walk it in order.
-        static let walk: [Color] = [orange, gold, green, cyan, blue, violet, purple]
-    }
-
-    /// A Home stat's colour: a badge lit from the top like the app icon, and a glow in the
-    /// card's top-right corner.
-    struct StatTone {
-        let badgeTop: Color
-        let badgeBottom: Color
-        let glow: Color
-
-        static let blue = StatTone(top: 0x5A9CFB, bottom: 0x2B6FE6, glow: 0x3082F8)
-        static let green = StatTone(top: 0x4BD394, bottom: 0x18A066, glow: 0x3CCB8A)
-        static let orange = StatTone(top: 0xFFA25C, bottom: 0xEA6A1E, glow: 0xF78C46)
-        static let purple = StatTone(top: 0xC77AF4, bottom: 0x9A3EE0, glow: 0xB348ED)
-
-        private init(top: UInt32, bottom: UInt32, glow: UInt32) {
-            badgeTop = Color(hex: top)
-            badgeBottom = Color(hex: bottom)
-            // A touch stronger on the dark tile, where the same light reads fainter.
-            self.glow = Color.adaptive(light: glow, lightAlpha: 0.16, dark: glow, darkAlpha: 0.22)
-        }
-    }
-
-    enum Stat {
-        /// The badge's top-edge highlight and the small lift under it.
-        static let badgeHighlight = Color.white.opacity(0.35)
-        static let badgeShadow = Color(hex: 0x091231, alpha: 0.16)
-        static let glyph = Color.white
-    }
-}
-
-extension Layout {
-    /// The main window's sidebar: flush, a step off the canvas, under the traffic lights.
+    /// The main window's sidebar: flush, 234 pt, a quiet wash off the canvas, under the
+    /// traffic lights.
     enum Sidebar {
-        static let width: CGFloat = 244
-        /// Room above the wordmark for the traffic lights.
-        static let topInset: CGFloat = 52
-        static let horizontalPadding: CGFloat = 8
-        static let bottomPadding: CGFloat = 10
-        static let rowHeight: CGFloat = 32
-        static let rowRadius: CGFloat = 10
-        static let rowPadding: CGFloat = 10
-        static let rowSpacing: CGFloat = 10
+        static let width: CGFloat = 234
+        /// The traffic lights' row above the wordmark: the toolbar's height, so their
+        /// baselines line up across the window.
+        static let topInset: CGFloat = Layout.Toolbar.height
+        /// Rows sit 15 pt in from the edges, leaving room for the marker bar and the 3 pt
+        /// focus ring (which would clip at the scroll view's edge otherwise).
+        static let horizontalPadding: CGFloat = 15
+        static let bottomPadding: CGFloat = 20
+        static let rowHeight: CGFloat = 46
+        static let rowRadius: CGFloat = Radius.field
+        static let rowPadding: CGFloat = 13
+        static let rowSpacing: CGFloat = 12
+        /// Between nav rows.
+        static let rowGap: CGFloat = 5
         /// The column the icons sit in, so labels line up whatever the symbol's width.
-        static let iconColumn: CGFloat = 18
-        static let wordmarkHeight: CGFloat = 28
-        static let wordmarkBottom: CGFloat = 12
-        /// "Admin" above the Lab.
-        static let labelTop: CGFloat = 14
-        static let labelBottom: CGFloat = 4
+        static let iconColumn: CGFloat = 22
+        /// The app icon beside the name (its tile fills about 80 % of this).
+        static let logo: CGFloat = 48
+        static let wordmarkSpacing: CGFloat = 8
+        static let wordmarkInset: CGFloat = 5
+        static let wordmarkBottom: CGFloat = 27
+        /// The selected row's marker bar, in the margin left of the row.
+        static let markerWidth: CGFloat = 3
+        static let markerInset: CGFloat = 14
+        static let markerOffset: CGFloat = 6
+        /// The divider and "Workspace" label.
+        static let dividerInset: CGFloat = 12
+        static let dividerVertical: CGFloat = 20
+        static let labelBottom: CGFloat = 9
+        /// The "fn  Hold to dictate" line under Settings.
+        static let hintTop: CGFloat = 20
+        static let hintInset: CGFloat = 12
+        static let hintSpacing: CGFloat = 9
         /// The Hide sidebar button, top right of the sidebar, level with the traffic lights.
         static let hideButton: CGFloat = 28
-        static let hideButtonRadius: CGFloat = 8
-        static let hideButtonTop: CGFloat = 12
-        static let hideButtonTrailing: CGFloat = 10
-        /// With the sidebar hidden, Show sidebar sits right of the traffic lights, and the
-        /// page starts below them.
+        static let hideButtonRadius: CGFloat = Radius.control
+        static let hideButtonTop: CGFloat = 19
+        static let hideButtonTrailing: CGFloat = 14
+        /// With the sidebar hidden, Show sidebar sits right of the traffic lights.
         static let showButtonLeading: CGFloat = 80
-        static let collapsedTopInset: CGFloat = 40
-    }
-
-    /// Home's column and its rhythm.
-    enum Home {
-        static let columnWidth: CGFloat = 660
-        static let topPadding: CGFloat = 28
-        static let statsTop: CGFloat = 20
-        static let recentTop: CGFloat = 28
-        static let recentHeaderBottom: CGFloat = 8
-        static let bannersTop: CGFloat = 20
-    }
-
-    /// Home's stat cards: soft tiles, a badge, the number and a caption.
-    enum Stat {
-        static let spacing: CGFloat = 8
-        static let padding: CGFloat = 14
-        static let radius: CGFloat = 16
-        static let badge: CGFloat = 24
-        static let badgeRadius: CGFloat = 7
-        static let labelSpacing: CGFloat = 8
-        static let numberTop: CGFloat = 10
-        static let unitSpacing: CGFloat = 4
-        static let captionTop: CGFloat = 2
-        /// The corner glow: an ellipse this wide and tall around the top-right corner, fading
-        /// to nothing at `glowFade` of its radius.
-        static let glowWidth: CGFloat = 150
-        static let glowHeight: CGFloat = 110
-        static let glowFade: CGFloat = 0.7
-        static let badgeHighlight: CGFloat = 0.5
-        static let badgeShadowRadius: CGFloat = 1
-        static let badgeShadowY: CGFloat = 1
-    }
-
-    /// The Settings card's section rail and pane header.
-    enum SettingsRail {
-        static let rowHeight: CGFloat = 32
-        static let rowRadius: CGFloat = 10
-        static let rowPadding: CGFloat = 10
-        static let iconColumn: CGFloat = 16
-        static let headerHeight: CGFloat = 52
-        static let panePadding: CGFloat = 28
-        /// Space above a group's title, and between its rows.
-        static let groupTop: CGFloat = 16
-        static let rowVertical: CGFloat = 8
-        /// Rows sit flush with the group's title: no card around them to inset from.
-        static let rowInset: CGFloat = 0
     }
 }
 
 extension Typography {
-    static let sidebarRow = Font.system(size: 14)
-    static let sidebarRowSelected = Font.system(size: 14, weight: .medium)
-    /// The section icons, drawn to sit in an 18 pt column like the design's line icons.
-    static let sidebarIcon = Font.system(size: 15)
-    /// "Admin", "Settings" above the rail, and the History count.
-    static let sidebarLabel = Font.system(size: 12.5, weight: .medium)
-    static let sidebarCount = Font.system(size: 12.5).monospacedDigit()
+    /// An empty state's headline. 19 pt.
+    static let emptyTitle = Font.system(size: 19, weight: .semibold)
+    /// The symbol in a page header's tile.
+    static let pageSymbol = Font.system(size: 26, weight: .regular)
+    /// The nav rows: 16 pt, heavier when chosen (never hue alone).
+    static let sidebarRow = Font.system(size: 16, weight: .medium)
+    static let sidebarRowSelected = Font.system(size: 16, weight: .semibold)
+    /// The section icons, drawn to sit in a 22 pt column like the design's 21 pt line icons.
+    static let sidebarIcon = Font.system(size: 17, weight: .regular)
+    static let sidebarIconSelected = Font.system(size: 17, weight: .semibold)
+    /// "Workspace" above the Lab, and the History count.
+    static let sidebarLabel = Font.system(size: 15)
+    static let sidebarCount = Font.system(size: 15).monospacedDigit()
+    /// The app's name beside its icon at the top of the sidebar.
+    static let wordmark = Font.system(size: 18, weight: .semibold)
+    /// The toolbar's page title, Search history and status.
+    static let toolbarTitle = Font.system(size: 15, weight: .medium)
+    static let toolbarItem = Font.system(size: 15)
+    /// The unit beside a stat numeral ("words", "wpm").
+    static let statUnit = Font.system(size: 15)
     /// The stat's name beside its badge.
-    static let statLabel = Font.system(size: 12.5, weight: .medium)
-    static let statCaption = Font.system(size: 12).monospacedDigit()
+    static let statLabel = Font.system(size: 15, weight: .medium)
+    static let statCaption = Font.system(size: 15).monospacedDigit()
     static let statGlyph = Font.system(size: 11.5, weight: .semibold)
-    /// "Recent" on Home, and a Settings group's title: small, semibold, not shouted.
-    static let groupTitle = Font.system(size: 13, weight: .semibold)
-    static let link = Font.system(size: 13, weight: .medium)
+    /// "Recent dictation" on Home, and a Settings group's title.
+    static let groupTitle = Font.system(size: 17, weight: .semibold)
+    static let link = Font.system(size: 15, weight: .semibold)
     /// A Settings pane's title in its header.
-    static let paneTitle = Font.system(size: 18, weight: .semibold)
-    static let settingsRowTitle = Font.system(size: 14)
-    static let settingsRowDetail = Font.system(size: 12.5)
+    static let paneTitle = Font.system(size: 23, weight: .semibold)
+    static let settingsRowTitle = Font.system(size: 17, weight: .medium)
+    static let settingsRowDetail = Font.system(size: 15)
 }

@@ -227,6 +227,9 @@ public final class PolishLabStore {
     public private(set) var configurations: [PolishConfiguration] = []
     private var assignments: [String: UUID] = [:]
     private let fileURL: URL?
+    /// Why the last write to disk failed, or `nil` when it worked (and for an in-memory
+    /// store). The Lab says "Saved" only while this is `nil`.
+    public private(set) var persistenceError: String?
 
     /// Loads the saved Lab, or starts one with the built-in prompts.
     public init(fileURL: URL) {
@@ -355,14 +358,24 @@ public final class PolishLabStore {
         }
     }
 
+    /// Writes the current state again, for the Lab's "Try again" after a failed save.
+    public func retrySave() {
+        save()
+    }
+
     private func save() {
         guard let fileURL else { return }
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-        guard let data = try? encoder.encode(state) else { return }
-        try? FileManager.default.createDirectory(at: fileURL.deletingLastPathComponent(), withIntermediateDirectories: true)
-        try? data.write(to: fileURL, options: .atomic)
+        do {
+            let data = try encoder.encode(state)
+            try? FileManager.default.createDirectory(at: fileURL.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try data.write(to: fileURL, options: .atomic)
+            persistenceError = nil
+        } catch {
+            persistenceError = error.localizedDescription
+        }
     }
 
     /// `nil` when there's nothing saved yet. A file that won't decode is copied aside first,

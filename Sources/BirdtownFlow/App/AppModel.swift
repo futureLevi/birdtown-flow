@@ -79,6 +79,9 @@ final class AppModel {
     var settingsTab: SettingsTab?
     /// The main window's sidebar tucked away (its Hide sidebar button, or ⌃⌘S).
     var sidebarHidden = false
+    /// The toolbar's Search history asked for History's search field. The field takes focus,
+    /// then clears this. Set it through `showHistorySearch()`.
+    var historySearchRequested = false
 
     init(
         settings: Settings = .shared,
@@ -219,6 +222,12 @@ final class AppModel {
         if let id, history.record(id: id) != nil, !historyDeletion.isPending(id) {
             focusedRecordID = id
         }
+        show(.history)
+    }
+
+    /// Opens History with its search field focused (the toolbar's Search history).
+    func showHistorySearch() {
+        historySearchRequested = true
         show(.history)
     }
 

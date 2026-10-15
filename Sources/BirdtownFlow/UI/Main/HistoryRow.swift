@@ -4,12 +4,10 @@ import MurmurDictionary
 import MurmurKit
 import SwiftUI
 
-/// One dictation: where it went, what was written, what the pipeline did, and every action
-/// you might want — on hover, in the ⋯ menu and in the context menu.
+/// One dictation: the words lead (19 pt), under the app and time, with quiet metadata and the
+/// copy and play controls below. Everything else (paste again, original, replacements, delete)
+/// is in the ⋯ menu and the context menu.
 struct HistoryRow: View {
-    /// Leading inset that lines dividers up with the row's text column.
-    static let textInset = Spacing.l + Layout.Main.rowIcon + Spacing.m
-
     let record: HistoryRecord
     let player: AudioPlayback
     var isSelected: Bool
@@ -31,7 +29,6 @@ struct HistoryRow: View {
 
     @Environment(AppModel.self) private var model
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @Environment(\.accessibilityVoiceOverEnabled) private var voiceOverEnabled
 
     init(
         record: HistoryRecord,
@@ -56,25 +53,30 @@ struct HistoryRow: View {
     }
 
     var body: some View {
-        HStack(alignment: .top, spacing: Spacing.m) {
-            AppIcon(bundleID: record.context?.bundleID, name: record.context?.appName, size: Layout.Main.rowIcon)
-            VStack(alignment: .leading, spacing: Spacing.s) {
-                header
-                content
-                footer
-                if showsTimings {
-                    TimingsLine(record: record)
-                }
-                if showsOriginal {
-                    // The timings line above already says this, in more detail.
-                    OriginalPanel(record: record, query: query, showsTimings: !showsTimings)
-                        .transition(.opacity)
-                }
+        VStack(alignment: .leading, spacing: Spacing.s) {
+            header
+            content
+            footer
+            if showsTimings {
+                TimingsLine(record: record)
+            }
+            if showsOriginal {
+                // The timings line above already says this, in more detail.
+                OriginalPanel(record: record, query: query, showsTimings: !showsTimings)
+                    .transition(.opacity)
             }
         }
-        .padding(.horizontal, Spacing.l)
-        .padding(.vertical, Spacing.m)
+        .padding(.horizontal, Layout.History.rowHorizontal)
+        .padding(.vertical, Layout.History.rowVertical)
+        .frame(maxWidth: .infinity, alignment: .leading)
         .background(rowFill)
+        .overlay(alignment: .leading) {
+            if isSelected {
+                Rectangle()
+                    .fill(Palette.accent)
+                    .frame(width: Layout.History.selectionMarker)
+            }
+        }
         .contentShape(Rectangle())
         .onHover { isHovered = $0 }
         .onTapGesture {
@@ -93,8 +95,9 @@ struct HistoryRow: View {
         .animation(Motion.resolve(Motion.smooth, reduceMotion: reduceMotion), value: isExpanded)
         .accessibilityElement(children: .contain)
         .accessibilityLabel("\(appTitle), \(record.createdAt.formatted(date: .omitted, time: .shortened))")
-        // The hover buttons are invisible (and so missing from the accessibility tree) most of
-        // the time; name the row's main actions so VoiceOver offers them directly.
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
+        // Paste Again has no button of its own; name the row's actions so VoiceOver offers
+        // them all in the rotor.
         .accessibilityActions { accessibilityActionItems }
     }
 
@@ -102,22 +105,21 @@ struct HistoryRow: View {
 
     private var header: some View {
         HStack(alignment: .center, spacing: Spacing.s) {
+            AppIcon(bundleID: record.context?.bundleID, name: record.context?.appName, size: Layout.History.appIcon)
             Text(Self.highlighted(appTitle, query: query))
                 .font(Typography.headline)
                 .foregroundStyle(Palette.ink)
                 .lineLimit(1)
             Text(record.createdAt, format: .dateTime.hour().minute())
-                .font(Typography.caption)
+                .font(Typography.callout)
                 .foregroundStyle(Palette.inkTertiary)
             if record.outcome == .failed {
                 Badge(text: "Failed", symbol: "exclamationmark.triangle.fill", tone: .danger)
             }
             Spacer(minLength: Spacing.s)
-            actions
-                .opacity(showsActions ? 1 : 0)
-                .allowsHitTesting(showsActions)
+            moreMenu
         }
-        .frame(height: Layout.Main.iconButton)
+        .frame(minHeight: Layout.Main.iconButton)
     }
 
     @ViewBuilder
@@ -131,6 +133,7 @@ struct HistoryRow: View {
                         .foregroundStyle(Palette.inkSecondary)
                         .lineSpacing(Spacing.transcriptLine)
                         .lineLimit(Layout.Main.transcriptLines)
+                        .frame(maxWidth: Layout.History.transcriptMeasure, alignment: .leading)
                 }
                 Text(record.errorMessage ?? "Something went wrong while transcribing.")
                     .font(Typography.body)
@@ -152,6 +155,7 @@ struct HistoryRow: View {
                     .lineSpacing(Spacing.transcriptLine)
                     .lineLimit(isExpanded ? nil : Layout.Main.transcriptLines)
                     .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: Layout.History.transcriptMeasure, alignment: .leading)
                     .textSelection(.enabled)
                     // The old text stays readable but recedes while new text is on its way.
                     .opacity(isRetrying ? Interaction.dimmedOpacity : 1)
@@ -263,8 +267,18 @@ struct HistoryRow: View {
         }
     }
 
+    /// Quiet metadata on the left, copy and play on the right. The controls are always there:
+    /// a keyboard or VoiceOver user shouldn't have to hover to find them.
     private var footer: some View {
-        HStack(spacing: Spacing.s) {
+        HStack(spacing: Spacing.m) {
+            footerInfo
+            Spacer(minLength: Spacing.s)
+            actions
+        }
+    }
+
+    private var footerInfo: some View {
+        HStack(spacing: Spacing.m) {
             // The failed layout shows progress on its Retry button; everything else here.
             if isRetrying && record.outcome != .failed {
                 // A symbol rather than ProgressView: the native spinner ignores the accent and
@@ -287,26 +301,29 @@ struct HistoryRow: View {
                     .help("Put back the text from before you transcribed this again")
             }
             if let polisher = record.polishedBy, polisher != .off {
-                // A Lab configuration names itself; Settings' provider names the provider.
-                Badge(text: "Polished · \(record.polishConfiguration ?? polisher.title)", symbol: "sparkles")
-                    .help(record.polishConfiguration.map { "Lab configuration “\($0)”, on \(polisher.title)" } ?? "")
+                // Which model or Lab configuration did it is detail: the tooltip and the
+                // timings view say, the row only says that it happened.
+                Badge(text: "Polished", symbol: "sparkles", tone: .violet)
+                    .help(record.polishConfiguration.map { "Lab configuration “\($0)”, on \(polisher.title)" }
+                          ?? "Polished by \(polisher.title)")
             }
             if correctionCount > 0 {
                 Badge(
                     text: correctionCount == 1 ? "1 replacement" : "\(correctionCount) replacements",
-                    symbol: "character.book.closed"
+                    symbol: "character.book.closed",
+                    tone: .teal
                 )
             }
             if !record.snippets.isEmpty {
                 Badge(text: record.snippets.count == 1 ? "Snippet" : "\(record.snippets.count) snippets",
-                      symbol: "text.badge.plus")
+                      symbol: "text.badge.plus", tone: .teal)
             }
             if record.outcome == .copied {
                 Badge(text: "On clipboard", symbol: "doc.on.clipboard")
                     .help("Birdtown Flow put this on the clipboard instead of typing it.")
             }
             Text(meta)
-                .font(Typography.caption)
+                .font(Typography.callout)
                 .foregroundStyle(Palette.inkTertiary)
                 .lineLimit(1)
                 .help(polishNote.map { wasPolished ? $0 : "AI polish wasn't used: \($0)" } ?? "")
@@ -325,24 +342,24 @@ struct HistoryRow: View {
                 IconButton(symbol: "doc.on.doc", label: "Copy") { copy() }
                     .disabled(!record.hasText)
             }
-            IconButton(symbol: "text.insert", label: "Paste Again") {
-                model.controller.insert(record)
-            }
-            .disabled(!record.hasText)
             playButton
-            Menu {
-                menuItems
-            } label: {
-                Image(systemName: "ellipsis")
-                    .font(Typography.bodyEmphasis)
-            }
-            .menuStyle(.button)
-            .buttonStyle(.borderless)
-            .menuIndicator(.hidden)
-            .frame(width: Layout.Main.iconButton, height: Layout.Main.iconButton)
-            .help("More")
-            .accessibilityLabel("More actions")
         }
+    }
+
+    private var moreMenu: some View {
+        Menu {
+            menuItems
+        } label: {
+            Image(systemName: "ellipsis")
+                .font(Typography.bodyEmphasis)
+                .foregroundStyle(Palette.inkSecondary)
+        }
+        .menuStyle(.button)
+        .buttonStyle(.borderless)
+        .menuIndicator(.hidden)
+        .frame(width: Layout.Main.iconButton, height: Layout.Main.iconButton)
+        .help("More")
+        .accessibilityLabel("More actions")
     }
 
     private var playButton: some View {
@@ -429,7 +446,7 @@ struct HistoryRow: View {
         if isSelected || isHighlighted {
             Palette.accentSoft
         } else if isHovered {
-            Palette.surfaceHover
+            Palette.editor
         } else {
             // Whatever the row sits on shows through: History's card, Home's page.
             Color.clear
@@ -437,11 +454,6 @@ struct HistoryRow: View {
     }
 
     // MARK: - Derived
-
-    private var showsActions: Bool {
-        // VoiceOver drops invisible views, so keep the buttons in its reach while it runs.
-        isHovered || isSelected || didCopy || player.isPlaying(record.id) || voiceOverEnabled
-    }
 
     private var audioURL: URL? { model.history.audioURL(for: record) }
 
@@ -493,13 +505,12 @@ struct HistoryRow: View {
     private static let webApps = ["Gmail", "Outlook", "Slack", "Linear", "Notion", "Google Docs", "WhatsApp"]
 
     private var meta: String {
+        // Duration and style only; the engine and speed are in the details (Show Original).
         var parts: [String] = []
-        if let style = record.style { parts.append(style.title) }
-        if !record.engine.isEmpty { parts.append(record.engine) }
         if record.audioDuration > 0 {
             parts.append(Duration.seconds(record.audioDuration).formatted(.time(pattern: .minuteSecond)))
         }
-        if let wpm = record.wordsPerMinute { parts.append("\(wpm) wpm") }
+        if let style = record.style { parts.append(style.title) }
         if let note = polishNote {
             // A long dictation polished in parts was polished, even if some parts weren't.
             parts.append(wasPolished ? Self.shortNote(note) : "Not polished · \(Self.shortNote(note))")
@@ -627,7 +638,8 @@ private struct RowLinkBody: View {
     }
 }
 
-/// What the engine heard versus what was written, and what changed in between.
+/// What the engine heard versus what was written, what changed in between, and the details
+/// the row leaves out: which engine, how fast you spoke, how long each step took.
 struct OriginalPanel: View {
     let record: HistoryRecord
     var query: String = ""
@@ -636,7 +648,7 @@ struct OriginalPanel: View {
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.m) {
             VStack(alignment: .leading, spacing: Spacing.xs) {
-                Text("Heard").eyebrowStyle()
+                Text("Original, as heard").eyebrowStyle()
                 Text(record.rawText.isEmpty
                      ? AttributedString("Nothing was recognized.")
                      : HistoryRow.highlighted(record.rawText, query: query))
@@ -677,6 +689,22 @@ struct OriginalPanel: View {
                     }
                 }
             }
+            if !details.isEmpty {
+                VStack(alignment: .leading, spacing: Spacing.xs) {
+                    Text("Details").eyebrowStyle()
+                    HStack(spacing: Spacing.l) {
+                        ForEach(details) { detail in
+                            HStack(spacing: Spacing.xs) {
+                                Text(detail.label)
+                                    .foregroundStyle(Palette.inkTertiary)
+                                Text(detail.value)
+                                    .foregroundStyle(Palette.inkSecondary)
+                            }
+                            .font(Typography.callout)
+                        }
+                    }
+                }
+            }
             if showsTimings {
                 HStack(spacing: Spacing.l) {
                     timing("Transcribed", record.timings.transcribeMs)
@@ -688,9 +716,25 @@ struct OriginalPanel: View {
                 }
             }
         }
-        .padding(Spacing.m)
+        .padding(.vertical, Spacing.m)
+        .padding(.horizontal, Spacing.l)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(RoundedRectangle(cornerRadius: Radius.m, style: .continuous).fill(Palette.sunken))
+        .background(RoundedRectangle(cornerRadius: Radius.field, style: .continuous).fill(Palette.canvas))
+    }
+
+    private struct Detail: Identifiable {
+        let label: String
+        let value: String
+        var id: String { label }
+    }
+
+    /// What the row's one-line metadata leaves out. Polish's provider and Lab configuration
+    /// are in the timing line below, with how long they took.
+    private var details: [Detail] {
+        var rows: [Detail] = []
+        if !record.engine.isEmpty { rows.append(Detail(label: "Engine", value: record.engine)) }
+        if let wpm = record.wordsPerMinute { rows.append(Detail(label: "Speed", value: "\(wpm) wpm")) }
+        return rows
     }
 
     /// "Heard cloud code, wrote Claude Code, by polish".
@@ -754,6 +798,10 @@ struct TimingsLine: View {
             }
         }
         .font(Typography.caption)
+        .padding(.vertical, Spacing.m)
+        .padding(.horizontal, Spacing.l)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(RoundedRectangle(cornerRadius: Radius.field, style: .continuous).fill(Palette.canvas))
         .help("Measured from when you let go of the key. Other is cleanup, the dictionary and typing the text. "
             + "Mic is how long the microphone took to start once you pressed the key.")
         .accessibilityElement(children: .combine)
@@ -791,13 +839,14 @@ struct TimingsLine: View {
         detail == .brief ? polisher.map { "(\($0))" } : nil
     }
 
-    /// "Polish: cold start, model 1,180 ms, <model> low · Mic 45 ms", under the numbers: how
-    /// polish went, and how long the microphone took to start (before key-up, so not part of
-    /// the total). `nil` when neither was recorded.
+    /// "Engine: Parakeet Ultra · Polish: cold start, model 1,180 ms, <model> low · Mic 45 ms",
+    /// under the numbers: which engine heard it, how polish went, and how long the microphone
+    /// took to start (before key-up, so not part of the total). `nil` when none was recorded.
     private var details: String? {
         let timings = record.timings
         guard !timings.isEmpty else { return nil }
         var parts: [String] = []
+        if !record.engine.isEmpty { parts.append("Engine: " + record.engine) }
         let polish = timings.polishDetails(format: Self.format)
         if timings.polishMs > 0, !polish.isEmpty {
             parts.append("Polish: " + polish.joined(separator: ", "))

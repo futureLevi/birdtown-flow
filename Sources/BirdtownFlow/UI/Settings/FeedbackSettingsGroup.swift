@@ -21,6 +21,7 @@ struct FeedbackSettingsGroup: View {
             SettingsRow(title: "Repository", detail: repositoryDetail(settings.feedbackRepository)) {
                 TextField("owner/name", text: $settings.feedbackRepository)
                     .textFieldStyle(.roundedBorder)
+                    .font(Typography.callout)
                     .frame(width: Layout.sidebarWidth)
             }
             SettingsDivider()
@@ -49,14 +50,14 @@ struct FeedbackSettingsGroup: View {
                                 Text("Send Now")
                             }
                         }
-                        .buttonStyle(SetupKit.SecondaryButtonStyle())
+                        .settingsButton()
                         .disabled(sending || !feedback.isSetUp)
                     }
                     Button("Show in Finder") {
                         guard preview == nil else { return }
                         _ = NSWorkspace.shared.open(feedback.outbox.directory)
                     }
-                    .buttonStyle(SetupKit.SecondaryButtonStyle())
+                    .settingsButton()
                 }
             }
         }
@@ -75,16 +76,17 @@ struct FeedbackSettingsGroup: View {
                     Keychain.set(nil, for: .githubFeedback)
                     refreshToken()
                 }
-                .buttonStyle(SetupKit.SecondaryButtonStyle())
+                .settingsButton()
             }
         } else {
             HStack(spacing: Spacing.s) {
                 SecureField("GitHub token", text: $tokenDraft, prompt: Text("Paste a token"))
                     .textFieldStyle(.roundedBorder)
+                    .font(Typography.callout)
                     .frame(width: Layout.sidebarWidth - Spacing.huge)
                     .onSubmit(saveToken)
                 Button("Save", action: saveToken)
-                    .buttonStyle(SetupKit.SecondaryButtonStyle())
+                    .settingsButton()
                     .disabled(tokenDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             }
         }

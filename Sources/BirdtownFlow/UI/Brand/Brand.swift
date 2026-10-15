@@ -113,8 +113,8 @@ struct BrandWordmark: View {
         HStack(spacing: height * 0.45) {
             BrandMark(height: height)
             Text("Birdtown Flow")
-                .font(Typography.title)
-                .tracking(Tracking.title)
+                .font(Typography.Compact.title)
+                .tracking(Tracking.Compact.title)
                 .foregroundStyle(Palette.ink)
         }
         .accessibilityElement(children: .ignore)
