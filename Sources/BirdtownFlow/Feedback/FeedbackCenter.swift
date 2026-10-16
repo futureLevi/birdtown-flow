@@ -17,6 +17,8 @@ final class FeedbackCenter {
     private(set) var inFlight: Set<UUID> = []
 
     @ObservationIgnored private var retryTask: Task<Void, Never>?
+    /// Whether the pill reached the screen when the note's recording started (`HUDController`).
+    @ObservationIgnored var pillReport: (@MainActor () -> String?)?
 
     /// Waits this long after a failure that needs no one to fix it (offline, GitHub busy).
     static let retryDelay: Duration = .seconds(10 * 60)
@@ -155,6 +157,7 @@ final class FeedbackCenter {
         if settings.polishProvider != .off { polish += ", \(settings.polishLevel.rawValue)" }
         details.append(.init("Polish", polish))
         details.append(.init("Live transcription", settings.liveTranscription ? "on" : "off"))
+        if let pill = pillReport?() { details.append(.init("Pill", pill)) }
         return details
     }
 }

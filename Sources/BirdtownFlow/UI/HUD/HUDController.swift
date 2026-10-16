@@ -21,6 +21,11 @@ final class HUDController {
     /// itself open for a pointer that came to it: one that happened to be resting where the
     /// pill appeared (bottom centre, while the user types) must not keep it up forever.
     private var pointerMovedSinceShown = false
+    /// Confirms a new recording's pill reached the screen (`checkVisibility`).
+    private var visibilityCheck: Task<Void, Never>?
+    /// What that check found for the latest recording, in words. Feedback notes carry it, so a
+    /// note that says "no pill" also says what the window server thought.
+    private(set) var recordingReport: String?
 
     func attach(to app: AppModel) {
         guard panel == nil else { return }
@@ -36,6 +41,7 @@ final class HUDController {
         panel.contentView = hosting
         self.panel = panel
         self.model = model
+        app.controller.feedback.pillReport = { [weak self] in self?.recordingReport }
 
         screenObserver = NotificationCenter.default.addObserver(
             forName: NSApplication.didChangeScreenParametersNotification,
@@ -77,7 +83,8 @@ final class HUDController {
         let wantsPanel = phase != .idle || model.settings.showIdlePill
 
         // A new recording: follow the user to whichever screen the pointer is on.
-        if phase == .listening, lastPhase != .listening {
+        let startsRecording = phase == .listening && lastPhase != .listening
+        if startsRecording {
             reposition(followMouse: true)
         }
         if phase != lastPhase {
@@ -89,7 +96,9 @@ final class HUDController {
         if wantsPanel {
             hideTask?.cancel()
             hideTask = nil
-            if !panel.isVisible {
+            // A new recording always comes to the front of its level, even when AppKit says
+            // the panel is up already: the pill is the only sign the mic is open.
+            if !panel.isVisible || startsRecording {
                 panel.orderFrontRegardless()
             }
         } else if panel.isVisible, hideTask == nil {
@@ -102,6 +111,46 @@ final class HUDController {
             }
         }
         updateMouseTracking()
+        if startsRecording {
+            checkVisibility()
+        } else if phase != .listening {
+            visibilityCheck?.cancel()
+        }
+    }
+
+    // MARK: - Visibility
+
+    /// Once the window server has had a moment, makes sure a new recording's pill is really on
+    /// screen. If it isn't, the panel is placed and ordered front again, and both findings go
+    /// to the log (`log show --predicate 'subsystem == "com.birdtownlabs.flow" && category == "ui"'`)
+    /// and to `recordingReport`.
+    private func checkVisibility() {
+        visibilityCheck?.cancel()
+        recordingReport = nil
+        visibilityCheck = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: Self.visibilitySettle)
+            guard let self, !Task.isCancelled, let first = self.visibility() else { return }
+            if first.isOnScreen {
+                self.recordingReport = first.summary
+                Log.ui.debug("pill on screen: \(first.summary, privacy: .public)")
+                return
+            }
+            Log.ui.error("pill not on screen while recording: \(first.summary, privacy: .public)")
+            self.reposition(followMouse: true)
+            self.panel?.orderFrontRegardless()
+            try? await Task.sleep(for: Self.visibilitySettle)
+            guard !Task.isCancelled, let second = self.visibility() else { return }
+            Log.ui.error("pill shown again: \(second.summary, privacy: .public)")
+            self.recordingReport = "Not on screen at first (\(first.summary)). Shown again: \(second.summary)"
+        }
+    }
+
+    private static let visibilitySettle: Duration = .milliseconds(400)
+
+    private func visibility() -> HUDVisibility? {
+        guard let panel, let model else { return nil }
+        let pill = HUDMetrics.pillFrame(for: model.state).offsetBy(dx: panel.frame.minX, dy: panel.frame.minY)
+        return HUDVisibility(panel: panel, pill: pill)
     }
 
     // MARK: - VoiceOver
@@ -360,12 +409,67 @@ final class HUDPanel: NSPanel {
         backgroundColor = .clear
         // The pill draws its own shadow; AppKit's would outline the whole transparent panel.
         hasShadow = false
+        // Hiding the app (⌘H, or stepping aside to paste from History) leaves the pill up.
+        // Otherwise it would vanish with the app, and ordering it front again would unhide
+        // the whole app, main window and all.
+        canHide = false
         isReleasedWhenClosed = false
         animationBehavior = .none
     }
 
     override var canBecomeKey: Bool { false }
     override var canBecomeMain: Bool { false }
+}
+
+/// Whether the panel is really on screen, as AppKit and the window server see it, and why not.
+@MainActor
+struct HUDVisibility {
+    var isVisible: Bool
+    var isOccluded: Bool
+    var isOnActiveSpace: Bool
+    var isInWindowList: Bool
+    /// The pill's centre lies on a connected display.
+    var isOnDisplay: Bool
+    var pill: CGRect
+    var display: CGRect?
+    var appIsActive: Bool
+    var appIsHidden: Bool
+
+    init(panel: NSWindow, pill: CGRect) {
+        isVisible = panel.isVisible
+        isOccluded = !panel.occlusionState.contains(.visible)
+        isOnActiveSpace = panel.isOnActiveSpace
+        let onScreen = CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as? [[String: Any]] ?? []
+        isInWindowList = onScreen.contains { ($0[kCGWindowNumber as String] as? Int) == panel.windowNumber }
+        let centre = CGPoint(x: pill.midX, y: pill.midY)
+        display = NSScreen.screens.first { $0.frame.contains(centre) }?.frame
+        isOnDisplay = display != nil
+        self.pill = pill
+        appIsActive = NSApp.isActive
+        appIsHidden = NSApp.isHidden
+    }
+
+    var isOnScreen: Bool { isVisible && !isOccluded && isOnActiveSpace && isInWindowList && isOnDisplay }
+
+    /// "On screen at 656, 66 on a 1512×982 display · Birdtown Flow in front", or what's wrong.
+    var summary: String {
+        var problems: [String] = []
+        if !isVisible { problems.append("ordered out") }
+        if !isInWindowList { problems.append("not in the window server's on-screen list") }
+        if !isOnActiveSpace { problems.append("not on the current Space") }
+        if isOccluded { problems.append("covered") }
+        if !isOnDisplay { problems.append("off every display") }
+        let place = "\(Int(pill.minX)), \(Int(pill.minY))"
+        var text = problems.isEmpty ? "On screen at \(place)" : problems.joined(separator: ", ") + " (pill at \(place))"
+        if let display {
+            text += " on a \(Int(display.width))×\(Int(display.height)) display"
+        } else {
+            let displays = NSScreen.screens.map { "\(Int($0.frame.width))×\(Int($0.frame.height))" }
+            text += "; displays: \(displays.joined(separator: ", "))"
+        }
+        let app = appIsHidden ? "Birdtown Flow hidden" : appIsActive ? "Birdtown Flow in front" : "another app in front"
+        return text + " · " + app
+    }
 }
 
 /// Every click on the HUD is a "first mouse" (the panel is never key), so accept it —
