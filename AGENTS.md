@@ -68,6 +68,11 @@ make snapshots      # every screen to ./snapshots, light and dark
   a property-listener block queued for its input unit, and the app crashes in Apple's code
   when it runs. `AudioRecorder.discardEngine()` retires engines instead; they're released
   once they've gone quiet (`QuietRelease`). Don't add a path that sets an engine to `nil`.
+- **Selecting an input device leaves the input bus in the old device's format.**
+  `kAudioOutputUnitProperty_CurrentDevice` changes the hardware under an input node that
+  already exists, and the engine won't start while the bus's rate disagrees with it.
+  `AudioRecorder.installTap` taps in the hardware's format when they differ; keep tapping
+  through it. A chosen mic that still won't start falls back to the system default.
 - **AX calls into other apps need short timeouts**; an unresponsive app must never hang
   Birdtown Flow's main thread.
 - **`log` may be shadowed in your shell.** Use `/usr/bin/log show --predicate
