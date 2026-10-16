@@ -1,0 +1,11 @@
+sha=da052e904f86959873c4f9138e47eecf27d78788
+branch=claude/feedback-note-pill-iya4pg
+build=success
+test=success
+snapshots=success
+synth=success
+speech=success
+segmented=failure
+signcheck=success
+signing=skipped
+release=skipped
