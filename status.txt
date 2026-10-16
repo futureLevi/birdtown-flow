@@ -1,0 +1,11 @@
+sha=8cceb11a533d51621e077e6f5d3c28d4b2230fda
+branch=claude/mic-selection-recording-ctf285
+build=success
+test=success
+snapshots=success
+synth=success
+speech=success
+segmented=failure
+signcheck=success
+signing=skipped
+release=skipped
