@@ -24,6 +24,8 @@ struct CapturedAudio: Sendable {
     /// From `AudioRecorder.start` (the key going down) to the microphone's first buffer.
     /// `nil` when no buffer ever came.
     var micLiveMs: Int? = nil
+    /// The chosen microphone wouldn't start, so this was recorded from the system default.
+    var usedDefaultInput = false
 
     var duration: Double { Double(samples.count) / AudioRecorder.sampleRate }
 }
@@ -70,6 +72,12 @@ final class AudioRecorder: @unchecked Sendable {
     private var engineDevice: AudioDeviceID?
     private var configObserver: (any NSObjectProtocol)?
     private var sink: CaptureSink?
+    /// The running capture fell back to the system default input (`CapturedAudio.usedDefaultInput`).
+    private var sinkUsedDefaultInput = false
+    /// Same-device restarts of the running capture (`restart`), capped so a device that keeps
+    /// changing can't keep it going round.
+    private var sinkRestarts = 0
+    private static let maxRestarts = 3
     /// The device setting from the last `prewarm` or `start`, so an idle rebuild picks the same one.
     private var lastDeviceUID: String?
     /// Engines we've finished with, kept alive until AVFAudio has finished with them too.
@@ -117,7 +125,8 @@ final class AudioRecorder: @unchecked Sendable {
                 self.sink = nil
                 // Tap off before closing, so no trailing buffer is dropped between the two.
                 self.engine?.inputNode.removeTap(onBus: 0)
-                let audio = sink.close()
+                var audio = sink.close()
+                audio.usedDefaultInput = self.sinkUsedDefaultInput
                 continuation.resume(returning: audio)
                 self.engine?.stop()
                 Log.audio.info("capture stopped — \(audio.duration, format: .fixed(precision: 2))s")
@@ -152,19 +161,6 @@ final class AudioRecorder: @unchecked Sendable {
         _ = finishCapture()
         lastDeviceUID = deviceUID
 
-        let engine = preparedEngine(for: AudioDevices.resolveInputDevice(uid: deviceUID))
-        let input = engine.inputNode
-        let hardware = input.inputFormat(forBus: 0)
-        let tapFormat = input.outputFormat(forBus: 0)
-        guard hardware.sampleRate > 0, hardware.channelCount > 0,
-              tapFormat.sampleRate > 0, tapFormat.channelCount > 0
-        else {
-            Log.audio.error("no usable input format (\(hardware.sampleRate)Hz × \(hardware.channelCount))")
-            discardEngine()
-            emit(.failed(.noInputDevice, generation: generation))
-            return
-        }
-
         let sink = CaptureSink(
             generation: generation,
             maxSamples: Int(Self.sampleRate * Self.maxDuration),
@@ -172,9 +168,42 @@ final class AudioRecorder: @unchecked Sendable {
             emit: { [weak self] event in self?.emit(event) }
         )
 
-        // `format: nil` taps in the bus's own format. Passing a format that disagrees with the
-        // hardware raises an Objective-C exception, which Swift can't catch.
-        input.installTap(onBus: 0, bufferSize: 1024, format: nil, block: sink.makeTapBlock())
+        let chosen = AudioDevices.resolveInputDevice(uid: deviceUID)
+        var outcome = open(chosen, into: sink)
+        var usedDefault = false
+        // A chosen microphone that won't start shouldn't cost the recording: the words are
+        // being spoken now. Try the system default once, and say so when the dictation is done.
+        if case .failure = outcome, deviceUID != nil,
+           let fallback = AudioDevices.defaultInputDeviceID(), fallback != chosen {
+            Log.audio.notice("the chosen input wouldn't start — recording from the system default")
+            outcome = open(fallback, into: sink)
+            usedDefault = true
+        }
+
+        switch outcome {
+        case .success(let format):
+            self.sink = sink
+            sinkUsedDefaultInput = usedDefault
+            sinkRestarts = 0
+            Log.audio.info("capture started — \(format.sampleRate)Hz × \(format.channelCount) → 16kHz mono")
+        case .failure(let error):
+            emit(.failed(error, generation: generation))
+        }
+    }
+
+    /// Starts `device`'s engine feeding `sink`, and returns the format it delivers. On failure
+    /// the engine is retired, so the next attempt builds a fresh one.
+    private func open(_ device: AudioDeviceID?, into sink: CaptureSink) -> Result<AVAudioFormat, AudioRecorderError> {
+        let engine = preparedEngine(for: device)
+        let input = engine.inputNode
+        let hardware = input.inputFormat(forBus: 0)
+        guard hardware.sampleRate > 0, hardware.channelCount > 0 else {
+            Log.audio.error("no usable input format (\(hardware.sampleRate)Hz × \(hardware.channelCount))")
+            discardEngine()
+            return .failure(.noInputDevice)
+        }
+
+        let format = installTap(on: input, hardware: hardware, block: sink.makeTapBlock())
         engine.prepare()
         do {
             try engine.start()
@@ -182,12 +211,39 @@ final class AudioRecorder: @unchecked Sendable {
             Log.audio.error("engine start failed: \(error.localizedDescription, privacy: .public)")
             input.removeTap(onBus: 0)
             discardEngine()
-            emit(.failed(.couldNotStart(error.localizedDescription), generation: generation))
-            return
+            return .failure(.couldNotStart(error.localizedDescription))
         }
+        return .success(format)
+    }
 
-        self.sink = sink
-        Log.audio.info("capture started — \(tapFormat.sampleRate)Hz × \(tapFormat.channelCount) → 16kHz mono")
+    /// Taps the input node's output bus, and returns the format the tap delivers.
+    ///
+    /// Normally the tap takes the bus's own format (`format: nil`): passing one that disagrees
+    /// with the hardware's sample rate raises an Objective-C exception, which Swift can't catch.
+    /// But selecting a device (`preparedEngine`) changes the hardware under an input node that
+    /// already exists, and the bus can keep the previous device's rate and channel count. The
+    /// input unit can't convert sample rates, so the engine then refuses to start: choosing a
+    /// microphone whose format differs from the default's made every recording fail. When the
+    /// two disagree, the bus is set to the hardware's own rate and channels.
+    private func installTap(on input: AVAudioInputNode, hardware: AVAudioFormat, block: @escaping AVAudioNodeTapBlock) -> AVAudioFormat {
+        let bus = input.outputFormat(forBus: 0)
+        var format: AVAudioFormat?
+        if bus.sampleRate != hardware.sampleRate || bus.channelCount != hardware.channelCount {
+            format = Self.busFormat(matching: hardware)
+            Log.audio.notice("input bus was \(bus.sampleRate)Hz × \(bus.channelCount), hardware is \(hardware.sampleRate)Hz × \(hardware.channelCount) — tapping in the hardware's format")
+        }
+        input.installTap(onBus: 0, bufferSize: 1024, format: format, block: block)
+        return format ?? bus
+    }
+
+    /// The engine's usual bus format (deinterleaved Float32) at `hardware`'s rate and channels.
+    private static func busFormat(matching hardware: AVAudioFormat) -> AVAudioFormat? {
+        if hardware.channelCount <= 2 {
+            return AVAudioFormat(standardFormatWithSampleRate: hardware.sampleRate, channels: hardware.channelCount)
+        }
+        guard let layout = AVAudioChannelLayout(layoutTag: kAudioChannelLayoutTag_DiscreteInOrder | hardware.channelCount)
+        else { return nil }
+        return AVAudioFormat(standardFormatWithSampleRate: hardware.sampleRate, channelLayout: layout)
     }
 
     private func finishCapture() -> CapturedAudio {
@@ -197,7 +253,8 @@ final class AudioRecorder: @unchecked Sendable {
             engine.inputNode.removeTap(onBus: 0)
             engine.stop()
         }
-        let audio = sink.close()
+        var audio = sink.close()
+        audio.usedDefaultInput = sinkUsedDefaultInput
         Log.audio.info("capture stopped — \(audio.duration, format: .fixed(precision: 2))s")
         return audio
     }
@@ -294,8 +351,9 @@ final class AudioRecorder: @unchecked Sendable {
     /// Monotonic seconds, on the same clock as `DispatchTime` (both stop while asleep).
     private static var uptime: TimeInterval { ProcessInfo.processInfo.systemUptime }
 
-    /// The hardware changed under us. The engine has already stopped itself; keep what was
-    /// captured and let the controller finish the dictation normally.
+    /// The hardware changed under us. The engine has already stopped itself. If the input is
+    /// still the same device, carry on with it; otherwise keep what was captured and let the
+    /// controller finish the dictation normally.
     private func configurationChanged(source: ObjectIdentifier) {
         guard let engine, ObjectIdentifier(engine) == source else {
             // A retired engine is still hearing from the hardware: not safe to free yet.
@@ -305,6 +363,22 @@ final class AudioRecorder: @unchecked Sendable {
         // The notification can also follow our own device selection while the engine keeps
         // running; only a stopped engine means capture actually ended.
         guard !engine.isRunning else { return }
+
+        // Selecting a device reports a change too, often only after the engine has started
+        // (the selection was just made, on key-down), and other hardware changes can leave our
+        // input untouched. The engine is still good for the same device: restart it rather
+        // than end the recording, or while idle simply keep it for the next one.
+        let sameDevice = AudioDevices.resolveInputDevice(uid: lastDeviceUID) == engineDevice
+        if sameDevice {
+            guard let sink else {
+                Log.audio.info("audio configuration changed; same input — keeping the engine")
+                return
+            }
+            if sinkRestarts < Self.maxRestarts, restart(engine, into: sink) {
+                sinkRestarts += 1
+                return
+            }
+        }
 
         Log.audio.notice("audio configuration changed — rebuilding the engine")
         if let sink {
@@ -316,6 +390,26 @@ final class AudioRecorder: @unchecked Sendable {
         let previousDevice = engineDevice
         discardEngine()
         if sink == nil { rebuildWhenSettled(replacing: previousDevice) }
+    }
+
+    /// Restarts a capture's engine on the same device after a configuration change, re-tapping
+    /// in whatever format the hardware has now (`CaptureSink` follows a format change).
+    private func restart(_ engine: AVAudioEngine, into sink: CaptureSink) -> Bool {
+        let input = engine.inputNode
+        input.removeTap(onBus: 0)
+        let hardware = input.inputFormat(forBus: 0)
+        guard hardware.sampleRate > 0, hardware.channelCount > 0 else { return false }
+        _ = installTap(on: input, hardware: hardware, block: sink.makeTapBlock())
+        engine.prepare()
+        do {
+            try engine.start()
+        } catch {
+            Log.audio.error("engine restart failed: \(error.localizedDescription, privacy: .public)")
+            input.removeTap(onBus: 0)
+            return false
+        }
+        Log.audio.notice("audio configuration changed; same input — capture restarted")
+        return true
     }
 
     /// While idle, re-prewarm for the device now in effect (AirPods became the default input),

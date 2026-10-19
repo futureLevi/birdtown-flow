@@ -383,6 +383,10 @@ struct AudioSettingsPane: View {
             refreshDisk()
         }
         .onChange(of: settings.engine) { refreshDisk() }
+        .onChange(of: settings.inputDeviceUID) {
+            guard preview == nil else { return }
+            model.controller.inputDeviceChanged()
+        }
         .onChange(of: stateKind) { refreshDisk() }
         .confirmationDialog(
             "Delete this speech model?",

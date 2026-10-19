@@ -288,6 +288,14 @@ final class DictationController {
         }
     }
 
+    /// The microphone picker changed: select the new input now, while idle, so its engine has
+    /// settled before the next key-down instead of being built and started in one go.
+    func inputDeviceChanged() {
+        if Permissions.hasMicrophone, session == nil {
+            recorder.prewarm(deviceUID: settings.inputDeviceUID)
+        }
+    }
+
     private func restartHotkey() {
         // Restarting the tap forgets a held key, so its release would never arrive and a
         // hold-to-talk recording would be orphaned. Drop it (hands-free ones need no key).
@@ -1032,6 +1040,9 @@ final class DictationController {
             } else if let polishNotice = DictationFeedback.polishNotice(for: output.polishNote) {
                 notice = polishNotice
                 resultFollowUp = .record(id)
+            } else if audio.usedDefaultInput {
+                notice = "Used the default microphone · the chosen one wouldn't start"
+                resultFollowUp = .inputDevice
             }
             processing = nil
             Sounds.play(.done)
