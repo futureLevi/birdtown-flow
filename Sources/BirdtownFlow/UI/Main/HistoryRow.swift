@@ -545,9 +545,8 @@ struct HistoryRow: View {
     // MARK: - Actions
 
     private func copy() {
-        let pasteboard = NSPasteboard.general
-        pasteboard.clearContents()
-        pasteboard.setString(record.finalText, forType: .string)
+        // Linked snippets stay linked where the paste can show it.
+        TextInjector.copy(record.finalText, links: record.links ?? [])
         flashCopied()
     }
 

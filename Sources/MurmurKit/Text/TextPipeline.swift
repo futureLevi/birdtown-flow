@@ -31,11 +31,16 @@ public struct PipelineResult: Sendable, Equatable {
     public var corrections: [AppliedCorrection]
     /// Triggers of the snippets that expanded.
     public var snippets: [String]
+    /// Linked snippets that expanded. `text` holds each one's plain form.
+    public var links: [SnippetLink]
 
-    public init(text: String, corrections: [AppliedCorrection] = [], snippets: [String] = []) {
+    public init(
+        text: String, corrections: [AppliedCorrection] = [], snippets: [String] = [], links: [SnippetLink] = []
+    ) {
         self.text = text
         self.corrections = corrections
         self.snippets = snippets
+        self.links = links
     }
 }
 
@@ -83,7 +88,7 @@ public enum TextPipeline {
         //    corrections can touch a URL or a signature the user typed exactly.
         let expanded = SnippetExpander.substitute(in: input, snippets: snippets)
         if let only = expanded.soleExpansion {
-            return PipelineResult(text: only, snippets: expanded.fired)
+            return PipelineResult(text: only, snippets: expanded.fired, links: expanded.links)
         }
 
         // 2. Style.
@@ -92,7 +97,8 @@ public enum TextPipeline {
         // 3. Dictionary corrections last, so they win over everything before them.
         let (corrected, applied) = corrector.apply(to: styled)
         return PipelineResult(
-            text: expanded.restore(in: corrected), corrections: applied, snippets: expanded.fired)
+            text: expanded.restore(in: corrected), corrections: applied, snippets: expanded.fired,
+            links: expanded.links)
     }
 }
 
@@ -103,6 +109,7 @@ struct SnippetExpander {
     var text: String
     var expansions: [String] = []
     var fired: [String] = []
+    var links: [SnippetLink] = []
 
     /// Placeholders are private-use scalars: never produced by an engine or a model, caseless,
     /// and not letters — so word-fenced patterns treat them as a boundary.
@@ -169,7 +176,9 @@ struct SnippetExpander {
             guard !matches.isEmpty else { continue }
 
             let marker = placeholder(result.expansions.count)
-            let dropsFullStop = endsWithLinkOrEmail(snippet.expansion)
+            // A linked snippet ends in ")", so a full stop after it can't run into the address.
+            let linked = snippet.linked
+            let dropsFullStop = linked == nil && endsWithLinkOrEmail(snippet.expansion)
             var output = ""
             var cursor = 0
             for match in matches {
@@ -184,8 +193,9 @@ struct SnippetExpander {
             }
             output += ns.substring(from: cursor)
             result.text = output
-            result.expansions.append(snippet.expansion)
+            result.expansions.append(linked?.plain ?? snippet.expansion)
             result.fired.append(snippet.trigger)
+            if let linked { result.links.append(linked) }
         }
         return result
     }

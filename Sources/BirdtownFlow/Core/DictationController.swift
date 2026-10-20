@@ -1002,7 +1002,8 @@ final class DictationController {
             }
 
             let insertStart = clock.now
-            let (outcome, split) = await TextInjector.insertMeasured(text, restoreClipboard: settings.restoreClipboard)
+            let (outcome, split) = await TextInjector.insertMeasured(
+                text, links: output.result.links, restoreClipboard: settings.restoreClipboard)
             insertMs = Self.milliseconds(insertStart.duration(to: clock.now))
             insertSplit = split
             var copiedNotice: String?
@@ -1207,6 +1208,7 @@ final class DictationController {
             record.corrections = Replacements.combined(
                 boost: boosted, polish: polished, dictionary: result.corrections)
             record.snippets = result.snippets
+            record.links = result.links.isEmpty ? nil : result.links
             record.polishedBy = polishedBy
             record.polishConfiguration = polishConfiguration
             record.timings.transcribeMs = transcribeMs
@@ -1607,10 +1609,11 @@ final class DictationController {
     func insert(_ record: HistoryRecord) {
         guard record.hasText else { return }
         let text = record.finalText
+        let links = record.links ?? []
         let restore = settings.restoreClipboard
         Task { [weak self] in
             await Self.yieldFocusIfNeeded()
-            let outcome = await TextInjector.insert(text, restoreClipboard: restore)
+            let outcome = await TextInjector.insert(text, links: links, restoreClipboard: restore)
             guard case .copied(let reason) = outcome else { return }
             Log.inject.info("insert from history copied instead: \(reason.message, privacy: .public)")
             // Say so the way a fresh dictation does, but never over a live one: a recording
@@ -1674,7 +1677,7 @@ final class DictationController {
                 updated.outcome = .empty
             } else {
                 updated.outcome = .copied
-                TextInjector.copy(output.result.text)
+                TextInjector.copy(output.result.text, links: output.result.links)
             }
             history.update(updated)
             if lastRecord?.id == updated.id { lastRecord = updated }

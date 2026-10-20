@@ -319,9 +319,8 @@ struct MenuBarContent: View {
     }
 
     private func copy(_ record: HistoryRecord) {
-        let pasteboard = NSPasteboard.general
-        pasteboard.clearContents()
-        pasteboard.setString(record.finalText, forType: .string)
+        // Linked snippets stay linked where the paste can show it.
+        TextInjector.copy(record.finalText, links: record.links ?? [])
         withAnimation(Motion.resolve(Motion.snappy, reduceMotion: reduceMotion)) { copiedID = record.id }
         Task {
             try? await Task.sleep(for: Motion.confirmationHold)

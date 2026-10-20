@@ -20,6 +20,7 @@ struct SnippetsView: View {
         // Snippets waiting out a delete's undo window are hidden.
         let visible = store.visible.filter {
             trimmed.isEmpty || $0.trigger.localizedStandardContains(trimmed) || $0.expansion.localizedStandardContains(trimmed)
+                || ($0.link?.localizedStandardContains(trimmed) ?? false)
         }
         ScrollView {
             VStack(alignment: .leading, spacing: Layout.Library.blockGap) {
@@ -57,8 +58,8 @@ struct SnippetsView: View {
                         EmptyState(
                             symbol: "magnifyingglass",
                             title: "No snippets match “\(trimmed)”",
-                            message: "Search looks at the phrase you say and the text it types. Clear the "
-                                + "search to see every snippet."
+                            message: "Search looks at the phrase you say, the text it types and its link. "
+                                + "Clear the search to see every snippet."
                         ) {
                             Button("Clear Search") { query = "" }
                                 .buttonStyle(.flowSecondary)
@@ -249,14 +250,28 @@ private struct SnippetCard: View {
             Text("Flow types")
                 .font(Typography.callout)
                 .foregroundStyle(Palette.inkSecondary)
+            // Linked text reads as a link: Signal blue, underlined, with its address under it.
+            let link = snippet.linked
             Text(snippet.expansion)
                 .font(Typography.transcript)
-                .foregroundStyle(snippet.isEnabled ? Palette.ink : Palette.inkTertiary)
+                .foregroundStyle(
+                    snippet.isEnabled ? (link == nil ? Palette.ink : Palette.accentInk) : Palette.inkTertiary)
+                .underline(link != nil)
                 .lineSpacing(Spacing.transcriptLine)
                 .lineLimit(Layout.Library.expansionLines)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.top, Spacing.m)
                 .help(snippet.expansion)
+            if let link {
+                Label(link.url, systemImage: "link")
+                    .font(Typography.callout)
+                    .foregroundStyle(Palette.inkSecondary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                    .padding(.top, Spacing.xs)
+                    .help(link.url)
+                    .accessibilityLabel("Links to \(link.url)")
+            }
             Spacer(minLength: Layout.Library.snippetFooterTop)
             Rectangle()
                 .fill(Palette.hairline)
@@ -319,6 +334,7 @@ struct SnippetEditorSheet: View {
 
     @State private var trigger: String
     @State private var expansion: String
+    @State private var link: String
     @FocusState private var expansionFocused: Bool
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
@@ -329,6 +345,7 @@ struct SnippetEditorSheet: View {
         self.onDelete = onDelete
         _trigger = State(initialValue: original?.trigger ?? "")
         _expansion = State(initialValue: original?.expansion ?? "")
+        _link = State(initialValue: original?.link ?? "")
     }
 
     private var trimmedTrigger: String { trigger.trimmingCharacters(in: .whitespacesAndNewlines) }
@@ -342,8 +359,16 @@ struct SnippetEditorSheet: View {
         trimmedTrigger.contains { $0.isLetter || $0.isNumber }
     }
 
+    private var trimmedLink: String { link.trimmingCharacters(in: .whitespacesAndNewlines) }
+
+    /// The address to save: `nil` for no link, and also for one that isn't an address.
+    private var normalizedLink: String? { SnippetLink.normalizedURL(trimmedLink) }
+
+    private var linkIsInvalid: Bool { !trimmedLink.isEmpty && normalizedLink == nil }
+
     private var canSave: Bool {
         triggerHasWords && !expansion.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !hasConflict
+            && !linkIsInvalid
     }
 
     var body: some View {
@@ -384,6 +409,20 @@ struct SnippetEditorSheet: View {
                     .overlay(shape.strokeBorder(Palette.hairlineStrong, lineWidth: Layout.Main.hairline))
                     .flowFocusRing(shape, drawn: expansionFocused)
                     .accessibilityLabel("Expansion")
+            }
+
+            VStack(alignment: .leading, spacing: Spacing.xs) {
+                LabeledInput(label: "Link it to (optional)", text: $link, prompt: "https://calendar.app.google/…")
+                if linkIsInvalid {
+                    problemRow("That isn't a web address. Paste the whole link, starting with https://.")
+                } else {
+                    Text(trimmedLink.isEmpty
+                        ? "Add an address and the text above becomes a link to it, like ⌘K in a document."
+                        : "Where links can't show, like Messages, it types the text with the address after it.")
+                        .font(Typography.callout)
+                        .foregroundStyle(Palette.inkSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
 
             HStack(spacing: Spacing.s) {
@@ -430,9 +469,10 @@ struct SnippetEditorSheet: View {
             var updated = original
             updated.trigger = trimmedTrigger
             updated.expansion = expansion
+            updated.link = normalizedLink
             onSave(updated)
         } else {
-            onSave(Snippet(trigger: trimmedTrigger, expansion: expansion))
+            onSave(Snippet(trigger: trimmedTrigger, expansion: expansion, link: normalizedLink))
         }
     }
 }

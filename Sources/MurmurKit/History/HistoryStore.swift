@@ -353,6 +353,7 @@ private struct LegacyRecord: Decodable {
     var polishedBy: PolishProvider?
     var corrections: [AppliedCorrection]?
     var snippets: [String]?
+    var links: [SnippetLink]?
     var audioFileName: String?
     var audioDuration: Double?
     var timings: DictationTimings?
@@ -363,7 +364,7 @@ private struct LegacyRecord: Decodable {
         HistoryRecord(
             id: id, createdAt: createdAt, context: context, style: style, engine: engine ?? "",
             rawText: rawText ?? "", finalText: finalText ?? "", polishedBy: polishedBy,
-            corrections: corrections ?? [], snippets: snippets ?? [], audioFileName: audioFileName,
+            corrections: corrections ?? [], snippets: snippets ?? [], links: links, audioFileName: audioFileName,
             audioDuration: audioDuration ?? 0, timings: timings ?? DictationTimings(),
             outcome: outcome ?? .inserted, errorMessage: errorMessage)
     }
