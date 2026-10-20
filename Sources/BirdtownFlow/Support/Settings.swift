@@ -215,6 +215,16 @@ final class Settings {
                      forKey: Keys.styles)
     }
 
+    /// Apps the person put in a category on the Style page, bundle ID to category. They win
+    /// over `AppCategoryResolver`'s built-in lists, and over a browser's tab.
+    private(set) var appCategories: [String: AppCategory]
+
+    /// Puts an app in `category`, or back where the built-in lists put it when `nil`.
+    func setCategory(_ category: AppCategory?, forApp bundleID: String) {
+        appCategories = AppCategoryResolver.overrides(appCategories, putting: bundleID, in: category)
+        defaults.set(appCategories.mapValues(\.rawValue), forKey: Keys.appCategories)
+    }
+
     // MARK: AI polish
 
     var polishProvider: PolishProvider {
@@ -328,6 +338,7 @@ final class Settings {
         static let spokenCommands = "spokenCommands"
         static let restoreClipboard = "restoreClipboard"
         static let styles = "styles"
+        static let appCategories = "appCategories"
         static let polishProvider = "polishProvider"
         static let polishLevel = "polishLevel"
         static let anthropicModel = "anthropicModel"
@@ -376,6 +387,8 @@ final class Settings {
                 result[category] = style
             }
         }
+        let rawAppCategories = defaults.dictionary(forKey: Keys.appCategories) as? [String: String] ?? [:]
+        appCategories = rawAppCategories.compactMapValues(AppCategory.init(rawValue:))
         polishProvider = PolishProvider(rawValue: defaults.string(forKey: Keys.polishProvider) ?? "") ?? .off
         polishLevel = PolishLevel(rawValue: defaults.string(forKey: Keys.polishLevel) ?? "") ?? .fillerWords
         anthropicModel = defaults.string(forKey: Keys.anthropicModel) ?? AnthropicClient.defaultModel

@@ -490,7 +490,8 @@ final class DictationController {
             blocked = "Birdtown Flow needs microphone access"
         }
 
-        let (quick, pid) = FrontmostContext.quick()
+        let overrides = settings.appCategories
+        let (quick, pid) = FrontmostContext.quick(overrides: overrides)
         context = quick
         // Polish gets ready for the category the dictation will use: the waiting Claude Code
         // and Apple Intelligence sessions only serve the instructions they started with. A
@@ -498,7 +499,7 @@ final class DictationController {
         // for that (`preparePolishOnceTitleIsRead`).
         // A feedback note is never polished, so nothing gets ready for it.
         let titleDecidesCategory = kind == .dictation
-            && AppCategoryResolver.categoryDependsOnTitle(bundleID: quick.bundleID)
+            && AppCategoryResolver.categoryDependsOnTitle(bundleID: quick.bundleID, overrides: overrides)
         if kind == .dictation, !titleDecidesCategory {
             // Claude Code takes a second or two to start; do it while the person is talking.
             prewarmPolish(for: quick)
@@ -506,7 +507,7 @@ final class DictationController {
             if blocked == nil { warmUpPolish(for: quick) }
         }
         let contextTask = Task.detached(priority: .userInitiated) {
-            FrontmostContext.refined(quick, pid: pid)
+            FrontmostContext.refined(quick, pid: pid, overrides: overrides)
         }
 
         level = 0

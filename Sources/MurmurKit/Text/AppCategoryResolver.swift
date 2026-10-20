@@ -4,6 +4,9 @@ import Foundation
 ///
 /// Native apps are recognised by bundle ID. Browsers (and web apps installed from them) host
 /// Gmail, Slack and WhatsApp alike, so for those the front window's title decides.
+///
+/// `overrides` are the person's own choices from the Style page, bundle ID to category. They
+/// win over the built-in lists and, for a browser, over its window title.
 public enum AppCategoryResolver {
     public static let personalApps: Set<String> = [
         "com.apple.MobileSMS",  // Messages
@@ -89,15 +92,67 @@ public enum AppCategoryResolver {
     /// "Linear algebra - Wikipedia").
     static let wholeSegmentKeywords: Set<String> = ["Linear", "Teams"]
 
-    public static func category(bundleID: String?, windowTitle: String?) -> AppCategory {
+    public static func category(
+        bundleID: String?, windowTitle: String?, overrides: [String: AppCategory] = [:]
+    ) -> AppCategory {
         guard let bundleID, !bundleID.isEmpty else { return .other }
-        if personalApps.contains(bundleID) { return .personal }
-        if workApps.contains(bundleID) { return .work }
-        if emailApps.contains(bundleID) { return .email }
+        if let chosen = overrides[bundleID] { return chosen }
+        if let listed = listedCategory(bundleID) { return listed }
         if isBrowser(bundleID), let windowTitle {
             return category(forWindowTitle: windowTitle) ?? .other
         }
         return .other
+    }
+
+    /// Where `bundleID` goes without the person's overrides: its list's category, `nil` for a
+    /// browser (its window title decides), `.other` for any other app.
+    public static func builtInCategory(bundleID: String) -> AppCategory? {
+        if let listed = listedCategory(bundleID) { return listed }
+        return isBrowser(bundleID) ? nil : .other
+    }
+
+    /// The bundle IDs the built-in lists put in `category`. Empty for `.other`, which is every
+    /// app that isn't listed.
+    public static func builtInApps(in category: AppCategory) -> Set<String> {
+        switch category {
+        case .personal: personalApps
+        case .work: workApps
+        case .email: emailApps
+        case .other: []
+        }
+    }
+
+    /// `overrides` with `bundleID` put in `category`, or back where the built-in lists put it
+    /// when `category` is `nil`. A choice that matches the built-in one isn't kept, so the
+    /// overrides only ever hold real changes.
+    public static func overrides(
+        _ overrides: [String: AppCategory], putting bundleID: String, in category: AppCategory?
+    ) -> [String: AppCategory] {
+        var result = overrides
+        if let category, category != builtInCategory(bundleID: bundleID) {
+            result[bundleID] = category
+        } else {
+            result[bundleID] = nil
+        }
+        return result
+    }
+
+    /// The apps the Style page lists under `category`: the built-in ones that weren't moved
+    /// elsewhere, and the ones the person put there. Each sorted by bundle ID; the page sorts
+    /// by name once it has looked the names up.
+    public static func members(
+        of category: AppCategory, overrides: [String: AppCategory]
+    ) -> (builtIn: [String], added: [String]) {
+        let builtIn = builtInApps(in: category).filter { overrides[$0] == nil }
+        let added = overrides.filter { $0.value == category }.keys
+        return (builtIn.sorted(), added.sorted())
+    }
+
+    private static func listedCategory(_ bundleID: String) -> AppCategory? {
+        if personalApps.contains(bundleID) { return .personal }
+        if workApps.contains(bundleID) { return .work }
+        if emailApps.contains(bundleID) { return .email }
+        return nil
     }
 
     public static func isBrowser(_ bundleID: String) -> Bool {
@@ -107,13 +162,10 @@ public enum AppCategoryResolver {
     /// Whether the front window's title can change `bundleID`'s category: a browser, or a web
     /// app installed from one. Every other app is categorized by its bundle ID alone, so a
     /// context read without the title (key-down does, to stay instant) already has the
-    /// category the dictation will use.
-    public static func categoryDependsOnTitle(bundleID: String?) -> Bool {
-        guard let bundleID, !bundleID.isEmpty else { return false }
-        if personalApps.contains(bundleID) || workApps.contains(bundleID) || emailApps.contains(bundleID) {
-            return false
-        }
-        return isBrowser(bundleID)
+    /// category the dictation will use. A browser the person put in a category doesn't wait.
+    public static func categoryDependsOnTitle(bundleID: String?, overrides: [String: AppCategory] = [:]) -> Bool {
+        guard let bundleID, !bundleID.isEmpty, overrides[bundleID] == nil else { return false }
+        return builtInCategory(bundleID: bundleID) == nil
     }
 
     /// Web apps name themselves in a title segment — usually the last ("Inbox (3) - me@x.com -
@@ -155,12 +207,12 @@ public enum AppCategoryResolver {
 extension AppContext {
     /// This context with the focused window's title, and the category the title implies (Gmail
     /// in a browser is email, not "other"). A title that couldn't be read, or an empty one,
-    /// changes nothing.
-    public func withWindowTitle(_ title: String?) -> AppContext {
+    /// changes nothing. `overrides` are the same ones the context was first categorized with.
+    public func withWindowTitle(_ title: String?, overrides: [String: AppCategory] = [:]) -> AppContext {
         guard let title, !title.isEmpty else { return self }
         var context = self
         context.windowTitle = title
-        context.category = AppCategoryResolver.category(bundleID: bundleID, windowTitle: title)
+        context.category = AppCategoryResolver.category(bundleID: bundleID, windowTitle: title, overrides: overrides)
         return context
     }
 }

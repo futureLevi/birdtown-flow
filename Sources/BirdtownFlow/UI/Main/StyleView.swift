@@ -5,6 +5,7 @@ import SwiftUI
 /// Style: how dictated text is shaped for each kind of app. The app categories are listed on
 /// the left; on the right one tone is chosen for the selected category, with one live example.
 /// The example is the real pipeline run on a spoken sentence, so what you pick is what you get.
+/// Below it, the apps in the category, which the person can move between categories.
 struct StyleView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.mainPreview) private var preview
@@ -44,6 +45,7 @@ struct StyleView: View {
                             savedNote(saved)
                                 .transition(.opacity)
                         }
+                        StyleAppsPanel(category: selected)
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }
