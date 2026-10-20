@@ -206,6 +206,7 @@ struct HomeView: View {
                 HistoryRow(
                     record: record,
                     player: player,
+                    density: .glance,
                     // A click opens the dictation in History, with all its actions and
                     // Show Original; the hover buttons still work in place.
                     onSelect: { _ in model.showHistory(revealing: record.id) },
