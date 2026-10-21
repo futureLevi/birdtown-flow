@@ -1,0 +1,11 @@
+sha=59b18f3937a59f7e48d3b91ead9f551a15466899
+branch=claude/snippet-named-links-tu87gv
+build=success
+test=success
+snapshots=success
+synth=success
+speech=success
+segmented=failure
+signcheck=success
+signing=skipped
+release=skipped
