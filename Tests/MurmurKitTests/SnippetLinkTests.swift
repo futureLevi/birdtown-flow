@@ -27,6 +27,67 @@ struct SnippetLinkTests {
         #expect(result.links.count == 1)
     }
 
+    // MARK: Part of the expansion
+
+    let booking = Snippet(
+        trigger: "my booking line", expansion: "grab a time on my calendar",
+        link: "https://calendar.app.google/abc123", linkText: "my calendar")
+
+    @Test("Only the chosen words become the link")
+    func partialLink() {
+        let result = finalize("Sure, my booking line.", snippets: [booking])
+        #expect(result.text == "Sure, grab a time on my calendar (https://calendar.app.google/abc123).")
+        #expect(result.links == [SnippetLink(text: "my calendar", url: "https://calendar.app.google/abc123")])
+        #expect(LinkedText.runs(in: result.text, links: result.links) == [
+            .init("Sure, grab a time on "),
+            .init("my calendar", url: "https://calendar.app.google/abc123"),
+            .init("."),
+        ])
+    }
+
+    @Test("The address goes right after the linked words, wherever they are")
+    func partialLinkInTheMiddle() {
+        var snippet = booking
+        snippet.expansion = "Here's my calendar, grab any free slot"
+        #expect(snippet.typed == "Here's my calendar (https://calendar.app.google/abc123), grab any free slot")
+        let result = finalize("My booking line.", snippets: [snippet])
+        #expect(result.text == snippet.typed)
+        #expect(LinkedText.runs(in: result.text, links: result.links) == [
+            .init("Here's "),
+            .init("my calendar", url: "https://calendar.app.google/abc123"),
+            .init(", grab any free slot"),
+        ])
+    }
+
+    @Test("The words match ignoring case and spaces, keep the expansion's spelling, and link once")
+    func partialLinkMatching() {
+        var snippet = booking
+        snippet.expansion = "Grab a time on My Calendar, or ask me for my calendar"
+        snippet.linkText = "  MY CALENDAR "
+        #expect(snippet.linked == SnippetLink(text: "My Calendar", url: "https://calendar.app.google/abc123"))
+        #expect(snippet.typed
+            == "Grab a time on My Calendar (https://calendar.app.google/abc123), or ask me for my calendar")
+    }
+
+    @Test("Words that aren't in the expansion, or none, link all of it", arguments: [nil, "", "  ", "my diary"])
+    func partialLinkFallsBack(words: String?) {
+        var snippet = booking
+        snippet.linkText = words
+        #expect(snippet.linked
+            == SnippetLink(text: "grab a time on my calendar", url: "https://calendar.app.google/abc123"))
+        #expect(snippet.typed == "grab a time on my calendar (https://calendar.app.google/abc123)")
+    }
+
+    @Test("Words to link without an address type the expansion as is")
+    func partialLinkNeedsAnAddress() {
+        var snippet = booking
+        snippet.link = nil
+        #expect(snippet.linked == nil)
+        #expect(snippet.linkedRange == nil)
+        #expect(snippet.typed == "grab a time on my calendar")
+        #expect(finalize("my booking line", snippets: [snippet]).links.isEmpty)
+    }
+
     @Test("Snippets without a link report none")
     func unlinked() {
         let plain = Snippet(trigger: "my calendly link", expansion: "https://calendly.com/levi")
@@ -45,6 +106,7 @@ struct SnippetLinkTests {
         decoder.dateDecodingStrategy = .iso8601
         let snippets = try decoder.decode([Snippet].self, from: Data(json.utf8))
         #expect(snippets.first?.link == nil)
+        #expect(snippets.first?.linkText == nil)
         #expect(snippets.first?.expansion == "1 Main St")
     }
 

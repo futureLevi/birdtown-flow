@@ -110,6 +110,9 @@ public struct Snippet: Identifiable, Codable, Hashable, Sendable {
     /// An address behind the expansion, the way ⌘K links text in a document: the expansion
     /// is what shows, and this is what it opens. `nil` (or empty) types the expansion as is.
     public var link: String?
+    /// The words in the expansion that `link` goes behind, when only part of it should be the
+    /// link: "my calendar" in "grab a time on my calendar". `nil` (or empty) links all of it.
+    public var linkText: String?
     public var isEnabled: Bool
     public var createdAt: Date
 
@@ -118,6 +121,7 @@ public struct Snippet: Identifiable, Codable, Hashable, Sendable {
         trigger: String,
         expansion: String,
         link: String? = nil,
+        linkText: String? = nil,
         isEnabled: Bool = true,
         createdAt: Date = Date()
     ) {
@@ -125,14 +129,38 @@ public struct Snippet: Identifiable, Codable, Hashable, Sendable {
         self.trigger = trigger
         self.expansion = expansion
         self.link = link
+        self.linkText = linkText
         self.isEnabled = isEnabled
         self.createdAt = createdAt
     }
 
-    /// The expansion as link text, when the snippet has an address to put behind it.
+    /// The linked part of the expansion as link text, when the snippet has an address to put
+    /// behind it. It keeps the expansion's own spelling of `linkText`.
     public var linked: SnippetLink? {
+        guard let link, !link.isEmpty, let range = linkedRange else { return nil }
+        return SnippetLink(text: String(expansion[range]), url: link)
+    }
+
+    /// Where the link goes in the expansion: the first place `linkText` appears, ignoring case,
+    /// or all of it when `linkText` is empty or no longer in the expansion. `nil` without a link.
+    public var linkedRange: Range<String.Index>? {
         guard let link, !link.isEmpty, !expansion.isEmpty else { return nil }
-        return SnippetLink(text: expansion, url: link)
+        return linkText.flatMap { Self.range(of: $0, in: expansion) } ?? expansion.startIndex..<expansion.endIndex
+    }
+
+    /// What the pipeline types: the expansion with its linked words in their plain form,
+    /// "grab a time on my calendar (https://…)". Without a link, the expansion as is.
+    public var typed: String {
+        guard let linked, let range = linkedRange else { return expansion }
+        return expansion.replacingCharacters(in: range, with: linked.plain)
+    }
+
+    /// The first place `words` appear in `expansion`, ignoring case and the spaces around them.
+    /// `nil` when they're empty or not there.
+    public static func range(of words: String, in expansion: String) -> Range<String.Index>? {
+        let words = words.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !words.isEmpty else { return nil }
+        return expansion.range(of: words, options: .caseInsensitive)
     }
 }
 

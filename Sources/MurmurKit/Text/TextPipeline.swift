@@ -176,9 +176,12 @@ struct SnippetExpander {
             guard !matches.isEmpty else { continue }
 
             let marker = placeholder(result.expansions.count)
-            // A linked snippet ends in ")", so a full stop after it can't run into the address.
+            // A snippet that ends in its link ends in ")", so a full stop after it can't run into
+            // the address.
             let linked = snippet.linked
-            let dropsFullStop = linked == nil && endsWithLinkOrEmail(snippet.expansion)
+            let typed = snippet.typed
+            let endsInLink = linked.map { typed.hasSuffix($0.plain) } ?? false
+            let dropsFullStop = !endsInLink && endsWithLinkOrEmail(snippet.expansion)
             var output = ""
             var cursor = 0
             for match in matches {
@@ -193,7 +196,7 @@ struct SnippetExpander {
             }
             output += ns.substring(from: cursor)
             result.text = output
-            result.expansions.append(linked?.plain ?? snippet.expansion)
+            result.expansions.append(typed)
             result.fired.append(snippet.trigger)
             if let linked { result.links.append(linked) }
         }
