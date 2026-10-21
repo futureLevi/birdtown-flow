@@ -29,8 +29,8 @@ enum SampleData {
             Snippet(trigger: "my calendly link", expansion: "https://calendly.com/levi/30min", createdAt: created),
             Snippet(trigger: "my address", expansion: "2301 SE Division St, Portland, OR 97202", createdAt: created),
             Snippet(
-                trigger: "my calendar link", expansion: "my calendar",
-                link: "https://calendar.app.google/q7Zt2mKx9VbLp3Ws8", createdAt: created),
+                trigger: "my calendar link", expansion: "grab a time on my calendar",
+                link: "https://calendar.app.google/q7Zt2mKx9VbLp3Ws8", linkText: "my calendar", createdAt: created),
             Snippet(trigger: "standup template", expansion: "Yesterday:\nToday:\nBlockers:", createdAt: created),
             Snippet(trigger: "email sign off", expansion: "Thanks so much,\nLevi", createdAt: created),
             Snippet(trigger: "zoom link", expansion: "https://zoom.us/j/4155550142", createdAt: created),

@@ -23,8 +23,9 @@ extension SnapshotCatalog {
                     }
                 }
             },
-            // Editing a linked snippet: the expansion is the link's text, the address under it.
-            SnapshotRenderer.Shot("snippet-editor-link", size: CGSize(width: Layout.Main.sheetWidth, height: 640)) {
+            // Editing a linked snippet: the expansion, the address under it, and the words that
+            // link to it ("my calendar" in "grab a time on my calendar").
+            SnapshotRenderer.Shot("snippet-editor-link", size: CGSize(width: Layout.Main.sheetWidth, height: 760)) {
                 snippetEditor(records: records)
             },
             // The panel's polish row sits below the preview, past the first screen, so these

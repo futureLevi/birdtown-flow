@@ -250,13 +250,10 @@ private struct SnippetCard: View {
             Text("Flow types")
                 .font(Typography.callout)
                 .foregroundStyle(Palette.inkSecondary)
-            // Linked text reads as a link: Signal blue, underlined, with its address under it.
             let link = snippet.linked
-            Text(snippet.expansion)
+            expansionText
                 .font(Typography.transcript)
-                .foregroundStyle(
-                    snippet.isEnabled ? (link == nil ? Palette.ink : Palette.accentInk) : Palette.inkTertiary)
-                .underline(link != nil)
+                .foregroundStyle(snippet.isEnabled ? Palette.ink : Palette.inkTertiary)
                 .lineSpacing(Spacing.transcriptLine)
                 .lineLimit(Layout.Library.expansionLines)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -294,6 +291,19 @@ private struct SnippetCard: View {
         }
         .padding(Layout.Library.snippetInset)
         .frame(maxWidth: .infinity, alignment: .topLeading)
+    }
+
+    /// The expansion with its linked words reading as a link: Signal blue, underlined, with the
+    /// address under the card's text. Only those words when the snippet links part of it.
+    private var expansionText: Text {
+        let expansion = snippet.expansion
+        guard let range = snippet.linkedRange else { return Text(expansion) }
+        let linked = Text(expansion[range])
+            .foregroundStyle(snippet.isEnabled ? Palette.accentInk : Palette.inkTertiary)
+            .underline()
+        let before = String(expansion[..<range.lowerBound])
+        let after = String(expansion[range.upperBound...])
+        return Text("\(before)\(linked)\(after)")
     }
 }
 
@@ -335,6 +345,7 @@ struct SnippetEditorSheet: View {
     @State private var trigger: String
     @State private var expansion: String
     @State private var link: String
+    @State private var linkText: String
     @FocusState private var expansionFocused: Bool
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
@@ -346,6 +357,7 @@ struct SnippetEditorSheet: View {
         _trigger = State(initialValue: original?.trigger ?? "")
         _expansion = State(initialValue: original?.expansion ?? "")
         _link = State(initialValue: original?.link ?? "")
+        _linkText = State(initialValue: original?.linkText ?? "")
     }
 
     private var trimmedTrigger: String { trigger.trimmingCharacters(in: .whitespacesAndNewlines) }
@@ -366,9 +378,30 @@ struct SnippetEditorSheet: View {
 
     private var linkIsInvalid: Bool { !trimmedLink.isEmpty && normalizedLink == nil }
 
+    private var trimmedLinkText: String { linkText.trimmingCharacters(in: .whitespacesAndNewlines) }
+
+    /// "Words to link" shows once there's an address to link, or if words were saved before.
+    private var showsLinkText: Bool { !trimmedLink.isEmpty || !trimmedLinkText.isEmpty }
+
+    /// Words to link that the expansion doesn't contain: saving would link something else.
+    private var linkTextIsMissing: Bool {
+        normalizedLink != nil && !trimmedLinkText.isEmpty && Snippet.range(of: trimmedLinkText, in: expansion) == nil
+    }
+
+    /// The words to save: `nil` links the whole expansion, and there's nothing to link without an address.
+    private var savedLinkText: String? {
+        normalizedLink == nil || trimmedLinkText.isEmpty ? nil : trimmedLinkText
+    }
+
+    private var linkTextHint: String {
+        trimmedLinkText.isEmpty
+            ? "Leave it empty to link all of the text, or pick a few words from it to link only those."
+            : "Only “\(trimmedLinkText)” becomes the link. The rest is typed as plain text."
+    }
+
     private var canSave: Bool {
         triggerHasWords && !expansion.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !hasConflict
-            && !linkIsInvalid
+            && !linkIsInvalid && !linkTextIsMissing
     }
 
     var body: some View {
@@ -418,10 +451,25 @@ struct SnippetEditorSheet: View {
                 } else {
                     Text(trimmedLink.isEmpty
                         ? "Add an address and the text above becomes a link to it, like ⌘K in a document."
-                        : "Where links can't show, like Messages, it types the text with the address after it.")
+                        : "Where links can't show, like Messages, the address goes in brackets after the linked words.")
                         .font(Typography.callout)
                         .foregroundStyle(Palette.inkSecondary)
                         .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+
+            if showsLinkText {
+                VStack(alignment: .leading, spacing: Spacing.xs) {
+                    LabeledInput(label: "Words to link (optional)", text: $linkText, prompt: "my calendar")
+                    if linkTextIsMissing {
+                        problemRow(
+                            "“\(trimmedLinkText)” isn't in the text above. Copy the words from there.")
+                    } else {
+                        Text(linkTextHint)
+                            .font(Typography.callout)
+                            .foregroundStyle(Palette.inkSecondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                 }
             }
 
@@ -470,9 +518,11 @@ struct SnippetEditorSheet: View {
             updated.trigger = trimmedTrigger
             updated.expansion = expansion
             updated.link = normalizedLink
+            updated.linkText = savedLinkText
             onSave(updated)
         } else {
-            onSave(Snippet(trigger: trimmedTrigger, expansion: expansion, link: normalizedLink))
+            onSave(Snippet(
+                trigger: trimmedTrigger, expansion: expansion, link: normalizedLink, linkText: savedLinkText))
         }
     }
 }
