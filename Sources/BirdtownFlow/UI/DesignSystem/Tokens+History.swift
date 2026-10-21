@@ -28,6 +28,26 @@ extension Layout {
         static let selectionMarker: CGFloat = 3
         /// Between the filter bar's groups, across and (when it wraps) down.
         static let filterGap: CGFloat = Spacing.m
+
+        /// Home's Recent dictation card: the same rows a step smaller, so the card reads as a
+        /// glance at the last few dictations rather than the full History page.
+        enum Glance {
+            static let appIcon: CGFloat = 22
+            static let rowVertical: CGFloat = Spacing.l
+            /// 17 pt on the same 1.6 line height: about 27 pt a line, the system's own is
+            /// about 21.
+            static let transcriptLine: CGFloat = 6
+        }
+    }
+}
+
+extension Typography {
+    /// Home's Recent dictation rows (`HistoryRow.Density.glance`): dictated words at 17 pt
+    /// instead of 19, the app name at 15, and times and details at 14.
+    enum Glance {
+        static let transcript = Font.system(size: 17)
+        static let headline = Font.system(size: 15, weight: .semibold)
+        static let callout = Font.system(size: 14)
     }
 }
 

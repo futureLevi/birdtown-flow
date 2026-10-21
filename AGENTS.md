@@ -40,8 +40,9 @@ make snapshots      # every screen to ./snapshots, light and dark
   The spectrum (`SpectrumOrb`, `Spectrum`) means live and nothing else; primary actions are
   navy capsules; Signal blue is for selection, focus and links; violet and teal are small
   accents (tuning, vocabulary). Type is big: 19 pt for dictated words, 16-17 for the
-  interface, nothing under 15. Onboarding and the menu bar use `Typography.Compact`. See
-  `docs/brand.md`.
+  interface, nothing under 15. The one exception is Home's Recent dictation card, a step
+  smaller at Levi's request (`Typography.Glance`: 17 / 15 / 14). Onboarding and the menu
+  bar use `Typography.Compact`. See `docs/brand.md`.
 - **Every animation goes through `Motion`** so Reduce Motion is honoured.
 - **Settings live in `Support/Settings.swift`.** Our `Settings` class shadows SwiftUI's
   scene of the same name. The app doesn't use that scene: the Settings screen is a modal in
