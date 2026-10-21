@@ -12,23 +12,24 @@ import MurmurKit
 @MainActor
 enum FrontmostContext {
     /// Bundle ID and name of the frontmost app, categorized without a window title.
-    static func quick() -> (context: AppContext, pid: pid_t?) {
+    /// `overrides` are the person's choices from the Style page (`Settings.appCategories`).
+    static func quick(overrides: [String: AppCategory]) -> (context: AppContext, pid: pid_t?) {
         let app = NSWorkspace.shared.frontmostApplication
         let bundleID = app?.bundleIdentifier
         let context = AppContext(
             bundleID: bundleID,
             appName: app?.localizedName,
             windowTitle: nil,
-            category: AppCategoryResolver.category(bundleID: bundleID, windowTitle: nil)
+            category: AppCategoryResolver.category(bundleID: bundleID, windowTitle: nil, overrides: overrides)
         )
         return (context, app?.processIdentifier)
     }
 
     /// `base` with the focused window's title and the category it implies (Gmail in a browser
     /// is email, not "other"). Best-effort: returns `base` if the title can't be read.
-    nonisolated static func refined(_ base: AppContext, pid: pid_t?) -> AppContext {
+    nonisolated static func refined(_ base: AppContext, pid: pid_t?, overrides: [String: AppCategory]) -> AppContext {
         guard let pid else { return base }
-        return base.withWindowTitle(focusedWindowTitle(pid: pid))
+        return base.withWindowTitle(focusedWindowTitle(pid: pid), overrides: overrides)
     }
 
     nonisolated private static func focusedWindowTitle(pid: pid_t) -> String? {

@@ -62,5 +62,12 @@ extension Layout {
         static let polishTop: CGFloat = 22
         static let polishGap: CGFloat = 16
         static let noteGap: CGFloat = 8
+
+        // The apps panel under the tone panel.
+        static let appsHeadBottom: CGFloat = 10
+        static let appIcon: CGFloat = 28
+        static let appRowGap: CGFloat = 12
+        static let appRowVertical: CGFloat = 10
+        static let appsNoteTop: CGFloat = 14
     }
 }
