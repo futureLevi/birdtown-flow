@@ -1,0 +1,7 @@
+Made "Birdtown Flow Signing" in /Users/runner/work/_temp/test-identity
+identity E9F203F476EF504DC5684022A293FB3A44BF48C4
+/Users/runner/work/_temp/hello: replacing existing signature
+Executable=/Users/runner/work/_temp/hello
+designated => identifier "com.birdtownlabs.signing-check" and certificate leaf = H"e9f203f476ef504dc5684022a293fb3a44bf48c4"
+/Users/runner/work/_temp/hello: valid on disk
+/Users/runner/work/_temp/hello: satisfies its Designated Requirement
