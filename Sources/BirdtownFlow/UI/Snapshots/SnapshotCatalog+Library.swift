@@ -31,6 +31,16 @@ extension SnapshotCatalog {
                     model.settings.polishProvider = .appleIntelligence
                 }
             },
+            // Apps moved between categories: Notes added to Personal messages, Mail moved
+            // there from Email, Safari added for every tab.
+            SnapshotRenderer.Shot("style-apps-moved", size: CGSize(width: size.width, height: styleAppsHeight)) {
+                libraryWindow(.style, records: records, preview: preview) { model in
+                    model.settings.setCategory(.personal, forApp: "com.apple.Notes")
+                    model.settings.setCategory(.personal, forApp: "com.apple.mail")
+                    model.settings.setCategory(.personal, forApp: "com.apple.Safari")
+                    model.settings.setCategory(.personal, forApp: "com.example.not-installed")
+                }
+            },
             // Polish off: the row reads "AI polish is off" with "Turn on AI polish".
             SnapshotRenderer.Shot("style-polish-off", size: CGSize(width: size.width, height: styleFullHeight)) {
                 libraryWindow(.style, records: records, preview: preview) { model in
@@ -42,6 +52,8 @@ extension SnapshotCatalog {
 
     /// Tall enough for the Style page's header, category list, tone choices, preview and polish row.
     private static let styleFullHeight: CGFloat = 1_100
+    /// Down to the bottom of the apps panel under the tone panel.
+    private static let styleAppsHeight: CGFloat = 1_600
 
     /// The main window on `section` over an in-memory model that `prepare` puts in a state.
     private static func libraryWindow(
