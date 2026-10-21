@@ -31,6 +31,8 @@ struct StyleAppsPanel: View {
                             .foregroundStyle(Palette.inkSecondary)
                             .fixedSize(horizontal: false, vertical: true)
                     }
+                    // Wraps only when the add link needs the room.
+                    .layoutPriority(1)
                     Spacer(minLength: Spacing.m)
                     addMenu
                 }
