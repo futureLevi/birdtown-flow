@@ -1,0 +1,11 @@
+sha=38f1dccdd0e2538d538c4f800faf715addc03ed4
+branch=claude/per-app-style-categories-klpqd1
+build=success
+test=success
+snapshots=success
+synth=success
+speech=success
+segmented=failure
+signcheck=success
+signing=skipped
+release=skipped
