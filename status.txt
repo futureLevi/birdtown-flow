@@ -1,0 +1,11 @@
+sha=bdddf7073ecd90d3146849ef9ea18b18e99b6851
+branch=claude/snippet-partial-link-cm7rs6
+build=success
+test=success
+snapshots=success
+synth=success
+speech=success
+segmented=failure
+signcheck=success
+signing=skipped
+release=skipped
