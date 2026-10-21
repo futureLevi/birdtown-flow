@@ -18,6 +18,10 @@ import MurmurKit
 ///
 /// "The focused element" is still the user's text field because the HUD never takes focus:
 /// it's a non-activating panel, so their app stays frontmost throughout.
+///
+/// Text with linked snippets in it always goes by the clipboard, since an AX write is plain
+/// text. The clipboard carries it three ways: plain text (each link as "text (URL)"), and
+/// RTF and HTML with the text linked. The app takes whichever it reads best.
 @MainActor
 enum TextInjector {
     enum Outcome: Equatable, Sendable {
@@ -54,37 +58,43 @@ enum TextInjector {
     }
 
     /// Inserts `text` at the caret, or leaves it on the clipboard when there's nowhere to type.
-    static func insert(_ text: String, restoreClipboard: Bool) async -> Outcome {
-        await insertMeasured(text, restoreClipboard: restoreClipboard).outcome
+    /// `links` are linked snippets whose plain form is in `text`.
+    static func insert(_ text: String, links: [SnippetLink] = [], restoreClipboard: Bool) async -> Outcome {
+        await insertMeasured(text, links: links, restoreClipboard: restoreClipboard).outcome
     }
 
     /// `insert`, and how long its steps took.
-    static func insertMeasured(_ text: String, restoreClipboard: Bool) async -> (outcome: Outcome, timings: Timings) {
+    static func insertMeasured(
+        _ text: String, links: [SnippetLink] = [], restoreClipboard: Bool
+    ) async -> (outcome: Outcome, timings: Timings) {
         var timings = Timings()
         guard !text.isEmpty else { return (outcome: .inserted, timings: timings) }
         configureMessagingTimeout()
 
         // Typing into a password prompt is never right, even if it would work.
         if IsSecureEventInputEnabled() {
-            copy(text)
+            copy(text, links: links)
             return (outcome: .copied(.secureInput), timings: timings)
         }
         guard AXIsProcessTrusted() else {
-            copy(text)
+            copy(text, links: links)
             return (outcome: .copied(.noAccessibility), timings: timings)
         }
 
         let frontmost = NSWorkspace.shared.frontmostApplication
         let pasteFirst = prefersPasteboard(frontmost)
+        // Apps that send plain text get each link's plain form, which `text` already is.
+        let shownLinks = showsLinks(frontmost) ? links.filter { text.contains($0.plain) } : []
 
         // Every AX call blocks until the target app answers, and the hotkey's event tap lives
         // on the main run loop, so the probe and write run on their own queue: a slow app
         // stalls this dictation, not the keyboard. The decisions are the same as on main.
         let clock = ContinuousClock()
         let accessibilityStart = clock.now
+        let writes = shownLinks.isEmpty
         let attempt = await withCheckedContinuation { (continuation: CheckedContinuation<AXAttempt, Never>) in
             axQueue.async {
-                continuation.resume(returning: attemptViaAccessibility(text, pasteFirst: pasteFirst))
+                continuation.resume(returning: attemptViaAccessibility(text, pasteFirst: pasteFirst, writes: writes))
             }
         }
         timings.accessibilityMs = milliseconds(accessibilityStart.duration(to: clock.now))
@@ -94,13 +104,13 @@ enum TextInjector {
             // Names the app, so a text box that should have worked can be added to the list.
             let app = frontmost?.bundleIdentifier ?? "unknown app"
             Log.inject.info("nothing editable focused in \(app, privacy: .public) — copied")
-            copy(text)
+            copy(text, links: shownLinks)
             return (outcome: .copied(.noTextField), timings: timings)
         case .inserted:
             return (outcome: .inserted, timings: timings)
         case .needsPaste(let spacedText):
             let pasteStart = clock.now
-            await paste(spacedText, restoreClipboard: restoreClipboard)
+            await paste(spacedText, links: shownLinks, restoreClipboard: restoreClipboard)
             timings.pasteMs = milliseconds(pasteStart.duration(to: clock.now))
             return (outcome: .inserted, timings: timings)
         }
@@ -110,11 +120,12 @@ enum TextInjector {
         Int((duration / Duration.milliseconds(1)).rounded())
     }
 
-    /// Puts `text` on the clipboard as an ordinary copy (clipboard managers keep it).
-    static func copy(_ text: String) {
+    /// Puts `text` on the clipboard as an ordinary copy (clipboard managers keep it), with
+    /// `links` linked in its rich flavours.
+    static func copy(_ text: String, links: [SnippetLink] = []) {
         cancelPendingRestore()
         NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(text, forType: .string)
+        NSPasteboard.general.writeObjects([pasteItem(for: text, links: links, transient: false)])
     }
 
     // MARK: - Smart spacing
@@ -158,9 +169,10 @@ enum TextInjector {
     /// Serial, so AX reads and writes from back-to-back dictations never interleave.
     private nonisolated static let axQueue = DispatchQueue(label: "com.birdtownlabs.flow.inject", qos: .userInitiated)
 
-    /// The whole AX side of `insert`: find the focused field, probe for spacing, try the write.
+    /// The whole AX side of `insert`: find the focused field, probe for spacing, try the write
+    /// (unless `writes` is false: text with links in it is always pasted).
     /// Runs on `axQueue`; the `AXUIElement` never leaves it.
-    private nonisolated static func attemptViaAccessibility(_ text: String, pasteFirst: Bool) -> AXAttempt {
+    private nonisolated static func attemptViaAccessibility(_ text: String, pasteFirst: Bool, writes: Bool) -> AXAttempt {
         let focused = focusedElement()
 
         // Apps on the paste-first list often build their AX tree lazily, so "nothing focused"
@@ -178,7 +190,7 @@ enum TextInjector {
             text = spaced(text, after: previous)
         }
 
-        if !pasteFirst, let focused, insertViaAccessibility(text, into: focused, before: range) {
+        if !pasteFirst, writes, let focused, insertViaAccessibility(text, into: focused, before: range) {
             Log.inject.info("AX insert landed, \(text.count) chars")
             return .inserted
         }
@@ -310,6 +322,20 @@ enum TextInjector {
         "com.openai.codex",
     ]
 
+    /// Apps that send what's typed as plain text. Pasted rich text would arrive as the link's
+    /// words with the address gone, so links go in as "text (URL)" instead.
+    private static let plainLinkBundleIDs: Set<String> = [
+        "com.apple.MobileSMS", "net.whatsapp.WhatsApp", "ru.keepcoder.Telegram",
+        "org.telegram.desktop", "org.whispersystems.signal-desktop", "com.hnc.Discord",
+        // Chat composers whose messages are plain text (and the model reads the address)
+        "com.openai.codex", "com.openai.chat", "com.anthropic.claudefordesktop",
+    ]
+
+    private static func showsLinks(_ app: NSRunningApplication?) -> Bool {
+        guard let bundleID = app?.bundleIdentifier else { return true }
+        return !plainLinkBundleIDs.contains(bundleID)
+    }
+
     /// Electron and other Chromium apps not on the list are recognized by what they bundle.
     private static var chromiumCache: [String: Bool] = [:]
 
@@ -370,7 +396,7 @@ enum TextInjector {
     /// The user's own clipboard, waiting to be put back after a paste.
     private static var pendingRestore: (contents: ClipboardContents, task: Task<Void, Never>)?
 
-    private static func paste(_ text: String, restoreClipboard: Bool) async {
+    private static func paste(_ text: String, links: [SnippetLink], restoreClipboard: Bool) async {
         let pasteboard = NSPasteboard.general
 
         // A restore still pending from a dictation a moment ago holds the *user's* clipboard;
@@ -381,7 +407,7 @@ enum TextInjector {
         cancelPendingRestore()
 
         pasteboard.clearContents()
-        pasteboard.writeObjects([pasteItem(for: text, transient: restoreClipboard)])
+        pasteboard.writeObjects([pasteItem(for: text, links: links, transient: restoreClipboard)])
         let ourChange = pasteboard.changeCount
 
         try? await Task.sleep(for: pasteSettleDelay)
@@ -393,15 +419,33 @@ enum TextInjector {
     }
 
     /// The dictation as a pasteboard item, marked transient when the user's clipboard is
-    /// coming back afterwards.
-    private static func pasteItem(for text: String, transient: Bool) -> NSPasteboardItem {
+    /// coming back afterwards. With links, RTF and HTML flavours carry them linked.
+    private static func pasteItem(for text: String, links: [SnippetLink], transient: Bool) -> NSPasteboardItem {
         let item = NSPasteboardItem()
         item.setString(text, forType: .string)
+        let runs = LinkedText.runs(in: text, links: links)
+        if LinkedText.hasLinks(runs) {
+            if let rtf = richText(runs) { item.setData(rtf, forType: .rtf) }
+            item.setString(LinkedText.html(runs), forType: .html)
+        }
         if transient {
             item.setData(Data(), forType: transientType)
             item.setData(Data(), forType: autoGeneratedType)
         }
         return item
+    }
+
+    /// The runs as RTF, links attached. No font is set, so it reads as the RTF default.
+    private static func richText(_ runs: [LinkedText.Run]) -> Data? {
+        let attributed = NSMutableAttributedString()
+        for run in runs {
+            var attributes: [NSAttributedString.Key: Any] = [:]
+            if let url = run.url.flatMap(URL.init(string:)) { attributes[.link] = url }
+            attributed.append(NSAttributedString(string: run.text, attributes: attributes))
+        }
+        return try? attributed.data(
+            from: NSRange(location: 0, length: attributed.length),
+            documentAttributes: [.documentType: NSAttributedString.DocumentType.rtf])
     }
 
     /// Puts `contents` back after `restoreDelay`, unless the clipboard has changed since

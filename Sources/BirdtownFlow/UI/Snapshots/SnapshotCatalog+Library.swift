@@ -23,6 +23,10 @@ extension SnapshotCatalog {
                     }
                 }
             },
+            // Editing a linked snippet: the expansion is the link's text, the address under it.
+            SnapshotRenderer.Shot("snippet-editor-link", size: CGSize(width: Layout.Main.sheetWidth, height: 640)) {
+                snippetEditor(records: records)
+            },
             // The panel's polish row sits below the preview, past the first screen, so these
             // render the whole page (as the Lab catalog does) rather than its first screen.
             // Polish on: the row names who polishes (Casual uses a Lab configuration here).
@@ -54,6 +58,17 @@ extension SnapshotCatalog {
     private static let styleFullHeight: CGFloat = 1_100
     /// Down to the bottom of the apps panel under the tone panel.
     private static let styleAppsHeight: CGFloat = 1_600
+
+    /// The snippet sheet on the sample's linked snippet.
+    private static func snippetEditor(records: [HistoryRecord]) -> some View {
+        let model = AppModel.preview(records: records)
+        let linked = model.snippets.snippets.first { $0.linked != nil }
+        return SnippetEditorSheet(original: linked, onSave: { _ in }, onDelete: {})
+            .frame(maxHeight: .infinity, alignment: .top)
+            .background(Palette.surface)
+            .environment(model)
+            .transaction { $0.disablesAnimations = true }
+    }
 
     /// The main window on `section` over an in-memory model that `prepare` puts in a state.
     private static func libraryWindow(

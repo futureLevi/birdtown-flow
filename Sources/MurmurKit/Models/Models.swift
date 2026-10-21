@@ -107,6 +107,9 @@ public struct Snippet: Identifiable, Codable, Hashable, Sendable {
     public var id: UUID
     public var trigger: String
     public var expansion: String
+    /// An address behind the expansion, the way ⌘K links text in a document: the expansion
+    /// is what shows, and this is what it opens. `nil` (or empty) types the expansion as is.
+    public var link: String?
     public var isEnabled: Bool
     public var createdAt: Date
 
@@ -114,14 +117,62 @@ public struct Snippet: Identifiable, Codable, Hashable, Sendable {
         id: UUID = UUID(),
         trigger: String,
         expansion: String,
+        link: String? = nil,
         isEnabled: Bool = true,
         createdAt: Date = Date()
     ) {
         self.id = id
         self.trigger = trigger
         self.expansion = expansion
+        self.link = link
         self.isEnabled = isEnabled
         self.createdAt = createdAt
+    }
+
+    /// The expansion as link text, when the snippet has an address to put behind it.
+    public var linked: SnippetLink? {
+        guard let link, !link.isEmpty, !expansion.isEmpty else { return nil }
+        return SnippetLink(text: expansion, url: link)
+    }
+}
+
+/// Text that opens an address: what a linked snippet inserts.
+///
+/// The pipeline and History carry it as `plain`, which is also what a plain-text field gets,
+/// so nothing is lost where links can't go. Pasting into an app that takes rich text swaps
+/// each `plain` back for `text`, linked (see `LinkedText`).
+public struct SnippetLink: Codable, Hashable, Sendable {
+    public var text: String
+    public var url: String
+
+    public init(text: String, url: String) {
+        self.text = text
+        self.url = url
+    }
+
+    /// "my calendar (https://calendar.app.google/…)".
+    public var plain: String { "\(text) (\(url))" }
+
+    /// What someone typed as a link, made into an address: "calendly.com/levi" gains
+    /// "https://". `nil` when it can't be one: empty, has spaces, or isn't a URL, domain
+    /// or email address.
+    public static func normalizedURL(_ raw: String) -> String? {
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, !trimmed.contains(where: \.isWhitespace) else { return nil }
+        let lowered = trimmed.lowercased()
+        if lowered.hasPrefix("mailto:") || lowered.hasPrefix("tel:") { return trimmed }
+        if let scheme = lowered.range(of: "://") {
+            // A scheme and something after it: "https://x", not "://x" or "https://".
+            return scheme.lowerBound > lowered.startIndex && scheme.upperBound < lowered.endIndex ? trimmed : nil
+        }
+        let parts = trimmed.split(separator: "@", omittingEmptySubsequences: false)
+        if parts.count == 2 {
+            // "me@example.com" mails; "@handle" and "me@" aren't addresses.
+            guard !parts[0].isEmpty, Token.isLinkLike(String(parts[1])) else { return nil }
+            return "mailto:" + trimmed
+        }
+        guard parts.count == 1, Token.isLinkLike(trimmed) else { return nil }
+        return "https://" + trimmed
     }
 }
 
@@ -316,6 +367,8 @@ public struct HistoryRecord: Identifiable, Codable, Hashable, Sendable {
     public var corrections: [AppliedCorrection]
     /// Triggers of snippets that expanded.
     public var snippets: [String]
+    /// Linked snippets in `finalText`, which holds each one's plain form. `nil` when none.
+    public var links: [SnippetLink]?
     /// File name inside the recordings directory. `nil` once retention purges the audio.
     public var audioFileName: String?
     /// Seconds of audio captured.
@@ -335,6 +388,7 @@ public struct HistoryRecord: Identifiable, Codable, Hashable, Sendable {
         polishedBy: PolishProvider? = nil,
         corrections: [AppliedCorrection] = [],
         snippets: [String] = [],
+        links: [SnippetLink]? = nil,
         audioFileName: String? = nil,
         audioDuration: Double = 0,
         timings: DictationTimings = DictationTimings(),
@@ -351,6 +405,7 @@ public struct HistoryRecord: Identifiable, Codable, Hashable, Sendable {
         self.polishedBy = polishedBy
         self.corrections = corrections
         self.snippets = snippets
+        self.links = links
         self.audioFileName = audioFileName
         self.audioDuration = audioDuration
         self.timings = timings
