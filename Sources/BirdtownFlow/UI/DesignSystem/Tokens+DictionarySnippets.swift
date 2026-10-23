@@ -9,10 +9,11 @@ import SwiftUI
 extension Layout {
     enum Library {
         // The dictionary table. Header and rows share these widths so the columns line up.
+        // Rows use the list type (`Typography.List`) and are a step tighter to match.
         static let tableInset: CGFloat = 22
         static let headVertical: CGFloat = 12
-        static let rowVertical: CGFloat = 17
-        static let rowMinHeight: CGFloat = 70
+        static let rowVertical: CGFloat = 14
+        static let rowMinHeight: CGFloat = 62
         static let columnGap: CGFloat = 14
         static let textColumnMin: CGFloat = 180
         static let arrowColumn: CGFloat = 24

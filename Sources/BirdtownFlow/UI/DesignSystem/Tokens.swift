@@ -204,7 +204,7 @@ enum Typography {
     static let transcript = Font.system(size: 19)
     /// The same words opened up in a detail view. 21 pt.
     static let transcriptLarge = Font.system(size: 21)
-    /// Metadata: times, durations, helper text. Never below 15 pt.
+    /// Metadata: times, durations, helper text. Never below 15 pt, except in list rows (`List`).
     static let callout = Font.system(size: 15)
     static let caption = Font.system(size: 15, weight: .medium)
     /// A small label above a group of rows. Sentence case at 15 pt; the old tracked
@@ -236,6 +236,22 @@ enum Typography {
         static let eyebrow = Font.system(size: 10.5, weight: .semibold)
         static let keycap = Font.system(size: 12, weight: .medium)
         static let mono = Font.system(size: 12, design: .monospaced)
+    }
+
+    /// List rows a step below the interface scale, at Levi's request: History's rows, Home's
+    /// Recent dictation and the Dictionary table. Dictated words 17 pt instead of 19, row
+    /// headings and text 15, terms 16, times and details 14.
+    enum List {
+        static let transcript = Font.system(size: 17)
+        static let headline = Font.system(size: 15, weight: .semibold)
+        static let body = Font.system(size: 15)
+        static let bodyEmphasis = Font.system(size: 15, weight: .medium)
+        /// A Dictionary term (was `bodyLarge`, 17 pt).
+        static let term = Font.system(size: 16)
+        static let termEmphasis = Font.system(size: 16, weight: .medium)
+        static let callout = Font.system(size: 14)
+        static let caption = Font.system(size: 14, weight: .medium)
+        static let eyebrow = Font.system(size: 14, weight: .semibold)
     }
 }
 

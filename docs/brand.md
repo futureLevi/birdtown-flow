@@ -69,8 +69,8 @@ The window follows Levi's design handoff (a single-file HTML prototype plus scre
   colour-wheel sidebar icons and gradient stat badges are gone.
 - **Big, legible type.** SF Pro. Page titles 34 pt, section titles 21-23, words you read
   (dictation, transcripts) 19 pt on a 1.6 line height, interface text 16-17, metadata never
-  below 15. Home's Recent dictation card is a step smaller (17 / 15 / 14), a glance rather
-  than the History page. Titles semibold with tight tracking.
+  below 15. List rows (History, Home's Recent dictation, the Dictionary table) are a step
+  smaller: dictated words 17, terms 16, row text 15, details 14 (`Typography.List`). Titles semibold with tight tracking.
 - **Shape.** Rail 234 pt, toolbar 66 pt, content inset 40 pt. Controls have 8-9 pt corners,
   panels 14 pt, dialogs and the window 18-20 pt. Surfaces are a hairline and the faintest
   panel shadow.

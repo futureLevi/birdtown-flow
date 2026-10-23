@@ -257,7 +257,7 @@ private struct DictionaryHeaderRow: View {
             Color.clear
                 .frame(width: Layout.Library.editColumn, height: 0)
         }
-        .font(Typography.callout)
+        .font(Typography.List.callout)
         .foregroundStyle(Palette.inkSecondary)
         .lineLimit(1)
         .padding(.horizontal, Layout.Library.tableInset)
@@ -282,11 +282,11 @@ private struct DictionaryRow: View {
         HStack(spacing: Layout.Library.columnGap) {
             if entry.kind == .correction {
                 Text(entry.hear)
-                    .font(Typography.bodyLarge)
+                    .font(Typography.List.term)
                     .foregroundStyle(entry.isEnabled ? Palette.inkSecondary : Palette.inkTertiary)
                     .frame(minWidth: Layout.Library.textColumnMin, maxWidth: .infinity, alignment: .leading)
                 Image(systemName: "arrow.right")
-                    .font(Typography.bodyLarge)
+                    .font(Typography.List.term)
                     .foregroundStyle(entry.isEnabled ? Palette.teal : Palette.inkTertiary)
                     .frame(width: Layout.Library.arrowColumn)
                     .accessibilityLabel("becomes")
@@ -297,7 +297,7 @@ private struct DictionaryRow: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
             Text(usedText)
-                .font(Typography.callout)
+                .font(Typography.List.callout)
                 .monospacedDigit()
                 .foregroundStyle(Palette.inkSecondary)
                 .lineLimit(1)
@@ -340,7 +340,7 @@ private struct DictionaryRow: View {
     private var written: some View {
         VStack(alignment: .leading, spacing: Spacing.xxs) {
             Text(entry.write)
-                .font(Typography.bodyLargeEmphasis)
+                .font(Typography.List.termEmphasis)
                 .foregroundStyle(entry.isEnabled ? Palette.ink : Palette.inkTertiary)
             ForEach(DictionaryWarning.check(entry)) { warning in
                 HStack(alignment: .firstTextBaseline, spacing: Spacing.xs) {
@@ -350,7 +350,7 @@ private struct DictionaryRow: View {
                         .foregroundStyle(Palette.inkSecondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
-                .font(Typography.callout)
+                .font(Typography.List.callout)
             }
         }
     }

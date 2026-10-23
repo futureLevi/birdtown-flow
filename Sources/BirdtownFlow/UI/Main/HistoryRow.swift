@@ -4,18 +4,10 @@ import MurmurDictionary
 import MurmurKit
 import SwiftUI
 
-/// One dictation: the words lead (19 pt), under the app and time, with quiet metadata and the
-/// copy and play controls below. Everything else (paste again, original, replacements, delete)
-/// is in the ⋯ menu and the context menu. Home's Recent dictation card shows the same row a
-/// step smaller (`Density.glance`).
+/// One dictation: the words lead (17 pt, `Typography.List`), under the app and time, with quiet
+/// metadata and the copy and play controls below. Everything else (paste again, original,
+/// replacements, delete) is in the ⋯ menu and the context menu.
 struct HistoryRow: View {
-    enum Density {
-        /// History: the words at 19 pt.
-        case regular
-        /// Home's Recent dictation: the words at 17 pt, the header and details a step down.
-        case glance
-    }
-
     let record: HistoryRecord
     let player: AudioPlayback
     var isSelected: Bool
@@ -24,7 +16,6 @@ struct HistoryRow: View {
     var query: String
     /// History's Timings view is on: the row shows how long each step took.
     var showsTimings: Bool
-    var density: Density
     var onSelect: ((ListSelection<UUID>.Click) -> Void)?
     let onDelete: () -> Void
 
@@ -47,7 +38,6 @@ struct HistoryRow: View {
         showsOriginal: Bool = false,
         query: String = "",
         showsTimings: Bool = false,
-        density: Density = .regular,
         onSelect: ((ListSelection<UUID>.Click) -> Void)? = nil,
         onDelete: @escaping () -> Void
     ) {
@@ -57,7 +47,6 @@ struct HistoryRow: View {
         self.isHighlighted = isHighlighted
         self.query = query
         self.showsTimings = showsTimings
-        self.density = density
         self.onSelect = onSelect
         self.onDelete = onDelete
         _showsOriginal = State(initialValue: showsOriginal)
@@ -78,7 +67,7 @@ struct HistoryRow: View {
             }
         }
         .padding(.horizontal, Layout.History.rowHorizontal)
-        .padding(.vertical, density == .glance ? Layout.History.Glance.rowVertical : Layout.History.rowVertical)
+        .padding(.vertical, Layout.History.rowVertical)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(rowFill)
         .overlay(alignment: .leading) {
@@ -114,26 +103,15 @@ struct HistoryRow: View {
 
     // MARK: - Pieces
 
-    private var transcriptFont: Font { density == .glance ? Typography.Glance.transcript : Typography.transcript }
-    private var transcriptLineSpacing: CGFloat {
-        density == .glance ? Layout.History.Glance.transcriptLine : Spacing.transcriptLine
-    }
-    private var headlineFont: Font { density == .glance ? Typography.Glance.headline : Typography.headline }
-    private var metaFont: Font { density == .glance ? Typography.Glance.callout : Typography.callout }
-
     private var header: some View {
         HStack(alignment: .center, spacing: Spacing.s) {
-            AppIcon(
-                bundleID: record.context?.bundleID,
-                name: record.context?.appName,
-                size: density == .glance ? Layout.History.Glance.appIcon : Layout.History.appIcon
-            )
+            AppIcon(bundleID: record.context?.bundleID, name: record.context?.appName, size: Layout.History.appIcon)
             Text(Self.highlighted(appTitle, query: query))
-                .font(headlineFont)
+                .font(Typography.List.headline)
                 .foregroundStyle(Palette.ink)
                 .lineLimit(1)
             Text(record.createdAt, format: .dateTime.hour().minute())
-                .font(metaFont)
+                .font(Typography.List.callout)
                 .foregroundStyle(Palette.inkTertiary)
             if record.outcome == .failed {
                 Badge(text: "Failed", symbol: "exclamationmark.triangle.fill", tone: .danger)
@@ -151,30 +129,30 @@ struct HistoryRow: View {
             VStack(alignment: .leading, spacing: Spacing.s) {
                 if record.hasText || !record.rawText.isEmpty {
                     Text(Self.highlighted(record.hasText ? record.finalText : record.rawText, query: query))
-                        .font(transcriptFont)
+                        .font(Typography.List.transcript)
                         .foregroundStyle(Palette.inkSecondary)
-                        .lineSpacing(transcriptLineSpacing)
+                        .lineSpacing(Layout.History.transcriptLine)
                         .lineLimit(Layout.Main.transcriptLines)
                         .frame(maxWidth: Layout.History.transcriptMeasure, alignment: .leading)
                 }
                 Text(record.errorMessage ?? "Something went wrong while transcribing.")
-                    .font(Typography.body)
+                    .font(Typography.List.body)
                     .foregroundStyle(Palette.danger)
                     .fixedSize(horizontal: false, vertical: true)
                 retryFooter
             }
         case .empty, .cancelled:
             Text(record.outcome == .empty ? "No speech was heard." : "Cancelled before anything was typed.")
-                .font(transcriptFont)
+                .font(Typography.List.transcript)
                 .italic()
                 .foregroundStyle(Palette.inkTertiary)
         case .inserted, .copied:
             VStack(alignment: .leading, spacing: Spacing.xs) {
                 let preview = transcriptPreview
                 Text(Self.highlighted(preview.text, ranges: preview.ranges))
-                    .font(transcriptFont)
+                    .font(Typography.List.transcript)
                     .foregroundStyle(Palette.ink)
-                    .lineSpacing(transcriptLineSpacing)
+                    .lineSpacing(Layout.History.transcriptLine)
                     .lineLimit(isExpanded ? nil : Layout.Main.transcriptLines)
                     .fixedSize(horizontal: false, vertical: true)
                     .frame(maxWidth: Layout.History.transcriptMeasure, alignment: .leading)
@@ -241,7 +219,7 @@ struct HistoryRow: View {
             Button("Dismiss") { model.retries.dismissReason(record.id) }
                 .buttonStyle(RowLinkButtonStyle())
         }
-        .font(Typography.callout)
+        .font(Typography.List.callout)
         .padding(.top, Spacing.xxs)
     }
 
@@ -258,7 +236,7 @@ struct HistoryRow: View {
                     .buttonStyle(RowLinkButtonStyle())
             }
         }
-        .font(Typography.callout)
+        .font(Typography.List.callout)
     }
 
     /// Retry, and whether the audio is there to retry with. One disk check per pass.
@@ -284,7 +262,7 @@ struct HistoryRow: View {
             Text(hasAudio
                  ? "The audio is saved, so nothing you said is lost."
                  : "The audio wasn't kept, so this one can't be retried.")
-                .font(Typography.callout)
+                .font(Typography.List.callout)
                 .foregroundStyle(Palette.inkTertiary)
         }
     }
@@ -311,7 +289,7 @@ struct HistoryRow: View {
                         .symbolEffect(.rotate, options: .repeat(.continuous), isActive: !reduceMotion)
                     Text("Transcribing again…")
                 }
-                .font(Typography.caption)
+                .font(Typography.List.caption)
                 .foregroundStyle(Palette.accentInk)
                 .fixedSize()
                 .accessibilityElement(children: .combine)
@@ -345,7 +323,7 @@ struct HistoryRow: View {
                     .help("Birdtown Flow put this on the clipboard instead of typing it.")
             }
             Text(meta)
-                .font(metaFont)
+                .font(Typography.List.callout)
                 .foregroundStyle(Palette.inkTertiary)
                 .lineLimit(1)
                 .help(polishNote.map { wasPolished ? $0 : "AI polish wasn't used: \($0)" } ?? "")
@@ -356,7 +334,7 @@ struct HistoryRow: View {
         HStack(spacing: Spacing.xxs) {
             if didCopy {
                 Label("Copied", systemImage: "checkmark")
-                    .font(Typography.caption)
+                    .font(Typography.List.caption)
                     .foregroundStyle(Palette.success)
                     .padding(.horizontal, Spacing.s)
                     .transition(.opacity)
@@ -373,7 +351,7 @@ struct HistoryRow: View {
             menuItems
         } label: {
             Image(systemName: "ellipsis")
-                .font(Typography.bodyEmphasis)
+                .font(Typography.List.bodyEmphasis)
                 .foregroundStyle(Palette.inkSecondary)
         }
         .menuStyle(.button)
@@ -394,11 +372,11 @@ struct HistoryRow: View {
                 if isPlaying {
                     ProgressRing(progress: player.progress)
                     Image(systemName: "stop.fill")
-                        .font(Typography.eyebrow)
+                        .font(Typography.List.eyebrow)
                         .imageScale(.small)
                 } else {
                     Image(systemName: "play.fill")
-                        .font(Typography.bodyEmphasis)
+                        .font(Typography.List.bodyEmphasis)
                 }
             }
         }
@@ -648,7 +626,7 @@ private struct RowLinkBody: View {
 
     var body: some View {
         configuration.label
-            .font(Typography.caption)
+            .font(Typography.List.caption)
             .foregroundStyle(Palette.accentInk)
             .underline(isHovered)
             .opacity(configuration.isPressed ? Interaction.dimmedOpacity : 1)
@@ -673,9 +651,9 @@ struct OriginalPanel: View {
                 Text(record.rawText.isEmpty
                      ? AttributedString("Nothing was recognized.")
                      : HistoryRow.highlighted(record.rawText, query: query))
-                    .font(Typography.transcript)
+                    .font(Typography.List.transcript)
                     .foregroundStyle(Palette.inkSecondary)
-                    .lineSpacing(Spacing.transcriptLine)
+                    .lineSpacing(Layout.History.transcriptLine)
                     .fixedSize(horizontal: false, vertical: true)
                     .textSelection(.enabled)
             }
@@ -685,23 +663,23 @@ struct OriginalPanel: View {
                     ForEach(record.corrections, id: \.self) { correction in
                         HStack(spacing: Spacing.s) {
                             Text(correction.from)
-                                .font(Typography.body)
+                                .font(Typography.List.body)
                                 .foregroundStyle(Palette.inkSecondary)
                             Image(systemName: "arrow.right")
-                                .font(Typography.caption)
+                                .font(Typography.List.caption)
                                 .foregroundStyle(Palette.inkTertiary)
                             Text(correction.to)
-                                .font(Typography.bodyEmphasis)
+                                .font(Typography.List.bodyEmphasis)
                                 .foregroundStyle(Palette.ink)
                             if correction.count > 1 {
                                 Text("×\(correction.count)")
-                                    .font(Typography.caption)
+                                    .font(Typography.List.caption)
                                     .foregroundStyle(Palette.inkTertiary)
                             }
                             // Which step made it, so a misfire points straight at its cause.
                             if let source = correction.source {
                                 Text(source.title)
-                                    .font(Typography.caption)
+                                    .font(Typography.List.caption)
                                     .foregroundStyle(Palette.inkTertiary)
                             }
                         }
@@ -721,7 +699,7 @@ struct OriginalPanel: View {
                                 Text(detail.value)
                                     .foregroundStyle(Palette.inkSecondary)
                             }
-                            .font(Typography.callout)
+                            .font(Typography.List.callout)
                         }
                     }
                 }
@@ -775,7 +753,7 @@ struct OriginalPanel: View {
                     .foregroundStyle(Palette.inkSecondary)
                     .monospacedDigit()
             }
-            .font(Typography.caption)
+            .font(Typography.List.caption)
         }
     }
 
@@ -818,7 +796,7 @@ struct TimingsLine: View {
                 }
             }
         }
-        .font(Typography.caption)
+        .font(Typography.List.caption)
         .padding(.vertical, Spacing.m)
         .padding(.horizontal, Spacing.l)
         .frame(maxWidth: .infinity, alignment: .leading)
