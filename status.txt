@@ -1,0 +1,11 @@
+sha=cfdb4e1fe7de3333d16d4571744c15aba9e2add1
+branch=claude/smaller-recent-dictations-6mmliu
+build=success
+test=success
+snapshots=success
+synth=success
+speech=success
+segmented=failure
+signcheck=success
+signing=skipped
+release=skipped
