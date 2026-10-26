@@ -96,7 +96,7 @@ struct PolishDiagnosticsTests {
     }
 
     @Test("History says the parts first: size, how many, how many done while the person talked")
-    func parts() {
+    func partDetails() {
         var timings = DictationTimings(polishMs: 1_830, totalMs: 2_300)
         var diagnostics = cold
         diagnostics.partSize = .smaller
