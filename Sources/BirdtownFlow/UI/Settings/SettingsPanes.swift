@@ -691,6 +691,18 @@ struct TextSettingsPane: View {
                 SettingsSwitch(label: "Polish in parts", isOn: $settings.polishInParts)
             }
             SettingsDivider()
+            SettingsRow(title: "Part size", detail: settings.polishPartSize.detail) {
+                Picker("Part size", selection: $settings.polishPartSize) {
+                    ForEach(PolishPartSize.allCases) { size in
+                        Text(size.title).tag(size)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                .fixedSize()
+                .disabled(!settings.polishInParts)
+            }
+            SettingsDivider()
             SettingsRow(title: "Polish while you talk", detail: "Starts polishing a long dictation before you finish.") {
                 SettingsSwitch(label: "Polish while you talk", isOn: $settings.polishWhileSpeaking)
                     // It polishes parts, so it needs them.

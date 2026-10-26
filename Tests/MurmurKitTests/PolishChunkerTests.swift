@@ -83,6 +83,30 @@ struct PolishChunkerTests {
         #expect(PolishChunker.join(chunks.map(\.text), chunks: chunks, style: .formal) == text)
     }
 
+    @Test("Smaller parts: from 100 words, parts of 60 to 140 words")
+    func smallerParts() throws {
+        let size = PolishPartSize.smaller
+        let short = sentences(total: 95).joined(separator: " ")
+        #expect(wordCount(short) < size.minimumWords)
+        #expect(PolishChunker.chunks(short, size: size).count == 1)
+        #expect(PolishChunker.chunks(short, closedOnly: true, size: size).isEmpty)
+
+        // Under the standard minimum, so one piece there, but in parts here.
+        let text = sentences(total: 240).joined(separator: " ")
+        #expect(PolishChunker.chunks(text).count == 1)
+        let chunks = PolishChunker.chunks(text, size: size)
+        #expect(chunks.count >= 2)
+        for chunk in chunks.dropLast() {
+            #expect((size.minWords...size.maxWords).contains(wordCount(chunk.text)))
+            #expect(chunk.continues)
+        }
+        #expect(PolishChunker.join(chunks.map(\.text), chunks: chunks, style: .formal) == text)
+        // The parts finished while talking are the parts key-up will have.
+        let closed = PolishChunker.chunks(text, closedOnly: true, size: size)
+        #expect(!closed.isEmpty)
+        #expect(closed.map(\.text) == Array(chunks.prefix(closed.count)).map(\.text))
+    }
+
     @Test("A text with nowhere to split stays whole")
     func noSentenceEnds() {
         let text = Array(repeating: "and then we kept going", count: 80).joined(separator: " ")

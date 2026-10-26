@@ -340,9 +340,11 @@ public struct DictationTimings: Codable, Hashable, Sendable {
     /// From the key going down to the microphone's first audio. Not part of `totalMs`, which
     /// starts at key-up.
     public var micLiveMs: Int?
-    /// A long dictation polished in parts: how many parts, and how many of them were finished
-    /// while the person was still talking, so key-up didn't wait for them. Both `nil` for a
-    /// dictation polished in one request, and for a Retry (nothing was polished early).
+    /// Polish in parts: the part size in use (`PolishPartSize`), how many parts (1: polished
+    /// in one piece), and how many of them were finished while the person was still talking,
+    /// so key-up didn't wait for them. The last is `nil` when nothing could have been (polish
+    /// while you talk off, a Retry); all three are with polish in parts off.
+    public var polishPartSize: PolishPartSize?
     public var polishParts: Int?
     public var polishPartsEarly: Int?
 
@@ -351,7 +353,8 @@ public struct DictationTimings: Codable, Hashable, Sendable {
     public init(
         transcribeMs: Int = 0, polishMs: Int = 0, totalMs: Int = 0, transcribedWhileRecording: Bool? = nil,
         polishModelMs: Int? = nil, polishStartedCold: Bool? = nil, polishModel: String? = nil,
-        polishEffort: String? = nil, micLiveMs: Int? = nil, polishParts: Int? = nil, polishPartsEarly: Int? = nil
+        polishEffort: String? = nil, micLiveMs: Int? = nil, polishPartSize: PolishPartSize? = nil, polishParts: Int? = nil,
+        polishPartsEarly: Int? = nil
     ) {
         self.transcribeMs = transcribeMs
         self.polishMs = polishMs
@@ -362,6 +365,7 @@ public struct DictationTimings: Codable, Hashable, Sendable {
         self.polishModel = polishModel
         self.polishEffort = polishEffort
         self.micLiveMs = micLiveMs
+        self.polishPartSize = polishPartSize
         self.polishParts = polishParts
         self.polishPartsEarly = polishPartsEarly
     }

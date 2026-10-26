@@ -15,7 +15,7 @@ public enum PolishTimeLimit {
     public static let minimum: Double = 0.5
     public static let maximum: Double = 30
     /// A request up to this long is a normal dictation, with the user's limit unchanged:
-    /// the size of a part (`PolishChunker.targetWords`).
+    /// the size of a standard part (`PolishChunker.targetWords`). Smaller parts are under it.
     public static let normalWords = PolishChunker.targetWords
 
     /// The user's setting, within `minimum...maximum`.
