@@ -85,12 +85,11 @@ struct PolishChunkerTests {
 
     @Test("Part sizes follow the length parts start from, within 60 to 400")
     func partSizes() {
-        let standard = PolishPartSize.standard
-        #expect([standard.minimumWords, standard.targetWords, standard.minWords, standard.maxWords, standard.hardMaxWords]
-            == [250, 150, 90, 260, 400])
-        let hundred = PolishPartSize(fromWords: 100)
-        #expect([hundred.minimumWords, hundred.targetWords, hundred.minWords, hundred.maxWords, hundred.hardMaxWords]
-            == [100, 60, 36, 104, 160])
+        func limits(_ size: PolishPartSize) -> [Int] {
+            [size.minimumWords, size.targetWords, size.minWords, size.maxWords, size.hardMaxWords]
+        }
+        #expect(limits(.standard) == [250, 150, 90, 260, 400])
+        #expect(limits(PolishPartSize(fromWords: 100)) == [100, 60, 36, 104, 160])
         #expect(PolishPartSize(fromWords: 10).minimumWords == 60)
         #expect(PolishPartSize(fromWords: 1_000).minimumWords == 400)
         for words in PolishPartSize.range {
