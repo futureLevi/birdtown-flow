@@ -25,10 +25,16 @@ public struct PolishDiagnostics: Sendable, Hashable {
     public var spareAgeMs: Int?
     /// Polish in parts: how many of the parts key-up polished or waited for started cold.
     public var coldParts: Int?
+    /// Polish in parts: how many parts the text was polished in…
+    public var parts: Int?
+    /// …and how many of them were finished while the person was still talking
+    /// (`ProgressivePolisher`). `nil` when nothing could have been: a Retry.
+    public var partsPolishedEarly: Int?
 
     public init(
         model: String? = nil, effort: String? = nil, startedCold: Bool? = nil, coldReason: String? = nil,
-        modelMs: Int? = nil, sessionMs: Int? = nil, spareAgeMs: Int? = nil, coldParts: Int? = nil
+        modelMs: Int? = nil, sessionMs: Int? = nil, spareAgeMs: Int? = nil, coldParts: Int? = nil,
+        parts: Int? = nil, partsPolishedEarly: Int? = nil
     ) {
         self.model = model
         self.effort = effort
@@ -38,6 +44,8 @@ public struct PolishDiagnostics: Sendable, Hashable {
         self.sessionMs = sessionMs
         self.spareAgeMs = spareAgeMs
         self.coldParts = coldParts
+        self.parts = parts
+        self.partsPolishedEarly = partsPolishedEarly
     }
 
     /// A long dictation polished in parts (`PolishChunker`), from the parts key-up polished
@@ -88,19 +96,28 @@ public struct PolishDiagnostics: Sendable, Hashable {
 
 extension DictationTimings {
     /// Takes History's share of `diagnostics`: the model's time, a cold start, the model and
-    /// its effort. `nil` (polish didn't run) clears them, as a Retry without polish should.
+    /// its effort, and how many parts were polished while the person talked. `nil` (polish
+    /// didn't run) clears them, as a Retry without polish should.
     public mutating func setPolish(_ diagnostics: PolishDiagnostics?) {
         polishModelMs = diagnostics?.modelMs
         polishStartedCold = diagnostics?.startedCold
         polishModel = diagnostics?.model
         polishEffort = diagnostics?.effort
+        // Only a dictation in parts that could have polished some early says how many did.
+        let early = diagnostics?.partsPolishedEarly
+        polishParts = early == nil ? nil : diagnostics?.parts
+        polishPartsEarly = polishParts == nil ? nil : early
     }
 
-    /// What History's Timings view says after polish's time, in order: "cold start", the
+    /// What History's Timings view says after polish's time, in order: the parts finished
+    /// while the person talked ("3 of 5 parts done while you talked"), "cold start", the
     /// model's own time ("model 1,180 ms", in `format`), and the model with its effort
     /// ("<model> low"). Empty when none of it was recorded.
     public func polishDetails(format: (Int) -> String) -> [String] {
         var details: [String] = []
+        if let polishParts, let polishPartsEarly {
+            details.append("\(polishPartsEarly) of \(polishParts) parts done while you talked")
+        }
         if polishStartedCold == true { details.append("cold start") }
         if let polishModelMs { details.append("model \(format(polishModelMs))") }
         let sentWith = [polishModel, polishEffort].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " ")

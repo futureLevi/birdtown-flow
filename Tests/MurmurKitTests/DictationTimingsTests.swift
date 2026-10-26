@@ -74,13 +74,13 @@ struct DictationTimingsTests {
     @Test func polishAndMicrophoneFieldsRoundTrip() throws {
         let timings = DictationTimings(
             transcribeMs: 310, polishMs: 3_612, totalMs: 4_020, polishModelMs: 1_180, polishStartedCold: true,
-            polishModel: "fast-model-1", polishEffort: "low", micLiveMs: 42)
+            polishModel: "fast-model-1", polishEffort: "low", micLiveMs: 42, polishParts: 5, polishPartsEarly: 3)
         #expect(try JSONDecoder().decode(DictationTimings.self, from: JSONEncoder().encode(timings)) == timings)
     }
 
     @Test func polishAndMicrophoneFieldsAreSavedOnlyWhenSet() throws {
         let json = String(decoding: try JSONEncoder().encode(DictationTimings(transcribeMs: 310, totalMs: 400)), as: UTF8.self)
-        for key in ["polishModelMs", "polishStartedCold", "polishModel", "polishEffort", "micLiveMs"] {
+        for key in ["polishModelMs", "polishStartedCold", "polishModel", "polishEffort", "micLiveMs", "polishParts"] {
             #expect(!json.contains(key))
         }
     }
@@ -95,5 +95,7 @@ struct DictationTimingsTests {
         #expect(timings.polishModel == nil)
         #expect(timings.polishEffort == nil)
         #expect(timings.micLiveMs == nil)
+        #expect(timings.polishParts == nil)
+        #expect(timings.polishPartsEarly == nil)
     }
 }

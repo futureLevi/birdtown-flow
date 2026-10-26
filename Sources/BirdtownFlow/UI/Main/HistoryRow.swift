@@ -838,9 +838,10 @@ struct TimingsLine: View {
         detail == .brief ? polisher.map { "(\($0))" } : nil
     }
 
-    /// "Engine: Parakeet Ultra · Polish: cold start, model 1,180 ms, <model> low · Mic 45 ms",
-    /// under the numbers: which engine heard it, how polish went, and how long the microphone
-    /// took to start (before key-up, so not part of the total). `nil` when none was recorded.
+    /// "Engine: Parakeet Ultra · Polish: 3 of 5 parts done while you talked, cold start, model
+    /// 1,180 ms, <model> low · Mic 45 ms", under the numbers: which engine heard it, how polish
+    /// went, and how long the microphone took to start (before key-up, so not part of the
+    /// total). `nil` when none was recorded.
     private var details: String? {
         let timings = record.timings
         guard !timings.isEmpty else { return nil }

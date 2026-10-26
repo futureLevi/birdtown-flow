@@ -94,4 +94,36 @@ struct PolishDiagnosticsTests {
 
         #expect(DictationTimings(polishMs: 800, totalMs: 900).polishDetails(format: format).isEmpty)
     }
+
+    @Test("History says how many parts were polished while the person talked, first")
+    func partsPolishedEarly() {
+        var timings = DictationTimings(polishMs: 1_830, totalMs: 2_300)
+        var diagnostics = cold
+        diagnostics.parts = 5
+        diagnostics.partsPolishedEarly = 3
+        timings.setPolish(diagnostics)
+        #expect(timings.polishParts == 5)
+        #expect(timings.polishPartsEarly == 3)
+        let format: (Int) -> String = { "\($0) ms" }
+        #expect(timings.polishDetails(format: format)
+            == ["3 of 5 parts done while you talked", "cold start", "model 1180 ms", "fast-model-1 low"])
+
+        // None finished in time still says so: the parts were there to polish early.
+        diagnostics.partsPolishedEarly = 0
+        timings.setPolish(diagnostics)
+        #expect(timings.polishDetails(format: format).first == "0 of 5 parts done while you talked")
+
+        // A Retry polishes in parts with nothing done early: no count, not "0 of 5".
+        diagnostics.partsPolishedEarly = nil
+        timings.setPolish(diagnostics)
+        #expect(timings.polishParts == nil)
+        #expect(timings.polishPartsEarly == nil)
+        #expect(timings.polishDetails(format: format) == ["cold start", "model 1180 ms", "fast-model-1 low"])
+
+        // A Retry without polish clears them.
+        diagnostics.partsPolishedEarly = 3
+        timings.setPolish(diagnostics)
+        timings.setPolish(nil)
+        #expect(timings == DictationTimings(polishMs: 1_830, totalMs: 2_300))
+    }
 }

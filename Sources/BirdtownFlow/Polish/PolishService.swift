@@ -257,9 +257,14 @@ final class PolishService {
         let sentWith = Self.diagnostics(sentWith: client)
         outcome.diagnostics = PolishDiagnostics.parts(
             results.map(\.outcome.diagnostics), model: sentWith.model, effort: sentWith.effort)
+        // For History: how many parts were done before key-up. A Retry has no `progressive`,
+        // so it says nothing rather than "0 of 5".
+        let cached = parts.count - awaited.count - fresh.count
+        outcome.diagnostics.parts = parts.count
+        outcome.diagnostics.partsPolishedEarly = progressive == nil ? nil : cached
 
         report.line.count("chunks", parts.count)
-        report.line.count("cached", parts.count - awaited.count - fresh.count)
+        report.line.count("cached", cached)
         report.line.count("awaited", awaited.count)
         report.line.count("fresh", fresh.count)
         report.line.count("parallel", parallel)
