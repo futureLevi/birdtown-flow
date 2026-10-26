@@ -1,0 +1,11 @@
+sha=c1c1ca950d8610e66979f760318f2c42dcda5cf9
+branch=claude/early-polish-parts
+build=success
+test=success
+snapshots=success
+synth=success
+speech=success
+segmented=failure
+signcheck=success
+signing=skipped
+release=skipped

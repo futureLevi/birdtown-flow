@@ -1,0 +1,629 @@
+[0/1] Planning build
+Building for debugging...
+[0/9] Write sources
+[2/9] Write swift-version-7974D3F7F03D5E95.txt
+[3/9] Write sources
+[4/12] Compiling MachTaskSelfWrapper MachTaskSelf.c
+[5/12] Compiling FastClusterWrapper FastClusterWrapper.cpp
+[7/61] Compiling MurmurDictionary DictionaryEntry.swift
+[8/61] Emitting module MurmurDictionary
+[9/61] Compiling MurmurDictionary DictionaryCorrector.swift
+[10/91] Emitting module MurmurKit
+[11/105] Compiling MurmurKit BoostGuard.swift
+[12/105] Compiling MurmurKit ChromiumBundle.swift
+[13/105] Compiling MurmurKit Cleanup.swift
+[14/105] Compiling MurmurKit LinkedText.swift
+[15/105] Compiling MurmurKit Regex.swift
+[16/105] Compiling MurmurKit Replacements.swift
+[17/105] Compiling MurmurKit SnippetStore.swift
+[18/105] Compiling MurmurKit TextPipeline.swift
+[19/105] Compiling MurmurKit UndoableDeletion.swift
+[20/105] Compiling MurmurKit SegmentLedger.swift
+[21/105] Compiling MurmurKit SegmentPlanner.swift
+[22/105] Compiling MurmurKit SegmentStitcher.swift
+[23/105] Compiling MurmurKit TranscriptionTimeLimit.swift
+[24/105] Compiling MurmurKit WAVQuantization.swift
+[25/105] Compiling MurmurKit FeedbackNote.swift
+[26/105] Compiling MurmurKit FeedbackOutbox.swift
+[27/105] Compiling MurmurKit GitHubIssues.swift
+[28/105] Compiling MurmurKit HistoryDeletion.swift
+[29/105] Compiling MurmurKit HistoryStore.swift
+[30/105] Compiling MurmurKit ListSelection.swift
+[31/105] Compiling MurmurKit RecordingLength.swift
+[32/105] Compiling MurmurKit Retranscription.swift
+[33/105] Compiling MurmurKit SearchHighlight.swift
+[34/105] Compiling MurmurKit KeyShortcut.swift
+[35/105] Compiling MurmurKit ModifierPairTap.swift
+[36/105] Compiling MurmurKit QuietRelease.swift
+[37/105] Compiling MurmurKit ShortcutCapture.swift
+[38/105] Compiling MurmurKit ShortcutRules.swift
+[39/105] Compiling MurmurKit DictationFeedback.swift
+[40/105] Compiling MurmurKit EngineFallback.swift
+[41/105] Compiling MurmurKit Models.swift
+[42/105] Compiling MurmurKit Readiness.swift
+[43/105] Compiling MurmurKit ClaudeModel.swift
+[44/105] Compiling MurmurKit Polish.swift
+[45/105] Compiling MurmurKit PolishChunker.swift
+[46/105] Compiling MurmurKit PolishDiagnostics.swift
+[47/105] Compiling MurmurKit PolishLab.swift
+[48/105] Compiling MurmurKit PolishTimeLimit.swift
+[49/105] Compiling MurmurKit DictationStats.swift
+[50/105] Compiling MurmurKit LibraryUsage.swift
+[51/105] Compiling MurmurKit TimingLine.swift
+[52/105] Compiling MurmurKit TimingRollup.swift
+[53/105] Compiling MurmurKit AppCategoryResolver.swift
+[54/105] Emitting module FluidAudio
+[98/153] Compiling FluidAudio TdtDecoderV3.swift
+[99/153] Compiling FluidAudio TdtDurationMapping.swift
+[100/153] Compiling FluidAudio TdtFrameNavigation.swift
+[101/153] Compiling FluidAudio TdtHypothesis.swift
+[102/153] Compiling FluidAudio TdtJointDecision.swift
+[103/177] Compiling FluidAudio SequenceMatch.swift
+[104/177] Compiling FluidAudio SequenceMatcher.swift
+[105/177] Compiling FluidAudio StreamingUnifiedAsrManager.swift
+[106/177] Compiling FluidAudio UnifiedAsrManager.swift
+[107/177] Compiling FluidAudio UnifiedConfig.swift
+[108/177] Compiling FluidAudio UnifiedFeatureProviders.swift
+[109/177] Compiling FluidAudio UnifiedMelExtractor.swift
+[110/177] Compiling FluidAudio UnifiedRnntDecoder.swift
+[111/177] Compiling FluidAudio UnifiedStreamingWindower.swift
+[112/177] Compiling FluidAudio SenseVoiceConfig.swift
+[113/177] Compiling FluidAudio SenseVoiceManager.swift
+[114/177] Compiling FluidAudio SenseVoiceModels.swift
+[115/177] Compiling FluidAudio LogitsArgmax.swift
+[116/177] Compiling FluidAudio PunctuationCommitLayer.swift
+[117/177] Compiling FluidAudio CuaS1FormsInput.swift
+[118/177] Compiling FluidAudio CuaS1FormsManager.swift
+[119/177] Compiling FluidAudio CuaS1FormsOutput.swift
+[120/177] Compiling FluidAudio CuaS1FormsPackage.swift
+[121/177] Compiling FluidAudio CuaS1FormsTypes.swift
+[122/177] Compiling FluidAudio SpeakerManager.swift
+[123/177] Compiling FluidAudio SpeakerOperations.swift
+[124/177] Compiling FluidAudio SpeakerTypes.swift
+[125/177] Compiling FluidAudio DiarizerManager.swift
+[126/177] Compiling FluidAudio DiarizerModels.swift
+[127/201] Compiling FluidAudio DiarizerTypes.swift
+[128/201] Compiling FluidAudio DiarizationDER.swift
+[129/201] Compiling FluidAudio DiarizerProtocol.swift
+[130/201] Compiling FluidAudio DiarizerTimeline.swift
+[131/201] Compiling FluidAudio EmbeddingExtractor.swift
+[132/201] Compiling FluidAudio HungarianAssignment.swift
+[133/201] Compiling FluidAudio LSEENDDiarizer.swift
+[134/201] Compiling FluidAudio LSEENDInference.swift
+[135/201] Compiling FluidAudio LSEENDPreprocessor.swift
+[136/201] Compiling FluidAudio LSEENDTypes.swift
+[137/201] Compiling FluidAudio Nemotron3Diarizer.swift
+[138/201] Compiling FluidAudio Nemotron3Models.swift
+[139/201] Compiling FluidAudio Nemotron3StateUpdater.swift
+[140/201] Compiling FluidAudio Nemotron3Types.swift
+[141/201] Compiling FluidAudio AHCClustering.swift
+[142/201] Compiling FluidAudio ConstrainedClusterAssignment.swift
+[143/201] Compiling FluidAudio KMeansClustering.swift
+[144/201] Compiling FluidAudio SpeakerCountConstraints.swift
+[145/201] Compiling FluidAudio VBxClustering.swift
+[146/201] Compiling FluidAudio OfflineDiarizerManager.swift
+[147/201] Compiling FluidAudio OfflineDiarizerModels.swift
+[148/201] Compiling FluidAudio OfflineDiarizerTypes.swift
+[149/201] Compiling FluidAudio PreparedDiarization.swift
+[150/201] Compiling FluidAudio OfflineEmbeddingExtractor.swift
+[151/225] Compiling FluidAudio TdtJointInputProvider.swift
+[152/225] Compiling FluidAudio TdtModelInference.swift
+[153/225] Compiling FluidAudio DualDecodeArbitration.swift
+[154/225] Compiling FluidAudio StreamingEouAsrManager.swift
+[155/225] Compiling FluidAudio EncoderCacheManager.swift
+[156/225] Compiling FluidAudio NemotronChunkSize.swift
+[157/225] Compiling FluidAudio NemotronMelExtractor.swift
+[158/225] Compiling FluidAudio NemotronMultilingualStreamingConfig.swift
+[159/225] Compiling FluidAudio NemotronMultilingualTokenizer.swift
+[160/225] Compiling FluidAudio NemotronStreamingConfig.swift
+[161/225] Compiling FluidAudio NemotronVocabularyBias.swift
+[162/225] Compiling FluidAudio StreamingNemotronAsrManager+Pipeline.swift
+[163/225] Compiling FluidAudio StreamingNemotronAsrManager.swift
+[164/225] Compiling FluidAudio StreamingNemotronMultilingualAsrManager+BlankRescue.swift
+[165/225] Compiling FluidAudio StreamingNemotronMultilingualAsrManager+Buffers.swift
+[166/225] Compiling FluidAudio StreamingNemotronMultilingualAsrManager+Decode.swift
+[167/225] Compiling FluidAudio StreamingNemotronMultilingualAsrManager+Pipeline.swift
+[168/225] Compiling FluidAudio StreamingNemotronMultilingualAsrManager+Shared.swift
+[169/225] Compiling FluidAudio StreamingNemotronMultilingualAsrManager.swift
+[170/225] Compiling FluidAudio ParakeetModelVariant.swift
+[171/225] Compiling FluidAudio RnntDecoder.swift
+[172/225] Compiling FluidAudio StreamingAsrManager.swift
+[173/225] Compiling FluidAudio StreamingAsrUtils.swift
+[174/225] Compiling FluidAudio Tokenizer.swift
+[175/249] Compiling FluidAudio PLDATransform.swift
+[176/249] Compiling FluidAudio SilenceAwareFbank.swift
+[177/249] Compiling FluidAudio WeightInterpolation.swift
+[178/249] Compiling FluidAudio OfflineSegmentationProcessor.swift
+[179/249] Compiling FluidAudio OfflineReconstruction.swift
+[180/249] Compiling FluidAudio VDSPOperations.swift
+[181/249] Compiling FluidAudio ZeroVoteReembedder.swift
+[182/249] Compiling FluidAudio AudioValidation.swift
+[183/249] Compiling FluidAudio SegmentationProcessor.swift
+[184/249] Compiling FluidAudio SlidingWindow.swift
+[185/249] Compiling FluidAudio OfflineSortformerDiarizer.swift
+[186/249] Compiling FluidAudio SortformerSpeakerStitcher.swift
+[187/249] Compiling FluidAudio SortformerDiarizer.swift
+[188/249] Compiling FluidAudio SortformerModelInference.swift
+[189/249] Compiling FluidAudio SortformerStateUpdater.swift
+[190/249] Compiling FluidAudio SortformerTypes.swift
+[191/249] Compiling FluidAudio LocalVqeManager.swift
+[192/249] Compiling FluidAudio LocalVqeStream.swift
+[193/249] Compiling FluidAudio LocalVqeTypes.swift
+[194/249] Compiling FluidAudio FluidAudioSwift.swift
+[195/249] Compiling FluidAudio TextNormalizer.swift
+[196/249] Compiling FluidAudio ModelNames.swift
+[197/249] Compiling FluidAudio ModelRegistry.swift
+[198/249] Compiling FluidAudio ANEMemoryOptimizer.swift
+[199/272] Compiling FluidAudio PerformanceMetrics.swift
+[200/272] Compiling FluidAudio ProgressEmitter.swift
+[201/272] Compiling FluidAudio StringUtils.swift
+[202/272] Compiling FluidAudio SystemInfo.swift
+[203/272] Compiling FluidAudio TokenLanguageFilter.swift
+[204/272] Compiling FluidAudio ZeroCopyFeatureProvider.swift
+[205/272] Compiling FluidAudio CampPlusEmbedder.swift
+[206/272] Compiling FluidAudio CampPlusModels.swift
+[207/272] Compiling FluidAudio ChatterboxTables.swift
+[208/272] Compiling FluidAudio ChatterboxConstants.swift
+[209/272] Compiling FluidAudio ChatterboxError.swift
+[210/272] Compiling FluidAudio ChatterboxManager.swift
+[211/272] Compiling FluidAudio ChatterboxModels.swift
+[212/272] Compiling FluidAudio ChatterboxNanoConstants.swift
+[213/272] Compiling FluidAudio ChatterboxNanoManager.swift
+[214/272] Compiling FluidAudio ChatterboxNanoModels.swift
+[215/272] Compiling FluidAudio ChatterboxNanoSynthesizer.swift
+[216/272] Compiling FluidAudio ChatterboxNanoTokenizer.swift
+[217/272] Compiling FluidAudio ChatterboxAlignmentAnalyzer.swift
+[218/272] Compiling FluidAudio ChatterboxMLSupport.swift
+[219/272] Compiling FluidAudio ChatterboxSynthesizer.swift
+[220/272] Compiling FluidAudio ChatterboxTokenizer.swift
+[221/272] Compiling FluidAudio G2PModel.swift
+[222/272] Compiling FluidAudio MultilingualG2PError.swift
+[223/295] Compiling FluidAudio ANEMemoryUtils.swift
+[224/295] Compiling FluidAudio ASRConstants.swift
+[225/295] Compiling FluidAudio AppLogger.swift
+[226/295] Compiling FluidAudio AssetDownloader.swift
+[227/295] Compiling FluidAudio AudioConverter.swift
+[228/295] Compiling FluidAudio AudioMelSpectrogram.swift
+[229/295] Compiling FluidAudio AudioSampleSource.swift
+[230/295] Compiling FluidAudio AudioSource.swift
+[231/295] Compiling FluidAudio AudioSourceFactory.swift
+[232/295] Compiling FluidAudio AudioStream.swift
+[233/295] Compiling FluidAudio DownloadTypes.swift
+[234/295] Compiling FluidAudio FileDownloader.swift
+[235/295] Compiling FluidAudio HFClient.swift
+[236/295] Compiling FluidAudio HFTreeLister.swift
+[237/295] Compiling FluidAudio ModelCache.swift
+[238/295] Compiling FluidAudio ModelHub.swift
+[239/295] Compiling FluidAudio ProgressReporter.swift
+[240/295] Compiling FluidAudio RetryPolicy.swift
+[241/295] Compiling FluidAudio Float16Conversion.swift
+[242/295] Compiling FluidAudio MLArrayCache.swift
+[243/295] Compiling FluidAudio MLModel+Prediction.swift
+[244/295] Compiling FluidAudio MLModelConfigurationUtils.swift
+[245/295] Compiling FluidAudio MLMultiArray+Extensions.swift
+[246/295] Compiling FluidAudio ModelWarmup.swift
+[247/318] Compiling FluidAudio MultilingualG2PLanguage.swift
+[248/318] Compiling FluidAudio MultilingualG2PModel.swift
+[249/318] Compiling FluidAudio InflectModelStore.swift
+[250/318] Compiling FluidAudio InflectResourceDownloader.swift
+[251/318] Compiling FluidAudio InflectConstants.swift
+[252/318] Compiling FluidAudio InflectError.swift
+[253/318] Compiling FluidAudio InflectManager.swift
+[254/318] Compiling FluidAudio InflectSymbols.swift
+[255/318] Compiling FluidAudio InflectVariant.swift
+[256/318] Compiling FluidAudio InflectNoise.swift
+[257/318] Compiling FluidAudio InflectSynthesizer.swift
+[258/318] Compiling FluidAudio KokoroAneModelCacheMigration.swift
+[259/318] Compiling FluidAudio KokoroAneResourceDownloader.swift
+[260/318] Compiling FluidAudio KokoroAneVocab.swift
+[261/318] Compiling FluidAudio KokoroAneEnglishPhonemizer.swift
+[262/318] Compiling FluidAudio FrenchG2P.swift
+[263/318] Compiling FluidAudio JapaneseCutlet.swift
+[264/318] Compiling FluidAudio JapaneseG2P.swift
+[265/318] Compiling FluidAudio JapaneseMecabDictionary.swift
+[266/318] Compiling FluidAudio JapaneseTokenizer.swift
+[267/318] Compiling FluidAudio KokoroAneLexicon.swift
+[268/318] Compiling FluidAudio MandarinBertTokenizer.swift
+[269/318] Compiling FluidAudio MandarinBopomofoMap.swift
+[270/341] Compiling FluidAudio MandarinCustomLexicon.swift
+[271/341] Compiling FluidAudio MandarinErhua.swift
+[272/341] Compiling FluidAudio MandarinG2P.swift
+[273/341] Compiling FluidAudio MandarinG2pwModel.swift
+[274/341] Compiling FluidAudio MandarinJiebaHmm.swift
+[275/341] Compiling FluidAudio MandarinJiebaTables.swift
+[276/341] Compiling FluidAudio MandarinNumberNormalizer.swift
+[277/341] Compiling FluidAudio MandarinPinyinDict.swift
+[278/341] Compiling FluidAudio MandarinPinyinNormalizer.swift
+[279/341] Compiling FluidAudio MandarinPolyphoneCatalog.swift
+[280/341] Compiling FluidAudio MandarinToneSandhi.swift
+[281/341] Compiling FluidAudio MandarinToneSandhiPOS.swift
+[282/341] Compiling FluidAudio RomanceNumberNormalizer.swift
+[283/341] Compiling FluidAudio SpanishG2P.swift
+[284/341] Compiling FluidAudio KokoroAneConstants.swift
+[285/341] Compiling FluidAudio KokoroAneError.swift
+[286/341] Compiling FluidAudio KokoroAneManager.swift
+[287/341] Compiling FluidAudio KokoroAneModelStore.swift
+[288/341] Compiling FluidAudio KokoroAneSynthesizer+Conversion.swift
+[289/341] Compiling FluidAudio KokoroAneSynthesizer+Types.swift
+[290/341] Compiling FluidAudio KokoroAneSynthesizer.swift
+[291/341] Compiling FluidAudio KokoroAneVoicePack.swift
+[292/341] Compiling FluidAudio KokoroAneV3Arrays.swift
+[293/364] Compiling FluidAudio KokoroAneV3Assets.swift
+[294/364] Compiling FluidAudio KokoroAneV3NativeSource.swift
+[295/364] Compiling FluidAudio KokoroAneV3Pipeline.swift
+[296/364] Compiling FluidAudio KokoroAneVersion.swift
+[297/364] Compiling FluidAudio LuxTtsEnglishNormalizer.swift
+[298/364] Compiling FluidAudio LuxTtsG2p.swift
+[299/364] Compiling FluidAudio LuxTtsConstants.swift
+[300/364] Compiling FluidAudio LuxTtsContinuation.swift
+[301/364] Compiling FluidAudio LuxTtsError.swift
+[302/364] Compiling FluidAudio LuxTtsManager.swift
+[303/364] Compiling FluidAudio LuxTtsMelExtractor.swift
+[304/364] Compiling FluidAudio LuxTtsModelStore.swift
+[305/364] Compiling FluidAudio LuxTtsSolver.swift
+[306/364] Compiling FluidAudio LuxTtsSynthesizer.swift
+[307/364] Compiling FluidAudio LuxTtsTokenizer.swift
+[308/364] Compiling FluidAudio NeuTtsConstants.swift
+[309/364] Compiling FluidAudio NeuTtsManager.swift
+[310/364] Compiling FluidAudio NeuTtsModels.swift
+[311/364] Compiling FluidAudio NeuTtsPrompt.swift
+[312/364] Compiling FluidAudio NeuTtsSynthesizer.swift
+[313/364] Compiling FluidAudio NeuTtsBpeTokenizer.swift
+[314/364] Compiling FluidAudio ParadeeModelStore.swift
+[315/364] Compiling FluidAudio ParadeeConstants.swift
+[316/387] Compiling FluidAudio SentencePieceTokenizer.swift
+[317/387] Compiling FluidAudio SSMLProcessor.swift
+[318/387] Compiling FluidAudio SSMLTagParser.swift
+[319/387] Compiling FluidAudio SSMLTypes.swift
+[320/387] Compiling FluidAudio SayAsInterpreter.swift
+[321/387] Compiling FluidAudio AudioPostProcessor.swift
+[322/387] Compiling FluidAudio EnglishInitialisms.swift
+[323/387] Compiling FluidAudio EnglishTextNormalizer.swift
+[324/387] Compiling FluidAudio LexiconAssetCache.swift
+[325/387] Compiling FluidAudio NemoTextNormalizer.swift
+[326/387] Compiling FluidAudio PhonemeChunker.swift
+[327/387] Compiling FluidAudio TTSError.swift
+[328/387] Compiling FluidAudio TtsCacheDirectory.swift
+[329/387] Compiling FluidAudio TtsComputeUnitPreset.swift
+[330/387] Compiling FluidAudio StyleTTS2ModelStore.swift
+[331/387] Compiling FluidAudio StyleTTS2ResourceDownloader.swift
+[332/387] Compiling FluidAudio StyleTTS2MelExtractor.swift
+[333/387] Compiling FluidAudio StyleTTS2DiffusionSchedule.swift
+[334/387] Compiling FluidAudio StyleTTS2GlueOps.swift
+[335/387] Compiling FluidAudio StyleTTS2MultiArray.swift
+[336/387] Compiling FluidAudio StyleTTS2Synthesizer.swift
+[337/387] Compiling FluidAudio StyleTTS2Phonemizer.swift
+[338/387] Compiling FluidAudio StyleTTS2TextCleaner.swift
+[339/387] Compiling FluidAudio StyleTTS2Constants.swift
+[340/387] Compiling FluidAudio StyleTTS2Error.swift
+[341/387] Compiling FluidAudio StyleTTS2Manager.swift
+[342/387] Compiling FluidAudio Supertonic3ModelStore.swift
+[343/387] Compiling FluidAudio Supertonic3ResourceDownloader.swift
+[344/387] Compiling FluidAudio Supertonic3TextChunker.swift
+[345/387] Compiling FluidAudio Supertonic3UnicodeProcessor.swift
+[346/387] Compiling FluidAudio Supertonic3LatentSampler.swift
+[347/387] Compiling FluidAudio Supertonic3MultiArray.swift
+[348/387] Compiling FluidAudio Supertonic3Synthesizer.swift
+[349/387] Compiling FluidAudio Supertonic3Constants.swift
+[350/387] Compiling FluidAudio Supertonic3Error.swift
+[351/387] Compiling FluidAudio Supertonic3Manager.swift
+[352/387] Compiling FluidAudio Supertonic3Types.swift
+[353/387] Compiling FluidAudio TtsBackend.swift
+[354/387] Compiling FluidAudio TtsConstants.swift
+[355/387] Compiling FluidAudio FsmnVadManager.swift
+[356/387] Compiling FluidAudio FsmnVadModels.swift
+[357/387] Compiling FluidAudio VadManager+SpeechSegmentation.swift
+[358/387] Compiling FluidAudio VadManager+Streaming.swift
+[359/387] Compiling FluidAudio VadManager.swift
+[360/387] Compiling FluidAudio VadTypes.swift
+[361/387] Compiling FluidAudio resource_bundle_accessor.swift
+[362/387] Compiling FluidAudio ParadeeError.swift
+[363/387] Compiling FluidAudio ParadeeManager.swift
+[364/387] Compiling FluidAudio ParadeeVariant.swift
+[365/387] Compiling FluidAudio ParadeeSynthesizer.swift
+[366/387] Compiling FluidAudio PocketTtsConstantsLoader.swift
+[367/387] Compiling FluidAudio PocketTtsResourceDownloader.swift
+[368/387] Compiling FluidAudio PocketTtsLayerKeys.swift
+[369/387] Compiling FluidAudio PocketTtsMimiKeys.swift
+[370/387] Compiling FluidAudio PocketTtsModelStore.swift
+[371/387] Compiling FluidAudio PocketTtsSession.swift
+[372/387] Compiling FluidAudio PocketTtsStateEngine.swift
+[373/387] Compiling FluidAudio PocketTtsSynthesizer+Flow.swift
+[374/387] Compiling FluidAudio PocketTtsSynthesizer+KVCache.swift
+[375/387] Compiling FluidAudio PocketTtsSynthesizer+Mimi.swift
+[376/387] Compiling FluidAudio PocketTtsSynthesizer+State.swift
+[377/387] Compiling FluidAudio PocketTtsSynthesizer+Types.swift
+[378/387] Compiling FluidAudio PocketTtsSynthesizer.swift
+[379/387] Compiling FluidAudio PocketTtsVoiceCloner.swift
+[380/387] Compiling FluidAudio PocketTTSError.swift
+[381/387] Compiling FluidAudio PocketTtsComputeUnits.swift
+[382/387] Compiling FluidAudio PocketTtsConstants.swift
+[383/387] Compiling FluidAudio PocketTtsManager.swift
+[384/387] Compiling FluidAudio SentencePieceProto.swift
+[385/430] Compiling BirdtownFlow LaunchAtLogin.swift
+[386/430] Compiling BirdtownFlow Log.swift
+[387/430] Compiling BirdtownFlow Permissions.swift
+[388/430] Compiling BirdtownFlow PermissionsMonitor.swift
+[389/430] Compiling BirdtownFlow Settings.swift
+[390/430] Compiling BirdtownFlow Sounds.swift
+[391/430] Compiling BirdtownFlow SpeechSmokeTest.swift
+[392/430] Compiling BirdtownFlow AppleSpeechEngine.swift
+[393/430] Compiling BirdtownFlow HardDeadline.swift
+[394/430] Compiling BirdtownFlow LongTranscription.swift
+[395/430] Compiling BirdtownFlow ModelManager.swift
+[396/430] Compiling BirdtownFlow ParakeetEngine.swift
+[397/430] Compiling BirdtownFlow SegmentedTranscriber.swift
+[398/430] Compiling BirdtownFlow TranscriptionEngine.swift
+[399/430] Compiling BirdtownFlow VocabularyBooster.swift
+[400/430] Compiling BirdtownFlow Brand.swift
+[401/430] Compiling BirdtownFlow IconExporter.swift
+[402/430] Compiling BirdtownFlow LogoPainter.swift
+[403/430] Compiling BirdtownFlow SpectrumOrb.swift
+[404/430] Compiling BirdtownFlow VoiceField.swift
+[405/430] Compiling BirdtownFlow AppIcon.swift
+[406/450] Compiling BirdtownFlow AppModel.swift
+[407/450] Compiling BirdtownFlow MurmurApp.swift
+[408/450] Compiling BirdtownFlow AudioDevices.swift
+[409/450] Compiling BirdtownFlow AudioRecorder.swift
+[410/450] Compiling BirdtownFlow DictationController.swift
+[411/450] Compiling BirdtownFlow FrontmostContext.swift
+[412/450] Compiling BirdtownFlow GlobalShortcut.swift
+[413/450] Compiling BirdtownFlow HotkeyMonitor.swift
+[414/450] Compiling BirdtownFlow IncrementalWAVWriter.swift
+[415/450] Compiling BirdtownFlow LiveDictation.swift
+[416/450] Compiling BirdtownFlow TextInjector.swift
+[417/450] Compiling BirdtownFlow Watchdog.swift
+[418/450] Compiling BirdtownFlow FeedbackCenter.swift
+[419/450] Compiling BirdtownFlow AppleIntelligencePolisher.swift
+[420/450] Compiling BirdtownFlow ClaudeCodePolisher.swift
+[421/450] Compiling BirdtownFlow Keychain.swift
+[422/450] Compiling BirdtownFlow LabBench.swift
+[423/450] Compiling BirdtownFlow PolishService.swift
+[424/450] Compiling BirdtownFlow ProgressivePolisher.swift
+[425/450] Compiling BirdtownFlow DictionaryStore.swift
+[426/450] Compiling BirdtownFlow AppPaths.swift
+[427/450] Emitting module BirdtownFlow
+[428/490] Compiling BirdtownFlow Badge.swift
+[429/490] Compiling BirdtownFlow Banner.swift
+[430/490] Compiling BirdtownFlow ButtonStyles.swift
+[431/490] Compiling BirdtownFlow Card.swift
+[432/490] Compiling BirdtownFlow EmptyState.swift
+[433/490] Compiling BirdtownFlow FilterChip.swift
+[434/490] Compiling BirdtownFlow FocusRing.swift
+[435/490] Compiling BirdtownFlow IconButton.swift
+[436/490] Compiling BirdtownFlow KeyCap.swift
+[437/490] Compiling BirdtownFlow LabeledInput.swift
+[438/490] Compiling BirdtownFlow SearchField.swift
+[439/490] Compiling BirdtownFlow SectionHeader.swift
+[440/490] Compiling BirdtownFlow ShortcutRecorder.swift
+[441/490] Compiling BirdtownFlow SpectrumProgressBar.swift
+[442/490] Compiling BirdtownFlow UndoToast.swift
+[443/490] Compiling BirdtownFlow AppearanceSupport.swift
+[444/490] Compiling BirdtownFlow Tokens+DictionarySnippets.swift
+[445/490] Compiling BirdtownFlow Tokens+HUD.swift
+[446/490] Compiling BirdtownFlow Tokens+History.swift
+[447/490] Compiling BirdtownFlow Tokens+Home.swift
+[448/490] Compiling BirdtownFlow StyleAppsPanel.swift
+/Users/runner/work/birdtown-flow/birdtown-flow/Sources/BirdtownFlow/UI/Main/StyleView.swift:238:25: warning: '+' was deprecated in macOS 26.0: Use string interpolation on `Text` instead: `Text("Hello \(name)")` [#DeprecatedDeclaration]
+236 |                     (Text("Polished with ")
+237 |                         .foregroundStyle(Palette.inkSecondary)
+238 |                         + Text(configuration?.name ?? provider.title)
+    |                         `- warning: '+' was deprecated in macOS 26.0: Use string interpolation on `Text` instead: `Text("Hello \(name)")` [#DeprecatedDeclaration]
+239 |                         .fontWeight(.semibold)
+240 |                         .foregroundStyle(Palette.violet))
+
+[#DeprecatedDeclaration]: <https://docs.swift.org/compiler/documentation/diagnostics/deprecated-declaration>
+[449/490] Compiling BirdtownFlow StyleView.swift
+/Users/runner/work/birdtown-flow/birdtown-flow/Sources/BirdtownFlow/UI/Main/StyleView.swift:238:25: warning: '+' was deprecated in macOS 26.0: Use string interpolation on `Text` instead: `Text("Hello \(name)")` [#DeprecatedDeclaration]
+236 |                     (Text("Polished with ")
+237 |                         .foregroundStyle(Palette.inkSecondary)
+238 |                         + Text(configuration?.name ?? provider.title)
+    |                         `- warning: '+' was deprecated in macOS 26.0: Use string interpolation on `Text` instead: `Text("Hello \(name)")` [#DeprecatedDeclaration]
+239 |                         .fontWeight(.semibold)
+240 |                         .foregroundStyle(Palette.violet))
+
+[#DeprecatedDeclaration]: <https://docs.swift.org/compiler/documentation/diagnostics/deprecated-declaration>
+[450/490] Compiling BirdtownFlow ViewMemo.swift
+/Users/runner/work/birdtown-flow/birdtown-flow/Sources/BirdtownFlow/UI/Main/StyleView.swift:238:25: warning: '+' was deprecated in macOS 26.0: Use string interpolation on `Text` instead: `Text("Hello \(name)")` [#DeprecatedDeclaration]
+236 |                     (Text("Polished with ")
+237 |                         .foregroundStyle(Palette.inkSecondary)
+238 |                         + Text(configuration?.name ?? provider.title)
+    |                         `- warning: '+' was deprecated in macOS 26.0: Use string interpolation on `Text` instead: `Text("Hello \(name)")` [#DeprecatedDeclaration]
+239 |                         .fontWeight(.semibold)
+240 |                         .foregroundStyle(Palette.violet))
+
+[#DeprecatedDeclaration]: <https://docs.swift.org/compiler/documentation/diagnostics/deprecated-declaration>
+[451/490] Compiling BirdtownFlow WeekSummary.swift
+/Users/runner/work/birdtown-flow/birdtown-flow/Sources/BirdtownFlow/UI/Main/StyleView.swift:238:25: warning: '+' was deprecated in macOS 26.0: Use string interpolation on `Text` instead: `Text("Hello \(name)")` [#DeprecatedDeclaration]
+236 |                     (Text("Polished with ")
+237 |                         .foregroundStyle(Palette.inkSecondary)
+238 |                         + Text(configuration?.name ?? provider.title)
+    |                         `- warning: '+' was deprecated in macOS 26.0: Use string interpolation on `Text` instead: `Text("Hello \(name)")` [#DeprecatedDeclaration]
+239 |                         .fontWeight(.semibold)
+240 |                         .foregroundStyle(Palette.violet))
+
+[#DeprecatedDeclaration]: <https://docs.swift.org/compiler/documentation/diagnostics/deprecated-declaration>
+[452/490] Compiling BirdtownFlow MenuBarContent.swift
+/Users/runner/work/birdtown-flow/birdtown-flow/Sources/BirdtownFlow/UI/Main/StyleView.swift:238:25: warning: '+' was deprecated in macOS 26.0: Use string interpolation on `Text` instead: `Text("Hello \(name)")` [#DeprecatedDeclaration]
+236 |                     (Text("Polished with ")
+237 |                         .foregroundStyle(Palette.inkSecondary)
+238 |                         + Text(configuration?.name ?? provider.title)
+    |                         `- warning: '+' was deprecated in macOS 26.0: Use string interpolation on `Text` instead: `Text("Hello \(name)")` [#DeprecatedDeclaration]
+239 |                         .fontWeight(.semibold)
+240 |                         .foregroundStyle(Palette.violet))
+
+[#DeprecatedDeclaration]: <https://docs.swift.org/compiler/documentation/diagnostics/deprecated-declaration>
+[453/490] Compiling BirdtownFlow OnboardingView.swift
+/Users/runner/work/birdtown-flow/birdtown-flow/Sources/BirdtownFlow/UI/Main/StyleView.swift:238:25: warning: '+' was deprecated in macOS 26.0: Use string interpolation on `Text` instead: `Text("Hello \(name)")` [#DeprecatedDeclaration]
+236 |                     (Text("Polished with ")
+237 |                         .foregroundStyle(Palette.inkSecondary)
+238 |                         + Text(configuration?.name ?? provider.title)
+    |                         `- warning: '+' was deprecated in macOS 26.0: Use string interpolation on `Text` instead: `Text("Hello \(name)")` [#DeprecatedDeclaration]
+239 |                         .fontWeight(.semibold)
+240 |                         .foregroundStyle(Palette.violet))
+
+[#DeprecatedDeclaration]: <https://docs.swift.org/compiler/documentation/diagnostics/deprecated-declaration>
+[454/490] Compiling BirdtownFlow OnboardingWindowController.swift
+/Users/runner/work/birdtown-flow/birdtown-flow/Sources/BirdtownFlow/UI/Main/StyleView.swift:238:25: warning: '+' was deprecated in macOS 26.0: Use string interpolation on `Text` instead: `Text("Hello \(name)")` [#DeprecatedDeclaration]
+236 |                     (Text("Polished with ")
+237 |                         .foregroundStyle(Palette.inkSecondary)
+238 |                         + Text(configuration?.name ?? provider.title)
+    |                         `- warning: '+' was deprecated in macOS 26.0: Use string interpolation on `Text` instead: `Text("Hello \(name)")` [#DeprecatedDeclaration]
+239 |                         .fontWeight(.semibold)
+240 |                         .foregroundStyle(Palette.violet))
+
+[#DeprecatedDeclaration]: <https://docs.swift.org/compiler/documentation/diagnostics/deprecated-declaration>
+[455/490] Compiling BirdtownFlow SetupKit.swift
+/Users/runner/work/birdtown-flow/birdtown-flow/Sources/BirdtownFlow/UI/Main/StyleView.swift:238:25: warning: '+' was deprecated in macOS 26.0: Use string interpolation on `Text` instead: `Text("Hello \(name)")` [#DeprecatedDeclaration]
+236 |                     (Text("Polished with ")
+237 |                         .foregroundStyle(Palette.inkSecondary)
+238 |                         + Text(configuration?.name ?? provider.title)
+    |                         `- warning: '+' was deprecated in macOS 26.0: Use string interpolation on `Text` instead: `Text("Hello \(name)")` [#DeprecatedDeclaration]
+239 |                         .fontWeight(.semibold)
+240 |                         .foregroundStyle(Palette.violet))
+
+[#DeprecatedDeclaration]: <https://docs.swift.org/compiler/documentation/diagnostics/deprecated-declaration>
+[456/490] Compiling BirdtownFlow FeedbackSettingsGroup.swift
+/Users/runner/work/birdtown-flow/birdtown-flow/Sources/BirdtownFlow/UI/Main/StyleView.swift:238:25: warning: '+' was deprecated in macOS 26.0: Use string interpolation on `Text` instead: `Text("Hello \(name)")` [#DeprecatedDeclaration]
+236 |                     (Text("Polished with ")
+237 |                         .foregroundStyle(Palette.inkSecondary)
+238 |                         + Text(configuration?.name ?? provider.title)
+    |                         `- warning: '+' was deprecated in macOS 26.0: Use string interpolation on `Text` instead: `Text("Hello \(name)")` [#DeprecatedDeclaration]
+239 |                         .fontWeight(.semibold)
+240 |                         .foregroundStyle(Palette.violet))
+
+[#DeprecatedDeclaration]: <https://docs.swift.org/compiler/documentation/diagnostics/deprecated-declaration>
+[457/490] Compiling BirdtownFlow SettingsPanes.swift
+/Users/runner/work/birdtown-flow/birdtown-flow/Sources/BirdtownFlow/UI/Main/StyleView.swift:238:25: warning: '+' was deprecated in macOS 26.0: Use string interpolation on `Text` instead: `Text("Hello \(name)")` [#DeprecatedDeclaration]
+236 |                     (Text("Polished with ")
+237 |                         .foregroundStyle(Palette.inkSecondary)
+238 |                         + Text(configuration?.name ?? provider.title)
+    |                         `- warning: '+' was deprecated in macOS 26.0: Use string interpolation on `Text` instead: `Text("Hello \(name)")` [#DeprecatedDeclaration]
+239 |                         .fontWeight(.semibold)
+240 |                         .foregroundStyle(Palette.violet))
+
+[#DeprecatedDeclaration]: <https://docs.swift.org/compiler/documentation/diagnostics/deprecated-declaration>
+[458/490] Compiling BirdtownFlow SettingsView.swift
+/Users/runner/work/birdtown-flow/birdtown-flow/Sources/BirdtownFlow/UI/Main/StyleView.swift:238:25: warning: '+' was deprecated in macOS 26.0: Use string interpolation on `Text` instead: `Text("Hello \(name)")` [#DeprecatedDeclaration]
+236 |                     (Text("Polished with ")
+237 |                         .foregroundStyle(Palette.inkSecondary)
+238 |                         + Text(configuration?.name ?? provider.title)
+    |                         `- warning: '+' was deprecated in macOS 26.0: Use string interpolation on `Text` instead: `Text("Hello \(name)")` [#DeprecatedDeclaration]
+239 |                         .fontWeight(.semibold)
+240 |                         .foregroundStyle(Palette.violet))
+
+[#DeprecatedDeclaration]: <https://docs.swift.org/compiler/documentation/diagnostics/deprecated-declaration>
+[459/490] Compiling BirdtownFlow SampleData.swift
+/Users/runner/work/birdtown-flow/birdtown-flow/Sources/BirdtownFlow/UI/Main/StyleView.swift:238:25: warning: '+' was deprecated in macOS 26.0: Use string interpolation on `Text` instead: `Text("Hello \(name)")` [#DeprecatedDeclaration]
+236 |                     (Text("Polished with ")
+237 |                         .foregroundStyle(Palette.inkSecondary)
+238 |                         + Text(configuration?.name ?? provider.title)
+    |                         `- warning: '+' was deprecated in macOS 26.0: Use string interpolation on `Text` instead: `Text("Hello \(name)")` [#DeprecatedDeclaration]
+239 |                         .fontWeight(.semibold)
+240 |                         .foregroundStyle(Palette.violet))
+
+[#DeprecatedDeclaration]: <https://docs.swift.org/compiler/documentation/diagnostics/deprecated-declaration>
+[460/490] Compiling BirdtownFlow SnapshotCatalog+HUD.swift
+/Users/runner/work/birdtown-flow/birdtown-flow/Sources/BirdtownFlow/UI/Main/StyleView.swift:238:25: warning: '+' was deprecated in macOS 26.0: Use string interpolation on `Text` instead: `Text("Hello \(name)")` [#DeprecatedDeclaration]
+236 |                     (Text("Polished with ")
+237 |                         .foregroundStyle(Palette.inkSecondary)
+238 |                         + Text(configuration?.name ?? provider.title)
+    |                         `- warning: '+' was deprecated in macOS 26.0: Use string interpolation on `Text` instead: `Text("Hello \(name)")` [#DeprecatedDeclaration]
+239 |                         .fontWeight(.semibold)
+240 |                         .foregroundStyle(Palette.violet))
+
+[#DeprecatedDeclaration]: <https://docs.swift.org/compiler/documentation/diagnostics/deprecated-declaration>
+[461/490] Compiling BirdtownFlow SnapshotCatalog+Lab.swift
+/Users/runner/work/birdtown-flow/birdtown-flow/Sources/BirdtownFlow/UI/Main/StyleView.swift:238:25: warning: '+' was deprecated in macOS 26.0: Use string interpolation on `Text` instead: `Text("Hello \(name)")` [#DeprecatedDeclaration]
+236 |                     (Text("Polished with ")
+237 |                         .foregroundStyle(Palette.inkSecondary)
+238 |                         + Text(configuration?.name ?? provider.title)
+    |                         `- warning: '+' was deprecated in macOS 26.0: Use string interpolation on `Text` instead: `Text("Hello \(name)")` [#DeprecatedDeclaration]
+239 |                         .fontWeight(.semibold)
+240 |                         .foregroundStyle(Palette.violet))
+
+[#DeprecatedDeclaration]: <https://docs.swift.org/compiler/documentation/diagnostics/deprecated-declaration>
+[462/490] Compiling BirdtownFlow SnapshotCatalog+Library.swift
+/Users/runner/work/birdtown-flow/birdtown-flow/Sources/BirdtownFlow/UI/Main/StyleView.swift:238:25: warning: '+' was deprecated in macOS 26.0: Use string interpolation on `Text` instead: `Text("Hello \(name)")` [#DeprecatedDeclaration]
+236 |                     (Text("Polished with ")
+237 |                         .foregroundStyle(Palette.inkSecondary)
+238 |                         + Text(configuration?.name ?? provider.title)
+    |                         `- warning: '+' was deprecated in macOS 26.0: Use string interpolation on `Text` instead: `Text("Hello \(name)")` [#DeprecatedDeclaration]
+239 |                         .fontWeight(.semibold)
+240 |                         .foregroundStyle(Palette.violet))
+
+[#DeprecatedDeclaration]: <https://docs.swift.org/compiler/documentation/diagnostics/deprecated-declaration>
+[463/490] Compiling BirdtownFlow SnapshotCatalog+Main.swift
+/Users/runner/work/birdtown-flow/birdtown-flow/Sources/BirdtownFlow/UI/Main/StyleView.swift:238:25: warning: '+' was deprecated in macOS 26.0: Use string interpolation on `Text` instead: `Text("Hello \(name)")` [#DeprecatedDeclaration]
+236 |                     (Text("Polished with ")
+237 |                         .foregroundStyle(Palette.inkSecondary)
+238 |                         + Text(configuration?.name ?? provider.title)
+    |                         `- warning: '+' was deprecated in macOS 26.0: Use string interpolation on `Text` instead: `Text("Hello \(name)")` [#DeprecatedDeclaration]
+239 |                         .fontWeight(.semibold)
+240 |                         .foregroundStyle(Palette.violet))
+
+[#DeprecatedDeclaration]: <https://docs.swift.org/compiler/documentation/diagnostics/deprecated-declaration>
+[464/490] Compiling BirdtownFlow SnapshotCatalog+MenuBar.swift
+/Users/runner/work/birdtown-flow/birdtown-flow/Sources/BirdtownFlow/UI/Main/StyleView.swift:238:25: warning: '+' was deprecated in macOS 26.0: Use string interpolation on `Text` instead: `Text("Hello \(name)")` [#DeprecatedDeclaration]
+236 |                     (Text("Polished with ")
+237 |                         .foregroundStyle(Palette.inkSecondary)
+238 |                         + Text(configuration?.name ?? provider.title)
+    |                         `- warning: '+' was deprecated in macOS 26.0: Use string interpolation on `Text` instead: `Text("Hello \(name)")` [#DeprecatedDeclaration]
+239 |                         .fontWeight(.semibold)
+240 |                         .foregroundStyle(Palette.violet))
+
+[#DeprecatedDeclaration]: <https://docs.swift.org/compiler/documentation/diagnostics/deprecated-declaration>
+[465/490] Compiling BirdtownFlow SnapshotCatalog+Setup.swift
+/Users/runner/work/birdtown-flow/birdtown-flow/Sources/BirdtownFlow/UI/Main/StyleView.swift:238:25: warning: '+' was deprecated in macOS 26.0: Use string interpolation on `Text` instead: `Text("Hello \(name)")` [#DeprecatedDeclaration]
+236 |                     (Text("Polished with ")
+237 |                         .foregroundStyle(Palette.inkSecondary)
+238 |                         + Text(configuration?.name ?? provider.title)
+    |                         `- warning: '+' was deprecated in macOS 26.0: Use string interpolation on `Text` instead: `Text("Hello \(name)")` [#DeprecatedDeclaration]
+239 |                         .fontWeight(.semibold)
+240 |                         .foregroundStyle(Palette.violet))
+
+[#DeprecatedDeclaration]: <https://docs.swift.org/compiler/documentation/diagnostics/deprecated-declaration>
+[466/490] Compiling BirdtownFlow SnapshotCatalog+Shortcuts.swift
+/Users/runner/work/birdtown-flow/birdtown-flow/Sources/BirdtownFlow/UI/Main/StyleView.swift:238:25: warning: '+' was deprecated in macOS 26.0: Use string interpolation on `Text` instead: `Text("Hello \(name)")` [#DeprecatedDeclaration]
+236 |                     (Text("Polished with ")
+237 |                         .foregroundStyle(Palette.inkSecondary)
+238 |                         + Text(configuration?.name ?? provider.title)
+    |                         `- warning: '+' was deprecated in macOS 26.0: Use string interpolation on `Text` instead: `Text("Hello \(name)")` [#DeprecatedDeclaration]
+239 |                         .fontWeight(.semibold)
+240 |                         .foregroundStyle(Palette.violet))
+
+[#DeprecatedDeclaration]: <https://docs.swift.org/compiler/documentation/diagnostics/deprecated-declaration>
+[467/490] Compiling BirdtownFlow SnapshotRenderer.swift
+/Users/runner/work/birdtown-flow/birdtown-flow/Sources/BirdtownFlow/UI/Main/StyleView.swift:238:25: warning: '+' was deprecated in macOS 26.0: Use string interpolation on `Text` instead: `Text("Hello \(name)")` [#DeprecatedDeclaration]
+236 |                     (Text("Polished with ")
+237 |                         .foregroundStyle(Palette.inkSecondary)
+238 |                         + Text(configuration?.name ?? provider.title)
+    |                         `- warning: '+' was deprecated in macOS 26.0: Use string interpolation on `Text` instead: `Text("Hello \(name)")` [#DeprecatedDeclaration]
+239 |                         .fontWeight(.semibold)
+240 |                         .foregroundStyle(Palette.violet))
+
+[#DeprecatedDeclaration]: <https://docs.swift.org/compiler/documentation/diagnostics/deprecated-declaration>
+[468/490] Compiling BirdtownFlow Tokens+Lab.swift
+[469/490] Compiling BirdtownFlow Tokens+Settings.swift
+[470/490] Compiling BirdtownFlow Tokens+Style.swift
+[471/490] Compiling BirdtownFlow Tokens.swift
+[472/490] Compiling BirdtownFlow HUDController.swift
+[473/490] Compiling BirdtownFlow HUDFilm.swift
+[474/490] Compiling BirdtownFlow HUDState.swift
+[475/490] Compiling BirdtownFlow HUDView.swift
+[476/490] Compiling BirdtownFlow HUDWaveform.swift
+[477/490] Compiling BirdtownFlow AudioPlayback.swift
+[478/490] Compiling BirdtownFlow DictionaryView.swift
+[479/490] Compiling BirdtownFlow HistoryFloatingBar.swift
+[480/490] Compiling BirdtownFlow HistoryRow.swift
+[481/490] Compiling BirdtownFlow HistoryView.swift
+[482/490] Compiling BirdtownFlow HomeView.swift
+[483/490] Compiling BirdtownFlow LabView.swift
+[484/490] Compiling BirdtownFlow MainEnvironment.swift
+[485/490] Compiling BirdtownFlow MainView.swift
+[486/490] Compiling BirdtownFlow RetryTracker.swift
+[487/490] Compiling BirdtownFlow SnippetsView.swift
+[487/490] Write Objects.LinkFileList
+[488/490] Linking BirdtownFlow
+[489/490] Applying BirdtownFlow
+Build complete! (91.27s)
