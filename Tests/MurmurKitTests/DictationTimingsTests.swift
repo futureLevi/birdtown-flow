@@ -74,7 +74,7 @@ struct DictationTimingsTests {
     @Test func polishAndMicrophoneFieldsRoundTrip() throws {
         let timings = DictationTimings(
             transcribeMs: 310, polishMs: 3_612, totalMs: 4_020, polishModelMs: 1_180, polishStartedCold: true,
-            polishModel: "fast-model-1", polishEffort: "low", micLiveMs: 42, polishPartSize: .smaller, polishParts: 5,
+            polishModel: "fast-model-1", polishEffort: "low", micLiveMs: 42, polishPartsFrom: 100, polishParts: 5,
             polishPartsEarly: 3)
         #expect(try JSONDecoder().decode(DictationTimings.self, from: JSONEncoder().encode(timings)) == timings)
     }
@@ -96,7 +96,7 @@ struct DictationTimingsTests {
         #expect(timings.polishModel == nil)
         #expect(timings.polishEffort == nil)
         #expect(timings.micLiveMs == nil)
-        #expect(timings.polishPartSize == nil)
+        #expect(timings.polishPartsFrom == nil)
         #expect(timings.polishParts == nil)
         #expect(timings.polishPartsEarly == nil)
     }

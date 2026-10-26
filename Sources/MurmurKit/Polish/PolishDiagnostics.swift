@@ -25,8 +25,9 @@ public struct PolishDiagnostics: Sendable, Hashable {
     public var spareAgeMs: Int?
     /// Polish in parts: how many of the parts key-up polished or waited for started cold.
     public var coldParts: Int?
-    /// Polish in parts (`Settings.polishInParts`): the part size in use (`PolishPartSize`)…
-    public var partSize: PolishPartSize?
+    /// Polish in parts (`Settings.polishInParts`): the length from which texts were split
+    /// (`PolishPartSize.minimumWords`)…
+    public var partsFrom: Int?
     /// …how many parts the text was polished in, 1 when it was polished in one piece…
     public var parts: Int?
     /// …and how many of them were finished while the person was still talking
@@ -37,7 +38,7 @@ public struct PolishDiagnostics: Sendable, Hashable {
     public init(
         model: String? = nil, effort: String? = nil, startedCold: Bool? = nil, coldReason: String? = nil,
         modelMs: Int? = nil, sessionMs: Int? = nil, spareAgeMs: Int? = nil, coldParts: Int? = nil,
-        partSize: PolishPartSize? = nil, parts: Int? = nil, partsPolishedEarly: Int? = nil
+        partsFrom: Int? = nil, parts: Int? = nil, partsPolishedEarly: Int? = nil
     ) {
         self.model = model
         self.effort = effort
@@ -47,7 +48,7 @@ public struct PolishDiagnostics: Sendable, Hashable {
         self.sessionMs = sessionMs
         self.spareAgeMs = spareAgeMs
         self.coldParts = coldParts
-        self.partSize = partSize
+        self.partsFrom = partsFrom
         self.parts = parts
         self.partsPolishedEarly = partsPolishedEarly
     }
@@ -100,31 +101,30 @@ public struct PolishDiagnostics: Sendable, Hashable {
 
 extension DictationTimings {
     /// Takes History's share of `diagnostics`: the model's time, a cold start, the model and
-    /// its effort, and the parts: their size, how many, and how many were polished while the
-    /// person talked. `nil` (polish didn't run) clears them, as a Retry without polish should.
+    /// its effort, and the parts: the length they start from, how many, and how many were
+    /// polished while the person talked. `nil` (polish didn't run) clears them, as a Retry without polish should.
     public mutating func setPolish(_ diagnostics: PolishDiagnostics?) {
         polishModelMs = diagnostics?.modelMs
         polishStartedCold = diagnostics?.startedCold
         polishModel = diagnostics?.model
         polishEffort = diagnostics?.effort
-        polishPartSize = diagnostics?.partSize
+        polishPartsFrom = diagnostics?.partsFrom
         polishParts = diagnostics?.parts
         polishPartsEarly = diagnostics?.partsPolishedEarly
     }
 
-    /// What History's Timings view says after polish's time, in order: the parts ("5 smaller
-    /// parts, 3 done while you talked", or "one piece (standard parts)"), "cold start", the
-    /// model's own time ("model 1,180 ms", in `format`), and the model with its effort
-    /// ("<model> low"). Empty when none of it was recorded.
+    /// What History's Timings view says after polish's time, in order: the parts ("5 parts
+    /// (from 100 words), 3 done while you talked", or "one piece (parts from 250 words)"),
+    /// "cold start", the model's own time ("model 1,180 ms", in `format`), and the model with
+    /// its effort ("<model> low"). Empty when none of it was recorded.
     public func polishDetails(format: (Int) -> String) -> [String] {
         var details: [String] = []
-        let size = polishPartSize.map { $0.title.lowercased() }
         if let polishParts, polishParts > 1 {
-            var parts = "\(polishParts) " + (size.map { "\($0) parts" } ?? "parts")
+            var parts = "\(polishParts) parts" + (polishPartsFrom.map { " (from \($0) words)" } ?? "")
             if let polishPartsEarly { parts += ", \(polishPartsEarly) done while you talked" }
             details.append(parts)
-        } else if let size {
-            details.append("one piece (\(size) parts)")
+        } else if let polishPartsFrom {
+            details.append("one piece (parts from \(polishPartsFrom) words)")
         }
         if polishStartedCold == true { details.append("cold start") }
         if let polishModelMs { details.append("model \(format(polishModelMs))") }

@@ -136,7 +136,7 @@ final class PolishService {
 
     /// `polish`, for a dictation of any length.
     ///
-    /// From `PolishPartSize.minimumWords` prepared words on (with `Settings.polishInParts`), the
+    /// From `Settings.polishPartSize.minimumWords` prepared words on (with `Settings.polishInParts`), the
     /// text is polished in parts at the same time, under one deadline: parts `progressive`
     /// polished while the person talked are reused, the one it's still polishing is awaited,
     /// and the rest are sent in parallel. The deadline grows with the parts left to polish
@@ -156,7 +156,7 @@ final class PolishService {
             // For History: polished in one piece with this part size. Not when it had parts
             // but no polisher to send them to: nothing was sent.
             if chunks.count == 1 {
-                outcome.diagnostics.partSize = size
+                outcome.diagnostics.partsFrom = size.minimumWords
                 outcome.diagnostics.parts = 1
             }
             return (outcome, report)
@@ -268,11 +268,11 @@ final class PolishService {
         // For History: how many parts were done before key-up. A Retry has no `progressive`,
         // so it says nothing rather than "0 of 5".
         let cached = parts.count - awaited.count - fresh.count
-        outcome.diagnostics.partSize = size
+        outcome.diagnostics.partsFrom = size.minimumWords
         outcome.diagnostics.parts = parts.count
         outcome.diagnostics.partsPolishedEarly = progressive == nil ? nil : cached
 
-        report.line.tag("size", size.rawValue)
+        report.line.count("from", size.minimumWords)
         report.line.count("chunks", parts.count)
         report.line.count("cached", cached)
         report.line.count("awaited", awaited.count)

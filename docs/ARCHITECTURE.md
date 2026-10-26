@@ -95,14 +95,14 @@ key up   ─► LiveDictation.stop; the WAV is rewritten whole, atomically, at t
               LongTranscription: in-flight window, then only the tail (≤ 15 s), stitched
               TextPipeline.prepare
               PolishService.polishLong: ≥ 250 words → sentence-safe parts of ~150 words
-                (Smaller part size: ≥ 100 → ~80),
+                (Settings › Polish in parts from N words: parts of ~0.6 N),
                 cached ones reused, the rest in parallel under one deadline
               TextPipeline.finalize, once, on the joined text (dictionary last)
 ```
 
 - **Thresholds.** The segmented path is used only for recordings longer than 30 s at key-up;
-  live work starts at 20 s. Polish works in parts only from 250 prepared words, or 100 with
-  the Smaller part size (`PolishPartSize`, Settings › Text & AI › Advanced).
+  live work starts at 20 s. Polish works in parts only from 250 prepared words by default
+  (`PolishPartSize`, Settings › Text & AI › Advanced, 60 to 400).
 - **Same cuts on Retry.** Cuts are planned on WAV-round-tripped samples, so a Retry of the
   saved WAV cuts the same windows and decodes the same input.
 - **The placeholder row** is hidden while recording (`HistoryStore.inProgress`) and deleted,

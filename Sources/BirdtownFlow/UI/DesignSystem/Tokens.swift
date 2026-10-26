@@ -314,6 +314,8 @@ enum Layout {
     static let iconLarge: CGFloat = 28
     static let appIcon: CGFloat = 18
     static let settingsWidth: CGFloat = 620
+    /// A settings field for a number of up to four digits ("250").
+    static let numberField: CGFloat = 64
     static let onboardingSize = CGSize(width: 640, height: 520)
 
     enum HUD {

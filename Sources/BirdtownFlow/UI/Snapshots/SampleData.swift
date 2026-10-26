@@ -101,7 +101,7 @@ enum SampleData {
              text: "Hi Priya,\n\nThanks for the intro to the team at Northwind. I'd love to find thirty minutes next week to walk through how we label manipulation data. Does Tuesday or Wednesday afternoon work?",
              polish: .anthropic, wpm: 156, polishDetail: PolishDiagnostics(
                 model: AnthropicClient.defaultModel, effort: AnthropicClient(apiKey: "").sentEffort,
-                partSize: .standard, parts: 3, partsPolishedEarly: 2)),
+                partsFrom: 250, parts: 3, partsPolishedEarly: 2)),
         Spec(day: 0, at: 0.64, app: App.notes, style: .formal, raw: "", text: "", wpm: 140,
              error: "The speech model wasn't ready yet, so this one wasn't transcribed."),
         Spec(day: 0, at: 0.52, app: App.terminal, style: .formal,

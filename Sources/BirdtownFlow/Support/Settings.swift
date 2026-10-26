@@ -259,10 +259,13 @@ final class Settings {
     var polishInParts: Bool {
         didSet { defaults.set(polishInParts, forKey: Keys.polishInParts) }
     }
-    /// How long a dictation must be to be polished in parts, and how big the parts are.
-    var polishPartSize: PolishPartSize {
-        didSet { defaults.set(polishPartSize.rawValue, forKey: Keys.polishPartSize) }
+    /// How long a dictation must be, in words, to be polished in parts; the parts' size follows
+    /// from it (`PolishPartSize`). Settings keeps it within `PolishPartSize.range`.
+    var polishPartsFromWords: Int {
+        didSet { defaults.set(polishPartsFromWords, forKey: Keys.polishPartsFromWords) }
     }
+    /// The parts `polishPartsFromWords` gives, within range whatever was saved.
+    var polishPartSize: PolishPartSize { PolishPartSize(fromWords: polishPartsFromWords) }
     /// Polish the finished parts of a long dictation before key-up. Text reaches the polish
     /// provider while the person is still talking, so Esc can't recall it.
     var polishWhileSpeaking: Bool {
@@ -351,7 +354,7 @@ final class Settings {
         static let polishTimeout = "polishTimeout"
         static let liveTranscription = "liveTranscription"
         static let polishInParts = "polishInParts"
-        static let polishPartSize = "polishPartSize"
+        static let polishPartsFromWords = "polishPartsFromWords"
         static let polishWhileSpeaking = "polishWhileSpeaking"
         static let historyRetentionDays = "historyRetentionDays"
         static let audioRetentionDays = "audioRetentionDays"
@@ -402,7 +405,8 @@ final class Settings {
         polishTimeout = defaults.object(forKey: Keys.polishTimeout) as? Double ?? 4
         liveTranscription = defaults.object(forKey: Keys.liveTranscription) as? Bool ?? true
         polishInParts = defaults.object(forKey: Keys.polishInParts) as? Bool ?? true
-        polishPartSize = PolishPartSize(rawValue: defaults.string(forKey: Keys.polishPartSize) ?? "") ?? .standard
+        polishPartsFromWords = defaults.object(forKey: Keys.polishPartsFromWords) as? Int
+            ?? PolishPartSize.standard.minimumWords
         polishWhileSpeaking = defaults.object(forKey: Keys.polishWhileSpeaking) as? Bool ?? true
         historyRetentionDays = defaults.object(forKey: Keys.historyRetentionDays) as? Int ?? 0
         audioRetentionDays = defaults.object(forKey: Keys.audioRetentionDays) as? Int ?? 7

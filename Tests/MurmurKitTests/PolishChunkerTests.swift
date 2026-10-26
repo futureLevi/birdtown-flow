@@ -83,9 +83,26 @@ struct PolishChunkerTests {
         #expect(PolishChunker.join(chunks.map(\.text), chunks: chunks, style: .formal) == text)
     }
 
-    @Test("Smaller parts: from 100 words, parts of 60 to 140 words")
+    @Test("Part sizes follow the length parts start from, within 60 to 400")
+    func partSizes() {
+        let standard = PolishPartSize.standard
+        #expect([standard.minimumWords, standard.targetWords, standard.minWords, standard.maxWords, standard.hardMaxWords]
+            == [250, 150, 90, 260, 400])
+        let hundred = PolishPartSize(fromWords: 100)
+        #expect([hundred.minimumWords, hundred.targetWords, hundred.minWords, hundred.maxWords, hundred.hardMaxWords]
+            == [100, 60, 36, 104, 160])
+        #expect(PolishPartSize(fromWords: 10).minimumWords == 60)
+        #expect(PolishPartSize(fromWords: 1_000).minimumWords == 400)
+        for words in PolishPartSize.range {
+            let size = PolishPartSize(fromWords: words)
+            #expect(size.minWords <= size.targetWords && size.targetWords <= size.maxWords)
+            #expect(size.maxWords <= size.hardMaxWords)
+        }
+    }
+
+    @Test("From 100 words: parts of 36 to 104 words")
     func smallerParts() throws {
-        let size = PolishPartSize.smaller
+        let size = PolishPartSize(fromWords: 100)
         let short = sentences(total: 95).joined(separator: " ")
         #expect(wordCount(short) < size.minimumWords)
         #expect(PolishChunker.chunks(short, size: size).count == 1)
@@ -95,7 +112,7 @@ struct PolishChunkerTests {
         let text = sentences(total: 240).joined(separator: " ")
         #expect(PolishChunker.chunks(text).count == 1)
         let chunks = PolishChunker.chunks(text, size: size)
-        #expect(chunks.count >= 2)
+        #expect(chunks.count >= 3)
         for chunk in chunks.dropLast() {
             #expect((size.minWords...size.maxWords).contains(wordCount(chunk.text)))
             #expect(chunk.continues)

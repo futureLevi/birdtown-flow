@@ -21,66 +21,37 @@ public struct PolishChunk: Sendable, Equatable {
     }
 }
 
-/// How big the parts of a long dictation are (`Settings.polishPartSize`), so the two can be
-/// compared in History. Smaller parts start sooner: a 1-2 minute dictation is polished in
-/// parts, some while the person is still talking, rather than in one request at key-up. The
-/// model sees less of the message at once, and there are more requests.
-public enum PolishPartSize: String, Codable, CaseIterable, Sendable, Identifiable {
-    /// From 250 words, parts of about 150.
-    case standard
-    /// From 100 words, parts of about 80.
-    case smaller
+/// When a dictation is polished in parts, and how big the parts are, from one number: the
+/// length from which a text is split (`Settings.polishPartsFromWords`). The rest scale with
+/// it, so 250, the standard, gives parts of about 150 words, and 100 gives about 60. Lower
+/// starts sooner: a 1-2 minute dictation is polished in parts, some while the person is
+/// still talking, rather than in one request at key-up. Each part sees less of the message,
+/// and there are more requests.
+public struct PolishPartSize: Sendable, Hashable {
+    /// Smaller parts than these lose the tone and formatting that hold a message together;
+    /// larger ones barely split.
+    public static let range = 60...400
+    public static let standard = PolishPartSize(fromWords: 250)
 
-    public var id: String { rawValue }
+    /// Shorter texts are polished in one piece. Within `range`.
+    public let minimumWords: Int
 
-    public var title: String {
-        switch self {
-        case .standard: "Standard"
-        case .smaller: "Smaller"
-        }
-    }
-
-    public var detail: String {
-        switch self {
-        case .standard: "From \(minimumWords) words, in parts of about \(targetWords)."
-        case .smaller: "From \(minimumWords) words, in parts of about \(targetWords). Shorter dictations start polishing sooner; each part sees less of the message."
-        }
+    public init(fromWords words: Int) {
+        minimumWords = min(max(words, Self.range.lowerBound), Self.range.upperBound)
     }
 
-    /// Shorter texts are polished in one piece.
-    public var minimumWords: Int {
-        switch self {
-        case .standard: 250
-        case .smaller: 100
-        }
-    }
-    /// A part closes at the first sentence end from here on…
-    public var targetWords: Int {
-        switch self {
-        case .standard: 150
-        case .smaller: 80
-        }
-    }
-    /// …or at a paragraph break from here on…
-    public var minWords: Int {
-        switch self {
-        case .standard: 90
-        case .smaller: 60
-        }
-    }
-    /// …but not before a sentence that starts "and", "but", "so"… until this long…
-    public var maxWords: Int {
-        switch self {
-        case .standard: 260
-        case .smaller: 140
-        }
-    }
-    /// …or before a correction or the next list item until this long.
-    public var hardMaxWords: Int {
-        switch self {
-        case .standard: 400
-        case .smaller: 220
-        }
+    /// A part closes at the first sentence end from here on (150 at the standard 250)…
+    public var targetWords: Int { scaled(60) }
+    /// …or at a paragraph break from here on (90)…
+    public var minWords: Int { scaled(36) }
+    /// …but not before a sentence that starts "and", "but", "so"… until this long (260)…
+    public var maxWords: Int { scaled(104) }
+    /// …or before a correction or the next list item until this long (400).
+    public var hardMaxWords: Int { scaled(160) }
+
+    /// `percent` of `minimumWords`, rounded.
+    private func scaled(_ percent: Int) -> Int {
+        (minimumWords * percent + 50) / 100
     }
 }
 
@@ -93,7 +64,7 @@ public enum PolishPartSize: String, Codable, CaseIterable, Sendable, Identifiabl
 /// parts a growing text has finished (`closedOnly`) are the parts the whole text will have:
 /// a part polished while the person is still talking is the same request at key-up.
 public enum PolishChunker {
-    /// The standard part size's limits (`PolishPartSize`).
+    /// The standard part size's limits (`PolishPartSize.standard`).
     public static let minimumWords = PolishPartSize.standard.minimumWords
     public static let targetWords = PolishPartSize.standard.targetWords
     public static let minWords = PolishPartSize.standard.minWords

@@ -95,36 +95,36 @@ struct PolishDiagnosticsTests {
         #expect(DictationTimings(polishMs: 800, totalMs: 900).polishDetails(format: format).isEmpty)
     }
 
-    @Test("History says the parts first: size, how many, how many done while the person talked")
+    @Test("History says the parts first: how many, from what length, how many done while the person talked")
     func partDetails() {
         var timings = DictationTimings(polishMs: 1_830, totalMs: 2_300)
         var diagnostics = cold
-        diagnostics.partSize = .smaller
+        diagnostics.partsFrom = 100
         diagnostics.parts = 5
         diagnostics.partsPolishedEarly = 3
         timings.setPolish(diagnostics)
-        #expect(timings.polishPartSize == .smaller)
+        #expect(timings.polishPartsFrom == 100)
         #expect(timings.polishParts == 5)
         #expect(timings.polishPartsEarly == 3)
         let format: (Int) -> String = { "\($0) ms" }
         #expect(timings.polishDetails(format: format)
-            == ["5 smaller parts, 3 done while you talked", "cold start", "model 1180 ms", "fast-model-1 low"])
+            == ["5 parts (from 100 words), 3 done while you talked", "cold start", "model 1180 ms", "fast-model-1 low"])
 
         // None finished in time still says so.
         diagnostics.partsPolishedEarly = 0
         timings.setPolish(diagnostics)
-        #expect(timings.polishDetails(format: format).first == "5 smaller parts, 0 done while you talked")
+        #expect(timings.polishDetails(format: format).first == "5 parts (from 100 words), 0 done while you talked")
 
         // Polish while you talk off, or a Retry: nothing could be done early, so no count.
         diagnostics.partsPolishedEarly = nil
         timings.setPolish(diagnostics)
-        #expect(timings.polishDetails(format: format).first == "5 smaller parts")
+        #expect(timings.polishDetails(format: format).first == "5 parts (from 100 words)")
 
-        // Under the part size's minimum: one request.
-        diagnostics.partSize = .standard
+        // Under the length parts start from: one request.
+        diagnostics.partsFrom = 250
         diagnostics.parts = 1
         timings.setPolish(diagnostics)
-        #expect(timings.polishDetails(format: format).first == "one piece (standard parts)")
+        #expect(timings.polishDetails(format: format).first == "one piece (parts from 250 words)")
 
         // Polish in parts off records none of it; a Retry without polish clears it.
         timings.setPolish(cold)
