@@ -1,0 +1,11 @@
+sha=7521009dff1cde55fa74744fa1d39e5d20d14719
+branch=main
+build=success
+test=success
+snapshots=success
+synth=success
+speech=success
+segmented=failure
+signcheck=success
+signing=success
+release=success
