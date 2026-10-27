@@ -21,6 +21,40 @@ public struct PolishChunk: Sendable, Equatable {
     }
 }
 
+/// When a dictation is polished in parts, and how big the parts are, from one number: the
+/// length from which a text is split (`Settings.polishPartsFromWords`). The rest scale with
+/// it, so 250, the standard, gives parts of about 150 words, and 100 gives about 60. Lower
+/// starts sooner: a 1-2 minute dictation is polished in parts, some while the person is
+/// still talking, rather than in one request at key-up. Each part sees less of the message,
+/// and there are more requests.
+public struct PolishPartSize: Sendable, Hashable {
+    /// Smaller parts than these lose the tone and formatting that hold a message together;
+    /// larger ones barely split.
+    public static let range = 60...400
+    public static let standard = PolishPartSize(fromWords: 250)
+
+    /// Shorter texts are polished in one piece. Within `range`.
+    public let minimumWords: Int
+
+    public init(fromWords words: Int) {
+        minimumWords = min(max(words, Self.range.lowerBound), Self.range.upperBound)
+    }
+
+    /// A part closes at the first sentence end from here on (150 at the standard 250)…
+    public var targetWords: Int { scaled(60) }
+    /// …or at a paragraph break from here on (90)…
+    public var minWords: Int { scaled(36) }
+    /// …but not before a sentence that starts "and", "but", "so"… until this long (260)…
+    public var maxWords: Int { scaled(104) }
+    /// …or before a correction or the next list item until this long (400).
+    public var hardMaxWords: Int { scaled(160) }
+
+    /// `percent` of `minimumWords`, rounded.
+    private func scaled(_ percent: Int) -> Int {
+        (minimumWords * percent + 50) / 100
+    }
+}
+
 /// Splits a long prepared text into parts that can be polished at the same time, and joins
 /// the polished parts back up.
 ///
@@ -30,32 +64,28 @@ public struct PolishChunk: Sendable, Equatable {
 /// parts a growing text has finished (`closedOnly`) are the parts the whole text will have:
 /// a part polished while the person is still talking is the same request at key-up.
 public enum PolishChunker {
-    /// Shorter texts are polished in one piece, as before.
-    public static let minimumWords = 250
-    /// A part closes at the first sentence end from here on…
-    public static let targetWords = 150
-    /// …or at a paragraph break from here on…
-    public static let minWords = 90
-    /// …but not before a sentence that starts "and", "but", "so"… until this long…
-    public static let maxWords = 260
-    /// …or before a correction or the next list item until this long.
-    public static let hardMaxWords = 400
+    /// The standard part size's limits (`PolishPartSize.standard`).
+    public static let minimumWords = PolishPartSize.standard.minimumWords
+    public static let targetWords = PolishPartSize.standard.targetWords
+    public static let minWords = PolishPartSize.standard.minWords
+    public static let maxWords = PolishPartSize.standard.maxWords
+    public static let hardMaxWords = PolishPartSize.standard.hardMaxWords
     /// At most this much of the part before goes along as context.
     public static let contextWords = 60
 
     /// The parts of `text`, which is a prepared transcript (`TextPipeline.prepare`, so
-    /// trimmed): one part, `text` itself, when it's under `minimumWords` words or has no
+    /// trimmed): one part, `text` itself, when it's under `size.minimumWords` words or has no
     /// place to split.
     ///
     /// - Parameter closedOnly: only the parts already finished: those followed by the start
-    ///   of a part whose first two words are known. Nothing while the text is under `minimumWords`
-    ///   words, since it may yet be polished in one piece.
-    public static func chunks(_ text: String, closedOnly: Bool = false) -> [PolishChunk] {
+    ///   of a part whose first two words are known. Nothing while the text is under
+    ///   `size.minimumWords` words, since it may yet be polished in one piece.
+    public static func chunks(_ text: String, closedOnly: Bool = false, size: PolishPartSize = .standard) -> [PolishChunk] {
         let scan = Scan(text)
-        guard scan.tokens.count >= minimumWords else {
+        guard scan.tokens.count >= size.minimumWords else {
             return closedOnly ? [] : [whole(text)]
         }
-        var parts = split(scan)
+        var parts = split(scan, size: size)
         if closedOnly {
             parts.removeLast()
             // A part is decided by the first two words after it ("I mean…"); the text's last
@@ -131,7 +161,7 @@ public enum PolishChunker {
 
     /// Greedy, left to right: each part closes at the first sentence end that qualifies, so
     /// a part depends only on the text up to the first two words after it.
-    private static func split(_ scan: Scan) -> [Range<Int>] {
+    private static func split(_ scan: Scan, size: PolishPartSize) -> [Range<Int>] {
         var parts: [Range<Int>] = []
         var start = 0
         var words = 0
@@ -142,7 +172,8 @@ public enum PolishChunker {
             let first = scan.segments[index + 1].lowerBound
             let next = scan.tokens[first]
             let after = first + 1 < scan.tokens.count ? scan.tokens[first + 1] : nil
-            if closes(words: words, paragraph: separator.filter(\.isNewline).count >= 2, cue: cue(next, then: after)) {
+            if closes(
+                words: words, paragraph: separator.filter(\.isNewline).count >= 2, cue: cue(next, then: after), size: size) {
                 parts.append(start..<(index + 1))
                 start = index + 1
                 words = 0
@@ -152,14 +183,14 @@ public enum PolishChunker {
         return parts
     }
 
-    private static func closes(words: Int, paragraph: Bool, cue: Cue) -> Bool {
-        guard words >= minWords else { return false }
+    private static func closes(words: Int, paragraph: Bool, cue: Cue, size: PolishPartSize) -> Bool {
+        guard words >= size.minWords else { return false }
         switch cue {
-        case .strong where words < hardMaxWords: return false
-        case .weak where words < maxWords: return false
+        case .strong where words < size.hardMaxWords: return false
+        case .weak where words < size.maxWords: return false
         default: break
         }
-        return paragraph || words >= targetWords
+        return paragraph || words >= size.targetWords
     }
 
     /// - Parameter following: the word after `token`, for the two-word corrections.

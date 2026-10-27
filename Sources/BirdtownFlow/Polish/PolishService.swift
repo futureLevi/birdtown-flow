@@ -136,7 +136,7 @@ final class PolishService {
 
     /// `polish`, for a dictation of any length.
     ///
-    /// From `PolishChunker.minimumWords` prepared words on (with `Settings.polishInParts`), the
+    /// From `Settings.polishPartSize.minimumWords` prepared words on (with `Settings.polishInParts`), the
     /// text is polished in parts at the same time, under one deadline: parts `progressive`
     /// polished while the person talked are reused, the one it's still polishing is awaited,
     /// and the rest are sent in parallel. The deadline grows with the parts left to polish
@@ -146,12 +146,20 @@ final class PolishService {
         _ request: PolishRequest, using configuration: PolishConfiguration?, progressive: ProgressivePolisher?
     ) async -> (Outcome, PolishReport) {
         var report = PolishReport()
-        let chunks = settings.polishInParts ? PolishChunker.chunks(request.text) : []
+        let size = settings.polishPartSize
+        let chunks = settings.polishInParts ? PolishChunker.chunks(request.text, size: size) : []
         guard chunks.count > 1, let polisher = polisher(using: configuration) else {
             progressive?.stop(keeping: [])
             report.line.count("chunks", 1)
             report.line.seconds("limit", oneRequestLimit(for: request.text))
-            return (await polish(request, using: configuration), report)
+            var outcome = await polish(request, using: configuration)
+            // For History: polished in one piece with this part size. Not when it had parts
+            // but no polisher to send them to: nothing was sent.
+            if chunks.count == 1 {
+                outcome.diagnostics.partsFrom = size.minimumWords
+                outcome.diagnostics.parts = 1
+            }
+            return (outcome, report)
         }
 
         let requests = chunks.map { chunk in
@@ -257,9 +265,16 @@ final class PolishService {
         let sentWith = Self.diagnostics(sentWith: client)
         outcome.diagnostics = PolishDiagnostics.parts(
             results.map(\.outcome.diagnostics), model: sentWith.model, effort: sentWith.effort)
+        // For History: how many parts were done before key-up. A Retry has no `progressive`,
+        // so it says nothing rather than "0 of 5".
+        let cached = parts.count - awaited.count - fresh.count
+        outcome.diagnostics.partsFrom = size.minimumWords
+        outcome.diagnostics.parts = parts.count
+        outcome.diagnostics.partsPolishedEarly = progressive == nil ? nil : cached
 
+        report.line.count("from", size.minimumWords)
         report.line.count("chunks", parts.count)
-        report.line.count("cached", parts.count - awaited.count - fresh.count)
+        report.line.count("cached", cached)
         report.line.count("awaited", awaited.count)
         report.line.count("fresh", fresh.count)
         report.line.count("parallel", parallel)
@@ -275,7 +290,7 @@ final class PolishService {
     /// on it (`DictationController`) never cuts polish short. A long text whose provider
     /// can't run gets the one-request limit here but never waits: `polish` returns at once.
     func overallTimeLimit(for request: PolishRequest, using configuration: PolishConfiguration?) -> Double {
-        let chunks = settings.polishInParts ? PolishChunker.chunks(request.text) : []
+        let chunks = settings.polishInParts ? PolishChunker.chunks(request.text, size: settings.polishPartSize) : []
         guard chunks.count > 1 else { return oneRequestLimit(for: request.text) }
         let provider = configuration?.provider ?? settings.polishProvider
         return PolishTimeLimit.seconds(

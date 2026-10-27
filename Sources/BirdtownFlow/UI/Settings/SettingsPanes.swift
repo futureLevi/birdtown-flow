@@ -691,12 +691,44 @@ struct TextSettingsPane: View {
                 SettingsSwitch(label: "Polish in parts", isOn: $settings.polishInParts)
             }
             SettingsDivider()
+            SettingsRow(
+                title: "Polish in parts from",
+                detail: "Dictations this long are split into parts of about \(settings.polishPartSize.targetWords) words. "
+                    + "Lower starts polishing shorter dictations while you talk; each part sees less of the message. "
+                    + "\(PolishPartSize.range.lowerBound) to \(PolishPartSize.range.upperBound), normally \(PolishPartSize.standard.minimumWords)."
+            ) {
+                partsFromField(source)
+                    .disabled(!settings.polishInParts)
+            }
+            SettingsDivider()
             SettingsRow(title: "Polish while you talk", detail: "Starts polishing a long dictation before you finish.") {
                 SettingsSwitch(label: "Polish while you talk", isOn: $settings.polishWhileSpeaking)
                     // It polishes parts, so it needs them.
                     .disabled(!settings.polishInParts)
             }
         }
+    }
+
+    /// "250 words", typed or stepped by 10, kept within `PolishPartSize.range`.
+    private func partsFromField(_ settings: Settings) -> some View {
+        let words = Binding(
+            get: { settings.polishPartSize.minimumWords },
+            set: { settings.polishPartsFromWords = PolishPartSize(fromWords: $0).minimumWords }
+        )
+        return HStack(spacing: Spacing.s) {
+            TextField("Words", value: words, format: .number)
+                .textFieldStyle(.roundedBorder)
+                .font(Typography.body)
+                .monospacedDigit()
+                .multilineTextAlignment(.trailing)
+                .frame(width: Layout.numberField)
+            Stepper("Words", value: words, in: PolishPartSize.range, step: 10)
+                .labelsHidden()
+            Text("words")
+                .font(Typography.body)
+                .foregroundStyle(Palette.ink)
+        }
+        .fixedSize()
     }
 
     @ViewBuilder

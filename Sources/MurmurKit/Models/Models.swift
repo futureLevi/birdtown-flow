@@ -340,13 +340,22 @@ public struct DictationTimings: Codable, Hashable, Sendable {
     /// From the key going down to the microphone's first audio. Not part of `totalMs`, which
     /// starts at key-up.
     public var micLiveMs: Int?
+    /// Polish in parts: the length texts were split from (`PolishPartSize.minimumWords`), how
+    /// many parts (1: polished in one piece), and how many of them were finished while the
+    /// person was still talking, so key-up didn't wait for them. The last is `nil` when nothing
+    /// could have been (polish while you talk off, a Retry); all three are with polish in
+    /// parts off.
+    public var polishPartsFrom: Int?
+    public var polishParts: Int?
+    public var polishPartsEarly: Int?
 
     // Every field after `totalMs` is optional and left out of the JSON when `nil`, so records
     // saved before it existed read as they always did.
     public init(
         transcribeMs: Int = 0, polishMs: Int = 0, totalMs: Int = 0, transcribedWhileRecording: Bool? = nil,
         polishModelMs: Int? = nil, polishStartedCold: Bool? = nil, polishModel: String? = nil,
-        polishEffort: String? = nil, micLiveMs: Int? = nil
+        polishEffort: String? = nil, micLiveMs: Int? = nil, polishPartsFrom: Int? = nil, polishParts: Int? = nil,
+        polishPartsEarly: Int? = nil
     ) {
         self.transcribeMs = transcribeMs
         self.polishMs = polishMs
@@ -357,6 +366,9 @@ public struct DictationTimings: Codable, Hashable, Sendable {
         self.polishModel = polishModel
         self.polishEffort = polishEffort
         self.micLiveMs = micLiveMs
+        self.polishPartsFrom = polishPartsFrom
+        self.polishParts = polishParts
+        self.polishPartsEarly = polishPartsEarly
     }
 
     /// Whether anything was measured. Failed and cancelled dictations can have no timings.

@@ -99,7 +99,8 @@ final class ProgressivePolisher {
         }
         guard inFlight == nil, let raw = latest else { return }
         let prepared = TextPipeline.prepare(raw, options: options)
-        for (index, chunk) in PolishChunker.chunks(prepared, closedOnly: true).enumerated() {
+        let parts = PolishChunker.chunks(prepared, closedOnly: true, size: settings.polishPartSize)
+        for (index, chunk) in parts.enumerated() {
             var request = template
             request.text = chunk.text
             request.context = chunk.context
